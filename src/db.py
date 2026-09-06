@@ -37,6 +37,8 @@ class Vendor(Base):
     engagements = relationship("Engagement", back_populates="vendor", cascade="all, delete-orphan")
     findings = relationship("Finding", back_populates="vendor", cascade="all, delete-orphan")
     events = relationship("MonitoringEvent", back_populates="vendor", cascade="all, delete-orphan")
+    assessments = relationship("Assessment", back_populates="vendor", cascade="all, delete-orphan")
+    evidence = relationship("Evidence", back_populates="vendor", cascade="all, delete-orphan")
 
 class Engagement(Base):
     __tablename__ = "engagements"
@@ -56,6 +58,49 @@ class Engagement(Base):
     status = Column(String(50), default="Active")
 
     vendor = relationship("Vendor", back_populates="engagements")
+
+class Assessment(Base):
+    __tablename__ = "assessments"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    assessment_type = Column(String(120), nullable=False)
+    assessment_reason = Column(String(120), default="New vendor")
+    status = Column(String(50), default="Not Started")
+    assigned_to = Column(String(255))
+    due_date = Column(String(40))
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    risk_score = Column(Float, default=0)
+    approval_status = Column(String(80), default="Pending")
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor", back_populates="assessments")
+    evidence = relationship("Evidence", back_populates="assessment")
+
+class Evidence(Base):
+    __tablename__ = "evidence"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"))
+    document_type = Column(String(120), nullable=False)
+    document_name = Column(String(255), nullable=False)
+    document_date = Column(String(40))
+    coverage_start = Column(String(40))
+    coverage_end = Column(String(40))
+    expiration_date = Column(String(40))
+    issuer = Column(String(255))
+    opinion = Column(String(120))
+    exceptions_count = Column(Integer, default=0)
+    status = Column(String(80), default="Received")
+    storage_path = Column(String(500))
+    analyst_notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor", back_populates="evidence")
+    assessment = relationship("Assessment", back_populates="evidence")
 
 class Finding(Base):
     __tablename__ = "findings"
@@ -94,3 +139,4 @@ def init_db():
 
 def get_session():
     return SessionLocal()
+
