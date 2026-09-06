@@ -123,3 +123,32 @@ This version adds:
 
 Evidence files are currently stored on the local Streamlit filesystem for MVP demonstration only. Streamlit Community Cloud storage is ephemeral. Before using real vendor documents, migrate evidence storage to durable object storage such as AWS S3 and migrate the SQLite database to PostgreSQL.
 
+
+## MVP v3 — AI Evidence Analyst
+
+SOC 2 uploads can now be analyzed before evidence is saved.
+
+The first iteration extracts or summarizes:
+- Auditor / issuer
+- Report date
+- Examination period
+- Opinion
+- Control exceptions
+- Complementary User Entity Controls (CUECs)
+- Subservice organization information
+- Extraction confidence and analyst review notes
+
+Detected SOC 2 exceptions can be converted into open Evidence Review findings after analyst confirmation.
+
+### OpenAI configuration
+
+The application works in demo mode without an API key by using a deterministic local parser. For AI-assisted extraction, add this secret in Streamlit Community Cloud:
+
+```toml
+OPENAI_API_KEY = "your-key-here"
+```
+
+Never commit API keys to GitHub.
+
+The application uses the OpenAI Responses API when the secret is configured. Analyst confirmation remains required before extracted evidence metadata is saved.
+
