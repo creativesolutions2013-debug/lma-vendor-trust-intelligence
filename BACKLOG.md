@@ -24,14 +24,14 @@
 - [x] SOC 2 / ISO / pentest / PCI metadata capture
 - [x] Evidence expiration tracking
 - [x] Evidence visibility in Vendor 360
-- [ ] Automated SOC 2 metadata extraction
+- [x] Automated SOC 2 metadata extraction
 - [ ] Automated pentest metadata extraction
 
 ## MVP 3 — Assurance intelligence
 
 - [ ] Common control framework
 - [ ] Framework mappings
-- [ ] AI evidence analyst
+- [x] AI evidence analyst (SOC 2 first iteration)
 - [ ] Evidence confidence scoring
 - [ ] Contradiction detection
 - [ ] AI risk statement drafting
@@ -70,3 +70,4 @@
 - [ ] AI vendor / MCP assessment
 - [ ] Risk acceptance workflow
 - [ ] Agentic workflow orchestration
+
