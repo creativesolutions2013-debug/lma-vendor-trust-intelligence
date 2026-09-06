@@ -20,6 +20,24 @@ def _find(pattern: str, text: str, default: str = "") -> str:
     match = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
     return match.group(1).strip() if match else default
 
+def normalize_date(value: str) -> str:
+    if not value:
+        return ""
+
+    formats = [
+        "%B %d, %Y",
+        "%b %d, %Y",
+        "%Y-%m-%d",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(value.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    return value.strip()
+
 
 def local_soc2_extraction(text: str) -> Dict[str, Any]:
     """Deterministic fallback for demo/testing when no API key is configured."""
@@ -66,9 +84,9 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     return {
         "document_type": "SOC 2 Type II" if re.search(r"SOC\s*2\s*TYPE\s*II", text, re.I) else "SOC 2",
         "issuer": issuer.replace("(Fictional)", "").strip(),
-        "document_date": report_date,
-        "coverage_start": period.group(1) if period else "",
-        "coverage_end": period.group(2) if period else "",
+        "document_date": normalize_date(report_date),
+"coverage_start": normalize_date(period.group(1)) if period else "",
+"coverage_end": normalize_date(period.group(2)) if period else "",
         "opinion": opinion.split(",")[0].strip() if opinion else "",
         "exceptions_count": len(exceptions),
         "exceptions": exceptions,
