@@ -15,14 +15,17 @@
 
 ## MVP 2 — Assessment & evidence
 
-- [ ] Assessment model
-- [ ] Questionnaire workflow
-- [ ] Assessment assignment
-- [ ] Evidence upload
-- [ ] SOC 2 metadata extraction
-- [ ] Pentest metadata extraction
-- [ ] ISO 27001 metadata extraction
-- [ ] Evidence expiration tracking
+- [x] Assessment model
+- [x] Risk-based assessment recommendation
+- [x] Assessment creation and assignment
+- [x] Assessment status / approval tracking
+- [x] Evidence Center
+- [x] Evidence upload
+- [x] SOC 2 / ISO / pentest / PCI metadata capture
+- [x] Evidence expiration tracking
+- [x] Evidence visibility in Vendor 360
+- [ ] Automated SOC 2 metadata extraction
+- [ ] Automated pentest metadata extraction
 
 ## MVP 3 — Assurance intelligence
 
@@ -42,6 +45,15 @@
 - [ ] Triggered reassessment
 - [ ] Risk escalation workflow
 
+## Production hardening
+
+- [ ] PostgreSQL persistence
+- [ ] Object storage for evidence
+- [ ] Multi-tenant RBAC
+- [ ] Audit log
+- [ ] Encryption / secret management
+- [ ] File malware scanning
+
 ## Later integrations
 
 - [ ] BitSight
@@ -57,6 +69,4 @@
 - [ ] Fourth-party graph
 - [ ] AI vendor / MCP assessment
 - [ ] Risk acceptance workflow
-- [ ] Multi-tenant RBAC
-- [ ] Audit log
 - [ ] Agentic workflow orchestration
