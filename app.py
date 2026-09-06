@@ -10,6 +10,7 @@ from src.db import (
     Evidence, Finding, MonitoringEvent
 )
 from src.seed import seed_demo_data
+from src.evidence_ai import extract_soc2_metadata
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -82,6 +83,13 @@ def recommended_assessment(vendor):
     if vendor.inherent_risk_score >= 25:
         return "Targeted Security Review"
     return "Basic Security Screening"
+
+
+def get_openai_api_key():
+    try:
+        return st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        return os.getenv("OPENAI_API_KEY", "")
 
 def render_control_tower():
     st.title("🛡️ Vendor Security Control Tower")
@@ -458,34 +466,96 @@ def render_evidence():
         st.warning("Create a vendor first.")
         return
 
+    vendor = st.selectbox("Vendor", vendors, format_func=lambda v: v.display_name, key="evidence_vendor")
+    vendor_assessments = session.query(Assessment).filter_by(vendor_id=vendor.id).all()
+    assessment_choices = [None] + vendor_assessments
+    assessment = st.selectbox(
+        "Linked assessment (optional)",
+        assessment_choices,
+        format_func=lambda a: "None" if a is None else f"#{a.id} — {a.assessment_type}",
+        key="evidence_assessment"
+    )
+    document_type = st.selectbox("Document type", EVIDENCE_TYPES, key="evidence_type")
+    uploaded = st.file_uploader("Upload evidence file", type=["pdf", "docx", "xlsx", "csv", "txt"], key="evidence_upload")
+
+    if uploaded and document_type in ["SOC 2 Type II", "SOC 2 Type I"]:
+        st.markdown("#### AI Evidence Analyst")
+        api_key = get_openai_api_key()
+        if api_key:
+            st.success("OpenAI extraction is configured.")
+        else:
+            st.info("No OpenAI API key is configured yet. The app will use the local test parser so you can validate the workflow.")
+
+        if st.button("Analyze SOC 2 report", type="primary", key="analyze_soc2"):
+            try:
+                with st.spinner("Analyzing SOC 2 report..."):
+                    result = extract_soc2_metadata(uploaded.getvalue(), api_key=api_key or None)
+                    st.session_state["soc2_extraction"] = result
+                st.success(f"Analysis complete using {result.get('extraction_method', 'extractor')}.")
+            except Exception as exc:
+                st.error(f"Could not analyze the report: {exc}")
+
+    extraction = st.session_state.get("soc2_extraction", {}) if uploaded else {}
+
+    if extraction:
+        st.markdown("##### Extracted metadata — analyst review required")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Confidence", f"{float(extraction.get('confidence', 0))*100:.0f}%")
+        c2.metric("Exceptions", extraction.get("exceptions_count", 0))
+        c3.metric("Method", extraction.get("extraction_method", "Unknown"))
+
+        if extraction.get("exceptions"):
+            st.markdown("**Detected exceptions**")
+            st.dataframe(pd.DataFrame(extraction["exceptions"]), use_container_width=True, hide_index=True)
+
+        if extraction.get("cuecs_summary"):
+            with st.expander("CUECs detected"):
+                st.write(extraction["cuecs_summary"])
+        if extraction.get("subservice_organizations_summary"):
+            with st.expander("Subservice organizations detected"):
+                st.write(extraction["subservice_organizations_summary"])
+        if extraction.get("review_notes"):
+            st.caption(extraction["review_notes"])
+
     with st.form("register_evidence"):
-        vendor = st.selectbox("Vendor", vendors, format_func=lambda v: v.display_name)
-        vendor_assessments = session.query(Assessment).filter_by(vendor_id=vendor.id).all()
-        assessment_choices = [None] + vendor_assessments
-        assessment = st.selectbox(
-            "Linked assessment (optional)",
-            assessment_choices,
-            format_func=lambda a: "None" if a is None else f"#{a.id} — {a.assessment_type}"
+        document_name = st.text_input(
+            "Document name",
+            value=uploaded.name if uploaded else "",
         )
-        document_type = st.selectbox("Document type", EVIDENCE_TYPES)
-        uploaded = st.file_uploader("Upload evidence file", type=["pdf", "docx", "xlsx", "csv", "txt"])
-        document_name = st.text_input("Document name (if no file is uploaded)")
         c1, c2 = st.columns(2)
         with c1:
-            issuer = st.text_input("Issuer / auditor")
-            document_date = st.text_input("Document date (YYYY-MM-DD)")
-            coverage_start = st.text_input("Coverage start (YYYY-MM-DD)")
-            coverage_end = st.text_input("Coverage end (YYYY-MM-DD)")
+            issuer = st.text_input("Issuer / auditor", value=extraction.get("issuer", ""))
+            document_date = st.text_input("Document date (YYYY-MM-DD)", value=extraction.get("document_date", ""))
+            coverage_start = st.text_input("Coverage start (YYYY-MM-DD)", value=extraction.get("coverage_start", ""))
+            coverage_end = st.text_input("Coverage end (YYYY-MM-DD)", value=extraction.get("coverage_end", ""))
         with c2:
             expiration_date = st.text_input("Expiration date (YYYY-MM-DD)")
-            opinion = st.selectbox("Opinion / result", ["", "Unqualified", "Qualified", "Pass", "Pass with Exceptions", "Fail", "Not Applicable"])
-            exceptions_count = st.number_input("Exceptions / findings count", min_value=0, step=1)
-            analyst_notes = st.text_area("Analyst notes")
+            opinion_options = ["", "Unqualified", "Qualified", "Pass", "Pass with Exceptions", "Fail", "Not Applicable"]
+            extracted_opinion = extraction.get("opinion", "")
+            opinion_index = opinion_options.index(extracted_opinion) if extracted_opinion in opinion_options else 0
+            opinion = st.selectbox("Opinion / result", opinion_options, index=opinion_index)
+            exceptions_count = st.number_input(
+                "Exceptions / findings count",
+                min_value=0,
+                step=1,
+                value=int(extraction.get("exceptions_count", 0) or 0),
+            )
+            analyst_notes = st.text_area(
+                "Analyst notes",
+                value=extraction.get("review_notes", ""),
+            )
+
+        accept_extracted = st.checkbox(
+            "I reviewed the extracted metadata and confirm it is appropriate to save.",
+            value=False if extraction else True,
+        )
 
         if st.form_submit_button("Save evidence", type="primary"):
-            final_name = uploaded.name if uploaded else document_name.strip()
+            final_name = document_name.strip()
             if not final_name:
                 st.error("Upload a file or enter a document name.")
+            elif extraction and not accept_extracted:
+                st.error("Review and confirm the extracted metadata before saving.")
             else:
                 storage_path = None
                 if uploaded:
@@ -512,7 +582,30 @@ def render_evidence():
                 )
                 session.add(ev)
                 session.commit()
-                st.success(f"{document_type} registered for {vendor.display_name}.")
+
+                # Turn extracted SOC 2 exceptions into reviewable findings.
+                created_findings = 0
+                for item in extraction.get("exceptions", []):
+                    title = f"{item.get('control_id', 'SOC 2')} exception"
+                    existing = session.query(Finding).filter_by(vendor_id=vendor.id, title=title).first()
+                    if not existing:
+                        session.add(Finding(
+                            vendor_id=vendor.id,
+                            title=title,
+                            description=item.get("description", ""),
+                            source="Evidence Review",
+                            severity=item.get("severity", "Moderate"),
+                            status="Open",
+                            owner="",
+                        ))
+                        created_findings += 1
+                session.commit()
+
+                st.success(
+                    f"{document_type} registered for {vendor.display_name}."
+                    + (f" {created_findings} finding(s) created from detected exceptions." if created_findings else "")
+                )
+                st.session_state.pop("soc2_extraction", None)
 
     st.subheader("Evidence review")
     latest = session.query(Evidence).order_by(Evidence.created_at.desc()).all()
@@ -700,4 +793,3 @@ elif page == "Monitoring":
     render_monitoring()
 elif page == "Reports":
     render_reports()
-
