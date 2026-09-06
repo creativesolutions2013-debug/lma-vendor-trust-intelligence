@@ -104,3 +104,22 @@ For the production version:
 ## Important
 
 The sample vendor data is synthetic and exists only to demonstrate the user experience.
+
+
+## MVP v2 — Assessment & Evidence Center
+
+This version adds:
+
+- Risk-based assessment recommendations
+- Assessment creation, ownership, due dates, status and approval tracking
+- Evidence Center for SOC 2, ISO 27001, PCI AOC, pentest and other artifacts
+- Evidence file upload for demo purposes
+- Evidence coverage dates, expiration, issuer, opinion and exception counts
+- Automatic Valid / Expiring Soon / Expired evidence status
+- Assessment and evidence tabs within Vendor 360
+- Evidence-expiration signals in the Control Tower attention queue
+
+### Important deployment note
+
+Evidence files are currently stored on the local Streamlit filesystem for MVP demonstration only. Streamlit Community Cloud storage is ephemeral. Before using real vendor documents, migrate evidence storage to durable object storage such as AWS S3 and migrate the SQLite database to PostgreSQL.
+
