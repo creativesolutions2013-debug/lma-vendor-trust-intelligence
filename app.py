@@ -1,8 +1,14 @@
+import os
+from datetime import datetime, date
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from src.db import init_db, get_session, Vendor, Engagement, Finding, MonitoringEvent
+from src.db import (
+    init_db, get_session, Vendor, Engagement, Assessment,
+    Evidence, Finding, MonitoringEvent
+)
 from src.seed import seed_demo_data
 from src.scoring import (
     InherentRiskInput,
@@ -22,8 +28,60 @@ init_db()
 session = get_session()
 seed_demo_data(session)
 
+EVIDENCE_DIR = "uploaded_evidence"
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+
+ASSESSMENT_TYPES = [
+    "Full Security Assessment",
+    "Enhanced Security Assessment",
+    "Targeted Security Review",
+    "AI Security Assessment",
+    "PCI Review",
+    "Incident-Triggered Reassessment",
+    "Material Change Reassessment",
+]
+
+EVIDENCE_TYPES = [
+    "SOC 2 Type II",
+    "SOC 2 Type I",
+    "ISO 27001 Certificate",
+    "ISO 27001 Statement of Applicability",
+    "PCI AOC",
+    "Penetration Test",
+    "SIG Questionnaire",
+    "CAIQ",
+    "BCP / DR Test",
+    "Incident Response Plan",
+    "Security Policy",
+    "Architecture Diagram",
+    "Other",
+]
+
 def metric_card(label, value):
     st.metric(label, value)
+
+def evidence_status(expiration_date):
+    if not expiration_date:
+        return "Received"
+    try:
+        exp = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+        days = (exp - date.today()).days
+        if days < 0:
+            return "Expired"
+        if days <= 60:
+            return "Expiring Soon"
+        return "Valid"
+    except ValueError:
+        return "Received"
+
+def recommended_assessment(vendor):
+    if vendor.inherent_risk_score >= 75:
+        return "Full Security Assessment"
+    if vendor.inherent_risk_score >= 50:
+        return "Enhanced Security Assessment"
+    if vendor.inherent_risk_score >= 25:
+        return "Targeted Security Review"
+    return "Basic Security Screening"
 
 def render_control_tower():
     st.title("🛡️ Vendor Security Control Tower")
@@ -32,28 +90,37 @@ def render_control_tower():
     vendors = session.query(Vendor).all()
     findings = session.query(Finding).all()
     events = session.query(MonitoringEvent).all()
+    evidence = session.query(Evidence).all()
+    assessments = session.query(Assessment).all()
 
     critical = sum(1 for v in vendors if v.criticality == "Critical")
     high_residual = sum(1 for v in vendors if v.residual_risk_score >= 50)
     open_findings = sum(1 for f in findings if f.status != "Closed")
     open_events = sum(1 for e in events if e.status != "Closed" and e.requires_review)
+    evidence_attention = sum(1 for e in evidence if evidence_status(e.expiration_date) in ["Expired", "Expiring Soon"])
+    open_assessments = sum(1 for a in assessments if a.status not in ["Completed", "Closed"])
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1: metric_card("Vendors", len(vendors))
     with c2: metric_card("Critical Vendors", critical)
     with c3: metric_card("High/Critical Residual Risk", high_residual)
-    with c4: metric_card("Attention Items", open_findings + open_events)
+    with c4: metric_card("Open Assessments", open_assessments)
+    with c5: metric_card("Attention Items", open_findings + open_events + evidence_attention)
 
     st.subheader("Vendor Attention Queue")
     rows = []
     for v in vendors:
         vendor_events = [e for e in events if e.vendor_id == v.id and e.status != "Closed"]
         vendor_findings = [f for f in findings if f.vendor_id == v.id and f.status != "Closed"]
+        vendor_evidence = [e for e in evidence if e.vendor_id == v.id]
+        stale = [e for e in vendor_evidence if evidence_status(e.expiration_date) in ["Expired", "Expiring Soon"]]
         reason = ""
         if vendor_events:
             reason = vendor_events[0].event_type
         elif vendor_findings:
             reason = vendor_findings[0].title
+        elif stale:
+            reason = f"{stale[0].document_type}: {evidence_status(stale[0].expiration_date)}"
         elif v.residual_risk_score >= 50:
             reason = "Elevated residual risk"
         if reason:
@@ -114,7 +181,7 @@ def render_vendors():
         c3.metric("External Risk", selected.external_risk_score)
         c4.metric("Security Rating", selected.security_rating)
 
-        tabs = st.tabs(["Overview", "Engagements", "Findings", "Monitoring"])
+        tabs = st.tabs(["Overview", "Engagements", "Assessments", "Evidence", "Findings", "Monitoring"])
         with tabs[0]:
             st.write({
                 "Legal name": selected.legal_name,
@@ -123,6 +190,7 @@ def render_vendors():
                 "Country": selected.headquarters_country,
                 "Criticality": selected.criticality,
                 "Overall risk": selected.overall_risk_rating,
+                "Recommended assessment": recommended_assessment(selected),
             })
         with tabs[1]:
             engagements = session.query(Engagement).filter_by(vendor_id=selected.id).all()
@@ -138,6 +206,32 @@ def render_vendors():
             else:
                 st.info("No engagements yet.")
         with tabs[2]:
+            rows = session.query(Assessment).filter_by(vendor_id=selected.id).all()
+            if rows:
+                st.dataframe(pd.DataFrame([{
+                    "Assessment": a.assessment_type,
+                    "Reason": a.assessment_reason,
+                    "Status": a.status,
+                    "Assigned To": a.assigned_to,
+                    "Due": a.due_date,
+                    "Approval": a.approval_status,
+                } for a in rows]), use_container_width=True, hide_index=True)
+            else:
+                st.info("No assessments yet.")
+        with tabs[3]:
+            rows = session.query(Evidence).filter_by(vendor_id=selected.id).all()
+            if rows:
+                st.dataframe(pd.DataFrame([{
+                    "Type": e.document_type,
+                    "Document": e.document_name,
+                    "Issuer": e.issuer,
+                    "Expiration": e.expiration_date,
+                    "Status": evidence_status(e.expiration_date),
+                    "Exceptions": e.exceptions_count,
+                } for e in rows]), use_container_width=True, hide_index=True)
+            else:
+                st.info("No evidence yet.")
+        with tabs[4]:
             rows = session.query(Finding).filter_by(vendor_id=selected.id).all()
             if rows:
                 st.dataframe(pd.DataFrame([{
@@ -150,7 +244,7 @@ def render_vendors():
                 } for f in rows]), use_container_width=True, hide_index=True)
             else:
                 st.success("No findings.")
-        with tabs[3]:
+        with tabs[5]:
             rows = session.query(MonitoringEvent).filter_by(vendor_id=selected.id).all()
             if rows:
                 st.dataframe(pd.DataFrame([{
@@ -255,7 +349,193 @@ def render_intake():
         st.success(f"{vendor_name} created.")
         st.metric("Inherent Risk", inherent)
         st.write(f"**Tier:** {tier_from_score(inherent)}")
+        st.write(f"**Recommended assessment:** {recommended_assessment(vendor)}")
         st.write(f"**Initial residual risk:** {residual} — {rating_from_score(residual)}")
+
+def render_assessments():
+    st.title("🧭 Assessments")
+    st.caption("Launch, assign, and track risk-based vendor security assessments.")
+    vendors = session.query(Vendor).order_by(Vendor.display_name).all()
+    assessments = session.query(Assessment).order_by(Assessment.created_at.desc()).all()
+
+    if assessments:
+        st.dataframe(pd.DataFrame([{
+            "ID": a.id,
+            "Vendor": a.vendor.display_name if a.vendor else a.vendor_id,
+            "Assessment": a.assessment_type,
+            "Reason": a.assessment_reason,
+            "Status": a.status,
+            "Assigned To": a.assigned_to,
+            "Due": a.due_date,
+            "Approval": a.approval_status,
+        } for a in assessments]), use_container_width=True, hide_index=True)
+    else:
+        st.info("No assessments created yet.")
+
+    st.subheader("Create assessment")
+    if not vendors:
+        st.warning("Create a vendor first.")
+        return
+
+    with st.form("create_assessment"):
+        vendor = st.selectbox("Vendor", vendors, format_func=lambda v: v.display_name)
+        st.caption(f"Recommended based on inherent risk: {recommended_assessment(vendor)}")
+        assessment_type = st.selectbox("Assessment type", ASSESSMENT_TYPES)
+        reason = st.selectbox("Assessment reason", [
+            "New vendor", "Annual review", "Contract renewal", "Material change",
+            "Security incident", "Security rating deterioration", "AI capability introduced"
+        ])
+        assigned_to = st.text_input("Assigned analyst")
+        due_date = st.date_input("Due date")
+        notes = st.text_area("Scope / notes")
+        if st.form_submit_button("Launch assessment", type="primary"):
+            assessment = Assessment(
+                vendor_id=vendor.id,
+                assessment_type=assessment_type,
+                assessment_reason=reason,
+                status="In Progress",
+                assigned_to=assigned_to,
+                due_date=str(due_date),
+                started_at=datetime.utcnow(),
+                notes=notes,
+            )
+            session.add(assessment)
+            session.commit()
+            st.success(f"{assessment_type} launched for {vendor.display_name}.")
+
+    st.subheader("Update assessment")
+    active = session.query(Assessment).order_by(Assessment.created_at.desc()).all()
+    if active:
+        with st.form("update_assessment"):
+            chosen = st.selectbox(
+                "Assessment",
+                active,
+                format_func=lambda a: f"#{a.id} — {a.vendor.display_name} — {a.assessment_type}"
+            )
+            status = st.selectbox("Status", ["Not Started", "In Progress", "Vendor Responding", "Analyst Review", "Completed", "Closed"],
+                                  index=["Not Started", "In Progress", "Vendor Responding", "Analyst Review", "Completed", "Closed"].index(chosen.status)
+                                  if chosen.status in ["Not Started", "In Progress", "Vendor Responding", "Analyst Review", "Completed", "Closed"] else 1)
+            approval = st.selectbox("Approval status", ["Pending", "Approved", "Approved with Conditions", "Rejected"])
+            risk_score = st.slider("Assessment risk score", 0, 100, int(chosen.risk_score or 0))
+            if st.form_submit_button("Save assessment update"):
+                chosen.status = status
+                chosen.approval_status = approval
+                chosen.risk_score = risk_score
+                if status in ["Completed", "Closed"]:
+                    chosen.completed_at = datetime.utcnow()
+                session.commit()
+                st.success("Assessment updated.")
+
+def render_evidence():
+    st.title("📁 Evidence Center")
+    st.caption("Track assurance artifacts, validity, coverage, and key report metadata.")
+    vendors = session.query(Vendor).order_by(Vendor.display_name).all()
+    evidence_rows = session.query(Evidence).order_by(Evidence.created_at.desc()).all()
+
+    if evidence_rows:
+        df = pd.DataFrame([{
+            "ID": e.id,
+            "Vendor": e.vendor.display_name if e.vendor else e.vendor_id,
+            "Type": e.document_type,
+            "Document": e.document_name,
+            "Issuer": e.issuer,
+            "Coverage End": e.coverage_end,
+            "Expiration": e.expiration_date,
+            "Status": evidence_status(e.expiration_date),
+            "Exceptions": e.exceptions_count,
+        } for e in evidence_rows])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        attention = df[df["Status"].isin(["Expired", "Expiring Soon"])]
+        if not attention.empty:
+            st.warning(f"{len(attention)} evidence item(s) require attention.")
+            st.dataframe(attention, use_container_width=True, hide_index=True)
+    else:
+        st.info("No evidence has been registered yet.")
+
+    st.subheader("Register evidence")
+    if not vendors:
+        st.warning("Create a vendor first.")
+        return
+
+    with st.form("register_evidence"):
+        vendor = st.selectbox("Vendor", vendors, format_func=lambda v: v.display_name)
+        vendor_assessments = session.query(Assessment).filter_by(vendor_id=vendor.id).all()
+        assessment_choices = [None] + vendor_assessments
+        assessment = st.selectbox(
+            "Linked assessment (optional)",
+            assessment_choices,
+            format_func=lambda a: "None" if a is None else f"#{a.id} — {a.assessment_type}"
+        )
+        document_type = st.selectbox("Document type", EVIDENCE_TYPES)
+        uploaded = st.file_uploader("Upload evidence file", type=["pdf", "docx", "xlsx", "csv", "txt"])
+        document_name = st.text_input("Document name (if no file is uploaded)")
+        c1, c2 = st.columns(2)
+        with c1:
+            issuer = st.text_input("Issuer / auditor")
+            document_date = st.text_input("Document date (YYYY-MM-DD)")
+            coverage_start = st.text_input("Coverage start (YYYY-MM-DD)")
+            coverage_end = st.text_input("Coverage end (YYYY-MM-DD)")
+        with c2:
+            expiration_date = st.text_input("Expiration date (YYYY-MM-DD)")
+            opinion = st.selectbox("Opinion / result", ["", "Unqualified", "Qualified", "Pass", "Pass with Exceptions", "Fail", "Not Applicable"])
+            exceptions_count = st.number_input("Exceptions / findings count", min_value=0, step=1)
+            analyst_notes = st.text_area("Analyst notes")
+
+        if st.form_submit_button("Save evidence", type="primary"):
+            final_name = uploaded.name if uploaded else document_name.strip()
+            if not final_name:
+                st.error("Upload a file or enter a document name.")
+            else:
+                storage_path = None
+                if uploaded:
+                    safe_name = f"{vendor.id}_{int(datetime.utcnow().timestamp())}_{uploaded.name}"
+                    storage_path = os.path.join(EVIDENCE_DIR, safe_name)
+                    with open(storage_path, "wb") as f:
+                        f.write(uploaded.getbuffer())
+
+                ev = Evidence(
+                    vendor_id=vendor.id,
+                    assessment_id=assessment.id if assessment else None,
+                    document_type=document_type,
+                    document_name=final_name,
+                    document_date=document_date,
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                    expiration_date=expiration_date,
+                    issuer=issuer,
+                    opinion=opinion,
+                    exceptions_count=int(exceptions_count),
+                    status=evidence_status(expiration_date),
+                    storage_path=storage_path,
+                    analyst_notes=analyst_notes,
+                )
+                session.add(ev)
+                session.commit()
+                st.success(f"{document_type} registered for {vendor.display_name}.")
+
+    st.subheader("Evidence review")
+    latest = session.query(Evidence).order_by(Evidence.created_at.desc()).all()
+    if latest:
+        selected = st.selectbox(
+            "Select evidence",
+            latest,
+            format_func=lambda e: f"#{e.id} — {e.vendor.display_name} — {e.document_type}"
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Status", evidence_status(selected.expiration_date))
+        c2.metric("Exceptions", selected.exceptions_count)
+        c3.metric("Opinion", selected.opinion or "Not recorded")
+        st.write({
+            "Document": selected.document_name,
+            "Issuer": selected.issuer,
+            "Coverage": f"{selected.coverage_start or '—'} to {selected.coverage_end or '—'}",
+            "Expiration": selected.expiration_date or "—",
+            "Linked assessment": selected.assessment_id or "None",
+        })
+        if selected.analyst_notes:
+            st.markdown("**Analyst notes**")
+            st.write(selected.analyst_notes)
 
 def render_findings():
     st.title("⚠️ Findings & Remediation")
@@ -343,7 +623,6 @@ def render_monitoring():
                 new_value=new_value,
                 requires_review=True,
             ))
-            # MVP dynamic risk effect
             severity_bump = {"Low": 2, "Moderate": 5, "High": 10, "Critical": 25}[severity]
             vendor.external_risk_score = min(100, vendor.external_risk_score + severity_bump)
             vendor.residual_risk_score = calculate_residual_risk(
@@ -358,6 +637,9 @@ def render_monitoring():
 def render_reports():
     st.title("📊 Reports")
     vendors = session.query(Vendor).all()
+    evidence = session.query(Evidence).all()
+    assessments = session.query(Assessment).all()
+
     df = pd.DataFrame([{
         "Vendor": v.display_name,
         "Criticality": v.criticality,
@@ -366,6 +648,8 @@ def render_reports():
         "Control Effectiveness": v.control_effectiveness,
         "Residual": v.residual_risk_score,
         "Rating": v.overall_risk_rating,
+        "Assessments": sum(1 for a in assessments if a.vendor_id == v.id),
+        "Evidence Items": sum(1 for e in evidence if e.vendor_id == v.id),
     } for v in vendors])
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.download_button(
@@ -375,6 +659,16 @@ def render_reports():
         mime="text/csv"
     )
 
+    if evidence:
+        st.subheader("Evidence Coverage")
+        ev_df = pd.DataFrame([{
+            "Vendor": e.vendor.display_name if e.vendor else e.vendor_id,
+            "Type": e.document_type,
+            "Status": evidence_status(e.expiration_date),
+            "Expiration": e.expiration_date,
+        } for e in evidence])
+        st.dataframe(ev_df, use_container_width=True, hide_index=True)
+
 st.sidebar.title("LMA Vendor Trust Intelligence")
 page = st.sidebar.radio(
     "Navigation",
@@ -382,6 +676,8 @@ page = st.sidebar.radio(
         "Control Tower",
         "Vendors",
         "New Vendor Intake",
+        "Assessments",
+        "Evidence Center",
         "Findings",
         "Monitoring",
         "Reports",
@@ -394,9 +690,14 @@ elif page == "Vendors":
     render_vendors()
 elif page == "New Vendor Intake":
     render_intake()
+elif page == "Assessments":
+    render_assessments()
+elif page == "Evidence Center":
+    render_evidence()
 elif page == "Findings":
     render_findings()
 elif page == "Monitoring":
     render_monitoring()
 elif page == "Reports":
     render_reports()
+
