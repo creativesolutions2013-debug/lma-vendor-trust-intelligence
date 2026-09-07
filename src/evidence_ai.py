@@ -76,13 +76,13 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         flags=re.IGNORECASE,
     )
     opinion = _find_first(
-    [
-        r"Auditor Opinion\s+([^\n]+)",
-        r"Conclusion\s+([^\n]+)",
-        r"Service Auditor Conclusion\s+([^\n]+)",
-    ],
-    text,
-)
+        [
+            r"Auditor Opinion\s+([^\n]+)",
+            r"Conclusion\s+([^\n]+)",
+            r"Service Auditor Conclusion\s+([^\n]+)",
+        ],
+        text,
+    )
     exception_mentions = re.findall(r"\bException\b", text, flags=re.IGNORECASE)
 
     # For the synthetic report and similar reports, identify explicit exception rows.
