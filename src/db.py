@@ -5,7 +5,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-DATABASE_URL = "sqlite:///vendor_trust.db"
+DATABASE_URL = "sqlite:////tmp/vendor_trust.db"
 
 engine = create_engine(
     DATABASE_URL,
