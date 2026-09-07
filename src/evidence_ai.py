@@ -31,12 +31,12 @@ def normalize_date(value: str) -> str:
     if not value:
         return ""
 
-    formats = [
+formats = [
     "%B %d, %Y",
     "%b %d, %Y",
     "%Y-%m-%d",
     "%m/%d/%Y",
-    ]
+]
 
     for fmt in formats:
         try:
