@@ -49,15 +49,15 @@ def normalize_date(value: str) -> str:
 
 def local_soc2_extraction(text: str) -> Dict[str, Any]:
     """Deterministic fallback for demo/testing when no API key is configured."""
-    issuer = _find_first(
-    [
-        r"Independent Auditor\s+([^\n]+)",
-        r"Independent service auditor\s+([^\n]+)",
-        r"Service auditor\s+([^\n]+)",
-        r"Auditor\s+([^\n]+)",
-    ],
-    text,
-)
+     issuer = _find_first(
+        [
+            r"Independent Auditor\s+([^\n]+)",
+            r"Independent service auditor\s+([^\n]+)",
+            r"Service auditor\s+([^\n]+)",
+            r"Auditor\s+([^\n]+)",
+        ],
+        text,
+    )
     report_date = _find_first(
     [
         r"Report Date\s+([^\n]+)",
