@@ -86,14 +86,30 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     exception_mentions = re.findall(r"\bException\b", text, flags=re.IGNORECASE)
 
     # For the synthetic report and similar reports, identify explicit exception rows.
-    explicit_exception_rows = re.findall(
-        r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
-        r".*?"
-        r"Exception(?:\s+noted)?\s+"
-        r"(.+?)(?=\n(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)|\n[A-Z]\.|$)",
+    control_blocks = re.findall(
+        r"(?ms)^(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*\n"
+        r"(.*?)(?=^(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*$|\Z)",
         text,
-        flags=re.IGNORECASE | re.DOTALL,
     )
+
+    explicit_exception_rows = []
+
+    for control, block in control_blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+
+        for index, line in enumerate(lines):
+            if re.fullmatch(
+                r"Exception(?:\s+noted)?",
+                line,
+                flags=re.IGNORECASE,
+            ):
+                description = " ".join(lines[index + 1 :]).strip()
+
+                if description:
+                    explicit_exception_rows.append(
+                        (control, description)
+                    )
+                break
     cuec_section = ""
     cuec_match = re.search(
         r"Complementary User Entity Controls.*?(?=\n\d+\.\s+Subservice Organizations|\Z)",
