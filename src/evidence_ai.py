@@ -20,14 +20,23 @@ def _find(pattern: str, text: str, default: str = "") -> str:
     match = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
     return match.group(1).strip() if match else default
 
+def _find_first(patterns, text: str, default: str = "") -> str:
+    for pattern in patterns:
+        value = _find(pattern, text)
+        if value:
+            return value
+    return default
+
 def normalize_date(value: str) -> str:
     if not value:
         return ""
 
     formats = [
-        "%B %d, %Y",
-        "%b %d, %Y",
-        "%Y-%m-%d",
+    "%B %d, %Y",
+    "%b %d, %Y",
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+]
     ]
 
     for fmt in formats:
@@ -41,22 +50,51 @@ def normalize_date(value: str) -> str:
 
 def local_soc2_extraction(text: str) -> Dict[str, Any]:
     """Deterministic fallback for demo/testing when no API key is configured."""
-    issuer = _find(r"Independent Auditor\s+([^\n]+)", text)
-    report_date = _find(r"Report Date\s+([^\n]+)", text)
-    period = re.search(
-        r"Examination Period\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})\s*[-–]\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})",
-        text,
-        flags=re.IGNORECASE,
-    )
-    opinion = _find(r"Auditor Opinion\s+([^\n]+)", text)
+    issuer = _find_first(
+    [
+        r"Independent Auditor\s+([^\n]+)",
+        r"Independent service auditor\s+([^\n]+)",
+        r"Service auditor\s+([^\n]+)",
+        r"Auditor\s+([^\n]+)",
+    ],
+    text,
+)
+    report_date = _find_first(
+    [
+        r"Report Date\s+([^\n]+)",
+        r"Report issued\s+([^\n]+)",
+        r"Report issue date\s+([^\n]+)",
+        r"Date of report\s+([^\n]+)",
+    ],
+    text,
+)
+period = re.search(
+    r"(?:Examination Period|Period under examination)\s+"
+    r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})"
+    r"\s*(?:[-–]|through|to)\s*"
+    r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})",
+    text,
+    flags=re.IGNORECASE,
+)
+    opinion = _find_first(
+    [
+        r"Auditor Opinion\s+([^\n]+)",
+        r"Conclusion\s+([^\n]+)",
+        r"Service Auditor Conclusion\s+([^\n]+)",
+    ],
+    text,
+)
     exception_mentions = re.findall(r"\bException\b", text, flags=re.IGNORECASE)
 
     # For the synthetic report and similar reports, identify explicit exception rows.
     explicit_exception_rows = re.findall(
-        r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s+.*?\s+Exception\s+([^\n]+)",
-        text,
-        flags=re.IGNORECASE,
-    )
+    r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
+    r"\s+.*?"
+    r"\s+Exception(?:\s+noted)?"
+    r"\s+([^\n]+)",
+    text,
+    flags=re.IGNORECASE,
+)
 
     cuec_section = ""
     cuec_match = re.search(
@@ -87,7 +125,15 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         "document_date": normalize_date(report_date),
         "coverage_start": normalize_date(period.group(1)) if period else "",
         "coverage_end": normalize_date(period.group(2)) if period else "",
-        "opinion": opinion.split(",")[0].strip() if opinion else "",
+        "opinion": (
+    "Unmodified"
+    if re.search(r"\bunmodified\b", opinion, re.IGNORECASE)
+    else "Unqualified"
+    if re.search(r"\bunqualified\b", opinion, re.IGNORECASE)
+    else opinion.split(",")[0].strip()
+    if opinion
+    else ""
+),
         "exceptions_count": len(exceptions),
         "exceptions": exceptions,
         "cuecs_summary": cuec_section[:1800],
