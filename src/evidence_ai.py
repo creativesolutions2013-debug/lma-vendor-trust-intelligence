@@ -58,15 +58,15 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         ],
         text,
     )
-    report_date = _find_first(
-    [
-        r"Report Date\s+([^\n]+)",
-        r"Report issued\s+([^\n]+)",
-        r"Report issue date\s+([^\n]+)",
-        r"Date of report\s+([^\n]+)",
-    ],
-    text,
-)
+     report_date = _find_first(
+        [
+            r"Report Date\s+([^\n]+)",
+            r"Report issued\s+([^\n]+)",
+            r"Report issue date\s+([^\n]+)",
+            r"Date of report\s+([^\n]+)",
+        ],
+        text,
+    )
     period = re.search(
         r"(?:Examination Period|Period under examination)\s+"
         r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})"
