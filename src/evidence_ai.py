@@ -86,13 +86,13 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     exception_mentions = re.findall(r"\bException\b", text, flags=re.IGNORECASE)
 
     # For the synthetic report and similar reports, identify explicit exception rows.
-    explicit_exception_rows = re.findall(
+     explicit_exception_rows = re.findall(
     r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
-    r"\s+.*?"
-    r"\s+Exception(?:\s+noted)?"
-    r"\s+([^\n]+)",
+    r".*?"
+    r"Exception(?:\s+noted)?\s+"
+    r"(.+?)(?=\n(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)|\n[A-Z]\.|$)",
     text,
-    flags=re.IGNORECASE,
+    flags=re.IGNORECASE | re.DOTALL,
 )
 
     cuec_section = ""
