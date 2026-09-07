@@ -530,7 +530,18 @@ def render_evidence():
             coverage_end = st.text_input("Coverage end (YYYY-MM-DD)", value=extraction.get("coverage_end", ""))
         with c2:
             expiration_date = st.text_input("Expiration date (YYYY-MM-DD)")
-            opinion_options = ["", "Unqualified", "Qualified", "Pass", "Pass with Exceptions", "Fail", "Not Applicable"]
+            opinion_options = [
+    "",
+    "Unmodified",
+    "Unqualified",
+    "Qualified",
+    "Adverse",
+    "Disclaimer",
+    "Pass",
+    "Pass with Exceptions",
+    "Fail",
+    "Not Applicable",
+]
             extracted_opinion = extraction.get("opinion", "")
             opinion_index = opinion_options.index(extracted_opinion) if extracted_opinion in opinion_options else 0
             opinion = st.selectbox("Opinion / result", opinion_options, index=opinion_index)
