@@ -124,14 +124,14 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         "coverage_start": normalize_date(period.group(1)) if period else "",
         "coverage_end": normalize_date(period.group(2)) if period else "",
         "opinion": (
-    "Unmodified"
-    if re.search(r"\bunmodified\b", opinion, re.IGNORECASE)
-    else "Unqualified"
-    if re.search(r"\bunqualified\b", opinion, re.IGNORECASE)
-    else opinion.split(",")[0].strip()
-    if opinion
-    else ""
-),
+            "Unmodified"
+            if re.search(r"\bunmodified\b", opinion, re.IGNORECASE)
+            else "Unqualified"
+            if re.search(r"\bunqualified\b", opinion, re.IGNORECASE)
+            else opinion.split(",")[0].strip()
+            if opinion
+            else ""
+        ),
         "exceptions_count": len(exceptions),
         "exceptions": exceptions,
         "cuecs_summary": cuec_section[:1800],
