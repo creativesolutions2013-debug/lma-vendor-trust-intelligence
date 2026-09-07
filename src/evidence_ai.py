@@ -36,7 +36,6 @@ def normalize_date(value: str) -> str:
     "%b %d, %Y",
     "%Y-%m-%d",
     "%m/%d/%Y",
-]
     ]
 
     for fmt in formats:
@@ -68,14 +67,14 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     ],
     text,
 )
-period = re.search(
-    r"(?:Examination Period|Period under examination)\s+"
-    r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})"
-    r"\s*(?:[-–]|through|to)\s*"
-    r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})",
-    text,
-    flags=re.IGNORECASE,
-)
+    period = re.search(
+        r"(?:Examination Period|Period under examination)\s+"
+        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})"
+        r"\s*(?:[-–]|through|to)\s*"
+        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})",
+        text,
+        flags=re.IGNORECASE,
+    )
     opinion = _find_first(
     [
         r"Auditor Opinion\s+([^\n]+)",
