@@ -87,14 +87,13 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
 
     # For the synthetic report and similar reports, identify explicit exception rows.
     explicit_exception_rows = re.findall(
-    r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
-    r".*?"
-    r"Exception(?:\s+noted)?\s+"
-    r"(.+?)(?=\n(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)|\n[A-Z]\.|$)",
-    text,
-    flags=re.IGNORECASE | re.DOTALL,
-)
-
+        r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
+        r".*?"
+        r"Exception(?:\s+noted)?\s+"
+        r"(.+?)(?=\n(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)|\n[A-Z]\.|$)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     cuec_section = ""
     cuec_match = re.search(
         r"Complementary User Entity Controls.*?(?=\n\d+\.\s+Subservice Organizations|\Z)",
