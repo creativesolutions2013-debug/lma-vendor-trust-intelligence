@@ -2,21 +2,60 @@
 
 [![Run tests](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml)
 
-A working MVP for continuous, evidence-driven third-party security lifecycle management.
+**A continuous third-party risk intelligence platform designed to identify which vendors need attention now, why their risk changed, and what action should happen next.**
 
-## Product thesis
+LMA Vendor Trust Intelligence is a working TPRM MVP that combines vendor intake, inherent-risk scoring, security evidence analysis, findings management, continuous monitoring, and event-driven reassessment into a single workflow.
 
-Traditional TPRM is often calendar-driven:
+## Why this matters
+
+Traditional third-party risk management is often calendar-driven:
 
 > Questionnaire → annual assessment → approval → repeat next year.
 
-This project is designed around a different operating model:
+That model creates unnecessary reassessment work while still leaving security teams exposed to risk changes that occur between review cycles.
 
-> Intake → risk tiering → assessment → findings → approval → continuous monitoring → event-driven reassessment.
+LMA Vendor Trust Intelligence is designed around a different operating model:
 
-The central question is:
+> Vendor Intake → Risk Tiering → Due Diligence → Evidence Validation → Risk Decision → Remediation → Continuous Monitoring → Triggered Reassessment.
+
+The core principle is simple:
+
+**Do not reassess every vendor simply because twelve months have passed. Reassess when the risk changes.**
+
+The platform is built around one operational question:
 
 **Which vendors need attention right now, why, and what should we do next?**
+
+## AI Evidence Analyst
+
+The AI Evidence Analyst helps reduce manual security-document review by extracting structured information from vendor evidence such as SOC 2 reports.
+
+Current capabilities include:
+
+- Auditor and report-date extraction
+- Audit-period identification
+- Opinion detection
+- Control-exception detection
+- Exception-to-control association
+- Evidence confidence and analyst review
+- Automatic creation of findings from detected exceptions
+- Human confirmation before evidence is saved
+
+The current public MVP supports a deterministic local parsing mode so the demonstration can operate without paid AI API usage. The architecture also supports an optional AI-assisted extraction path for future production use.
+
+## Continuous risk model
+
+The platform separates three major dimensions of vendor risk:
+
+- **Inherent risk** — what risk exists because of the service, data, access, business criticality, regulatory exposure, geography, fourth parties, and AI usage.
+- **Control effectiveness** — how effectively the vendor's security controls reduce that exposure based on available evidence.
+- **External risk** — changes in observable security posture, incidents, vulnerabilities, credentials, ratings, and other monitoring signals.
+
+These inputs contribute to an explainable residual-risk score and a prioritized Control Tower attention queue.
+
+The goal is not simply to assign vendors a risk score.
+
+The goal is to create an evidence-driven operating system for deciding **where security teams should spend their time next**.
 
 ## MVP features
 
