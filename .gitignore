@@ -6,3 +6,5 @@ venv/
 *.db
 .DS_Store
 .streamlit/secrets.toml
+.pytest_cache/
+uploaded_evidence/
