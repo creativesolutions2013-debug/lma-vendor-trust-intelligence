@@ -57,6 +57,15 @@ The goal is not simply to assign vendors a risk score.
 
 The goal is to create an evidence-driven operating system for deciding **where security teams should spend their time next**.
 
+## What makes this different
+
+- **Event-driven reassessment** instead of relying only on annual review cycles
+- **Evidence-driven risk decisions** rather than questionnaire responses alone
+- **Vendor + engagement modeling** so one supplier can have multiple services and risk profiles
+- **Human-in-the-loop evidence analysis** with automated extraction and analyst confirmation
+- **Explainable risk scoring** that separates inherent risk, control effectiveness, and external risk
+- **Prioritized attention queues** designed to show security teams where intervention is needed now
+
 ## MVP features
 
 - Vendor inventory
