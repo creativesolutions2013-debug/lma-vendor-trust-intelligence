@@ -2,6 +2,8 @@ from src.evidence_ai import local_soc2_extraction
 
 
 def test_variant_b_soc2_extraction():
+
+    
     text = """
 Organization
 Redwood Data Services LLC (Fictional)
