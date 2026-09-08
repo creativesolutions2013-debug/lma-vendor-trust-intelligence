@@ -1,5 +1,7 @@
 # LMA Vendor Trust Intelligence
 
+[![Run tests](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml)
+
 A working MVP for continuous, evidence-driven third-party security lifecycle management.
 
 ## Product thesis
