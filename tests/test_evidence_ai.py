@@ -47,7 +47,7 @@ No exceptions identified.
     assert result["exceptions_count"] == 1
     assert result["exceptions"][0]["control_id"] == "CC7.1"
     assert "36 hours after creation" in result["exceptions"][0]["description"]
-    def test_variant_a_soc2_extraction():
+def test_variant_a_soc2_extraction():
     text = """
 Service Organization
 Northstar Cloud Systems, Inc. (Fictional)
