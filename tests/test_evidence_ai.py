@@ -111,3 +111,33 @@ No additional exceptions noted.
     assert "Customers must review privileged access quarterly." in result["cuecs_summary"]
     assert "Example Cloud Provider" in result["subservice_organizations_summary"]
     assert "Analyst Test Notes" not in result["subservice_organizations_summary"]
+
+def test_confidence_increases_with_complete_metadata():
+    strong_text = """
+SOC 2 Type II Report
+
+Independent service auditor Example Assurance LLP
+Report issued September 12, 2026
+Period under examination 02/01/2026 through 07/31/2026
+Conclusion Unmodified opinion
+
+Complementary User Entity Controls
+Customers must review privileged access quarterly.
+
+Subservice Organizations
+Example Cloud Provider
+
+Analyst Test Notes
+No additional exceptions noted.
+"""
+
+    weak_text = """
+SOC 2 Report
+"""
+
+    strong_result = local_soc2_extraction(strong_text)
+    weak_result = local_soc2_extraction(weak_text)
+
+    assert strong_result["confidence"] > weak_result["confidence"]
+    assert 0 <= weak_result["confidence"] <= 1
+    assert 0 <= strong_result["confidence"] <= 1
