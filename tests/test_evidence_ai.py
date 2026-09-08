@@ -89,3 +89,25 @@ Two critical alerts exceeded the 24-hour investigation target.
     assert result["exceptions_count"] == 2
     assert result["exceptions"][0]["control_id"] == "CC6.6"
     assert result["exceptions"][1]["control_id"] == "CC7.3"
+
+def test_soc2_sections_without_numbered_headings():
+    text = """
+SOC 2 Type II Report
+
+Complementary User Entity Controls
+Customers must review privileged access quarterly.
+Customers must notify the service provider of terminated users promptly.
+
+Subservice Organizations
+Example Cloud Provider
+Example Identity Provider
+
+Analyst Test Notes
+No additional exceptions noted.
+"""
+
+    result = local_soc2_extraction(text)
+
+    assert "Customers must review privileged access quarterly." in result["cuecs_summary"]
+    assert "Example Cloud Provider" in result["subservice_organizations_summary"]
+    assert "Analyst Test Notes" not in result["subservice_organizations_summary"]

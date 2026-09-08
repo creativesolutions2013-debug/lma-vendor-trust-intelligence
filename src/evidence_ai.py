@@ -112,7 +112,7 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
                 break
     cuec_section = ""
     cuec_match = re.search(
-        r"Complementary User Entity Controls.*?(?=\n\d+\.\s+Subservice Organizations|\Z)",
+        r"Complementary User Entity Controls.*?(?=\n(?:\d+\.\s+)?Subservice Organizations|\Z)",
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -121,7 +121,7 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
 
     subservice_section = ""
     sub_match = re.search(
-        r"Subservice Organizations.*?(?=\n\d+\.\s+Analyst Test Notes|\Z)",
+        r"Subservice Organizations.*?(?=\n(?:\d+\.\s+)?Analyst Test Notes|\Z)",
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
