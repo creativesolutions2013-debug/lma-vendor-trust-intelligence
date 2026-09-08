@@ -81,15 +81,19 @@ The goal is to create an evidence-driven operating system for deciding **where s
 - Risk register export
 
 ## Demo & local setup
+
 The public MVP is built with Streamlit and uses synthetic data for demonstration purposes.
 
-### Run locally
+### Run in GitHub Codespaces
 
 Open the repository in GitHub Codespaces, then run:
 
 ```bash
 pip install -r requirements.txt
 python -m streamlit run app.py
+```
+
+Codespaces will expose port `8501` and provide a browser preview URL.
 
 ### Run locally
 
@@ -98,35 +102,44 @@ Clone the repository:
 ```bash
 git clone https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence.git
 cd lma-vendor-trust-intelligence
+```
 
 Create a virtual environment:
 
 ```bash
 python -m venv .venv
+```
+
 On macOS/Linux:
 
 ```bash
 source .venv/bin/activate
+```
 
 On Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+```
 
 Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
 
 Start the application:
 
 ```bash
 python -m streamlit run app.py
+```
 
 ### Run the test suite
 
 ```bash
 pytest -q
+```
+
 The repository includes automated regression tests for the SOC 2 evidence parser, including multiple synthetic report formats and control-exception association checks.
 
 ### Demo data and security note
@@ -134,6 +147,7 @@ The repository includes automated regression tests for the SOC 2 evidence parser
 The current public deployment uses synthetic vendor and evidence data only.
 
 SQLite and locally uploaded evidence files are used for MVP demonstration purposes and may be ephemeral in hosted Streamlit environments. Real or confidential vendor evidence should not be uploaded to the public demo.
+
 A production deployment should use persistent PostgreSQL storage, secure object storage, authentication, role-based access control, audit logging, encryption, and malware scanning for uploaded evidence.
 
 ## Current scoring model
