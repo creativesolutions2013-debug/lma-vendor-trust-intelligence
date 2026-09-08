@@ -154,3 +154,8 @@ Never commit API keys to GitHub.
 
 The application uses the OpenAI Responses API when the secret is configured. Analyst confirmation remains required before extracted evidence metadata is saved.
 
+## License
+
+Copyright © 2026 LMA Creative Solutions LLC. All rights reserved.
+
+This repository is provided for demonstration, evaluation, educational, and portfolio purposes. See [LICENSE](LICENSE) for permitted uses.
