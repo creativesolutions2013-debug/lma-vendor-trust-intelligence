@@ -7,6 +7,10 @@ from typing import Any, Dict
 from pypdf import PdfReader
 
 
+# ---------------------------------------------------------
+# PDF text extraction
+# ---------------------------------------------------------
+
 def extract_pdf_text(file_bytes: bytes) -> str:
     reader = PdfReader(io.BytesIO(file_bytes))
     pages = []
@@ -17,19 +21,38 @@ def extract_pdf_text(file_bytes: bytes) -> str:
     return "\n".join(pages)
 
 
-def _find(pattern: str, text: str, default: str = "") -> str:
+# ---------------------------------------------------------
+# Parsing helpers
+# ---------------------------------------------------------
+
+def _find(
+    pattern: str,
+    text: str,
+    default: str = "",
+) -> str:
     match = re.search(
         pattern,
         text,
         flags=re.IGNORECASE | re.MULTILINE,
     )
 
-    return match.group(1).strip() if match else default
+    return (
+        match.group(1).strip()
+        if match
+        else default
+    )
 
 
-def _find_first(patterns, text: str, default: str = "") -> str:
+def _find_first(
+    patterns,
+    text: str,
+    default: str = "",
+) -> str:
     for pattern in patterns:
-        value = _find(pattern, text)
+        value = _find(
+            pattern,
+            text,
+        )
 
         if value:
             return value
@@ -53,7 +76,9 @@ def normalize_date(value: str) -> str:
             return datetime.strptime(
                 value.strip(),
                 fmt,
-            ).strftime("%Y-%m-%d")
+            ).strftime(
+                "%Y-%m-%d"
+            )
 
         except ValueError:
             continue
@@ -61,11 +86,25 @@ def normalize_date(value: str) -> str:
     return value.strip()
 
 
-def local_soc2_extraction(text: str) -> Dict[str, Any]:
+# ---------------------------------------------------------
+# Local SOC 2 parser
+# ---------------------------------------------------------
+
+def local_soc2_extraction(
+    text: str,
+) -> Dict[str, Any]:
     """
-    Deterministic fallback parser used for demo/testing
-    when no AI API key is configured.
+    Deterministic SOC 2 parser used for the public demo
+    and as a fallback when no AI API key is configured.
+
+    The parser extracts common SOC 2 metadata,
+    control exceptions, CUECs, subservice organizations,
+    and produces an explainable extraction-confidence score.
     """
+
+    # -----------------------------------------------------
+    # Auditor / issuer
+    # -----------------------------------------------------
 
     issuer = _find_first(
         [
@@ -77,6 +116,10 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         text,
     )
 
+    # -----------------------------------------------------
+    # Report date
+    # -----------------------------------------------------
+
     report_date = _find_first(
         [
             r"Report Date\s+([^\n]+)",
@@ -87,14 +130,24 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         text,
     )
 
+    # -----------------------------------------------------
+    # Examination / coverage period
+    # -----------------------------------------------------
+
     period = re.search(
         r"(?:Examination Period|Period under examination)\s+"
-        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})"
+        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}"
+        r"|\d{1,2}/\d{1,2}/\d{4})"
         r"\s*(?:[-–]|through|to)\s*"
-        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})",
+        r"([A-Za-z]+\s+\d{1,2},\s+\d{4}"
+        r"|\d{1,2}/\d{1,2}/\d{4})",
         text,
         flags=re.IGNORECASE,
     )
+
+    # -----------------------------------------------------
+    # Auditor opinion
+    # -----------------------------------------------------
 
     opinion = _find_first(
         [
@@ -107,11 +160,19 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
 
     # -----------------------------------------------------
     # Control exception extraction
+    #
+    # Break the report into control-specific blocks so
+    # exceptions remain associated with the correct control.
     # -----------------------------------------------------
 
     control_blocks = re.findall(
-        r"(?ms)^(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*\n"
-        r"(.*?)(?=^(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*$|\Z)",
+        r"(?ms)^"
+        r"(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
+        r"\s*\n"
+        r"(.*?)"
+        r"(?=^"
+        r"(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)"
+        r"\s*$|\Z)",
         text,
     )
 
@@ -124,19 +185,26 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             if line.strip()
         ]
 
-        for index, line in enumerate(lines):
+        for index, line in enumerate(
+            lines
+        ):
             if re.fullmatch(
                 r"Exception(?:\s+noted)?",
                 line,
                 flags=re.IGNORECASE,
             ):
                 description = " ".join(
-                    lines[index + 1 :]
+                    lines[
+                        index + 1 :
+                    ]
                 ).strip()
 
                 if description:
                     explicit_exception_rows.append(
-                        (control, description)
+                        (
+                            control,
+                            description,
+                        )
                     )
 
                 break
@@ -144,46 +212,81 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     exceptions = [
         {
             "control_id": control,
-            "description": description.strip(),
+            "description": (
+                description.strip()
+            ),
             "severity": "Moderate",
         }
-        for control, description in explicit_exception_rows
+        for (
+            control,
+            description,
+        ) in explicit_exception_rows
     ]
 
     # -----------------------------------------------------
     # Complementary User Entity Controls
+    #
+    # Supports both numbered and unnumbered headings.
     # -----------------------------------------------------
 
     cuec_section = ""
 
     cuec_match = re.search(
-        r"Complementary User Entity Controls.*?"
-        r"(?=\n(?:\d+\.\s+)?Subservice Organizations|\Z)",
+        r"Complementary User Entity Controls"
+        r".*?"
+        r"(?="
+        r"\n(?:\d+\.\s+)?"
+        r"Subservice Organizations"
+        r"|\Z)",
         text,
-        flags=re.IGNORECASE | re.DOTALL,
+        flags=(
+            re.IGNORECASE
+            | re.DOTALL
+        ),
     )
 
     if cuec_match:
-        cuec_section = cuec_match.group(0).strip()
+        cuec_section = (
+            cuec_match
+            .group(0)
+            .strip()
+        )
 
     # -----------------------------------------------------
     # Subservice organizations
+    #
+    # Supports both numbered and unnumbered headings.
     # -----------------------------------------------------
 
     subservice_section = ""
 
     sub_match = re.search(
-        r"Subservice Organizations.*?"
-        r"(?=\n(?:\d+\.\s+)?Analyst Test Notes|\Z)",
+        r"Subservice Organizations"
+        r".*?"
+        r"(?="
+        r"\n(?:\d+\.\s+)?"
+        r"Analyst Test Notes"
+        r"|\Z)",
         text,
-        flags=re.IGNORECASE | re.DOTALL,
+        flags=(
+            re.IGNORECASE
+            | re.DOTALL
+        ),
     )
 
     if sub_match:
-        subservice_section = sub_match.group(0).strip()
+        subservice_section = (
+            sub_match
+            .group(0)
+            .strip()
+        )
 
     # -----------------------------------------------------
-    # Dynamic extraction confidence
+    # Dynamic extraction-confidence scoring
+    #
+    # This is extraction completeness confidence.
+    # It does NOT represent whether the SOC 2 report itself
+    # is trustworthy or whether controls are effective.
     # -----------------------------------------------------
 
     confidence_score = 0.20
@@ -207,12 +310,15 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         confidence_score += 0.075
 
     confidence_score = round(
-        min(confidence_score, 0.95),
+        min(
+            confidence_score,
+            0.95,
+        ),
         2,
     )
 
     # -----------------------------------------------------
-    # Explain why the confidence score was assigned
+    # Explain what supported the confidence score
     # -----------------------------------------------------
 
     confidence_reasons = []
@@ -248,7 +354,46 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         )
 
     # -----------------------------------------------------
-    # Normalize opinion
+    # Explain what was not identified
+    #
+    # These gaps give the analyst specific areas to review
+    # instead of relying only on a numerical score.
+    # -----------------------------------------------------
+
+    confidence_gaps = []
+
+    if not issuer:
+        confidence_gaps.append(
+            "Issuer / auditor not identified"
+        )
+
+    if not report_date:
+        confidence_gaps.append(
+            "Report date not identified"
+        )
+
+    if not period:
+        confidence_gaps.append(
+            "Coverage period not identified"
+        )
+
+    if not opinion:
+        confidence_gaps.append(
+            "Auditor opinion not identified"
+        )
+
+    if not cuec_section:
+        confidence_gaps.append(
+            "Complementary User Entity Controls not identified"
+        )
+
+    if not subservice_section:
+        confidence_gaps.append(
+            "Subservice organizations not identified"
+        )
+
+    # -----------------------------------------------------
+    # Normalize auditor opinion
     # -----------------------------------------------------
 
     normalized_opinion = ""
@@ -259,17 +404,25 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             opinion,
             flags=re.IGNORECASE,
         ):
-            normalized_opinion = "Unmodified"
+            normalized_opinion = (
+                "Unmodified"
+            )
 
         elif re.search(
             r"\bunqualified\b",
             opinion,
             flags=re.IGNORECASE,
         ):
-            normalized_opinion = "Unqualified"
+            normalized_opinion = (
+                "Unqualified"
+            )
 
         else:
-            normalized_opinion = opinion.split(",")[0].strip()
+            normalized_opinion = (
+                opinion
+                .split(",")[0]
+                .strip()
+            )
 
     # -----------------------------------------------------
     # Return structured extraction result
@@ -285,13 +438,20 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             )
             else "SOC 2"
         ),
-        "issuer": issuer.replace(
-            "(Fictional)",
-            "",
-        ).strip(),
-        "document_date": normalize_date(
-            report_date
+
+        "issuer": (
+            issuer.replace(
+                "(Fictional)",
+                "",
+            ).strip()
         ),
+
+        "document_date": (
+            normalize_date(
+                report_date
+            )
+        ),
+
         "coverage_start": (
             normalize_date(
                 period.group(1)
@@ -299,6 +459,7 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             if period
             else ""
         ),
+
         "coverage_end": (
             normalize_date(
                 period.group(2)
@@ -306,32 +467,61 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             if period
             else ""
         ),
-        "opinion": normalized_opinion,
-        "exceptions_count": len(
+
+        "opinion": (
+            normalized_opinion
+        ),
+
+        "exceptions_count": (
+            len(exceptions)
+        ),
+
+        "exceptions": (
             exceptions
         ),
-        "exceptions": exceptions,
+
         "cuecs_summary": (
             cuec_section[:1800]
         ),
+
         "subservice_organizations_summary": (
             subservice_section[:1800]
         ),
-        "confidence": confidence_score,
-        "confidence_reasons": confidence_reasons,
-        "extraction_method": "Local parser",
+
+        "confidence": (
+            confidence_score
+        ),
+
+        "confidence_reasons": (
+            confidence_reasons
+        ),
+
+        "confidence_gaps": (
+            confidence_gaps
+        ),
+
+        "extraction_method": (
+            "Local parser"
+        ),
+
         "review_notes": (
-            "Fallback parser used. Analyst review is required "
+            "Fallback parser used. "
+            "Analyst review is required "
             "before accepting metadata."
         ),
     }
 
+
+# ---------------------------------------------------------
+# Optional OpenAI extraction
+# ---------------------------------------------------------
 
 def ai_soc2_extraction(
     text: str,
     api_key: str,
     model: str = "gpt-5.6-luna",
 ) -> Dict[str, Any]:
+
     from openai import OpenAI
 
     client = OpenAI(
@@ -340,6 +530,7 @@ def ai_soc2_extraction(
 
     prompt = f"""
 You are a third-party security assurance analyst.
+
 Extract structured metadata from the SOC 2 report text below.
 
 Return ONLY valid JSON with these keys:
@@ -356,20 +547,38 @@ cuecs_summary,
 subservice_organizations_summary,
 confidence,
 confidence_reasons,
+confidence_gaps,
 extraction_method,
 review_notes.
 
 Rules:
 
 - Use ISO YYYY-MM-DD dates when the date is unambiguous.
+
 - exceptions must be an array of objects containing:
-  control_id, description, severity.
-- confidence_reasons must be an array of short explanations
-  describing which report elements supported the confidence score.
+  control_id,
+  description,
+  severity.
+
+- confidence must be a number between 0 and 1.
+
+- confidence represents confidence in extraction completeness,
+  not the trustworthiness of the report or effectiveness
+  of the vendor's controls.
+
+- confidence_reasons must be an array of short statements
+  explaining which expected SOC 2 elements were identified.
+
+- confidence_gaps must be an array of short statements
+  identifying expected SOC 2 metadata that could not
+  be reliably identified.
+
 - Do not invent missing facts.
+
 - Use empty strings or [] when information is unavailable.
-- confidence must be a number from 0 to 1.
+
 - extraction_method must be "OpenAI".
+
 - Flag ambiguity or potential issues in review_notes.
 
 REPORT TEXT:
@@ -382,7 +591,11 @@ REPORT TEXT:
         input=prompt,
     )
 
-    raw = response.output_text.strip()
+    raw = (
+        response
+        .output_text
+        .strip()
+    )
 
     raw = re.sub(
         r"^```json\s*|\s*```$",
@@ -402,10 +615,15 @@ REPORT TEXT:
     return result
 
 
+# ---------------------------------------------------------
+# Main evidence extraction function
+# ---------------------------------------------------------
+
 def extract_soc2_metadata(
     file_bytes: bytes,
     api_key: str | None = None,
 ) -> Dict[str, Any]:
+
     text = extract_pdf_text(
         file_bytes
     )
@@ -415,6 +633,8 @@ def extract_soc2_metadata(
             "No readable text was found in the PDF."
         )
 
+    # OpenAI path is optional.
+    # The public MVP currently works without an API key.
     if api_key:
         try:
             return ai_soc2_extraction(
@@ -423,15 +643,19 @@ def extract_soc2_metadata(
             )
 
         except Exception:
-            fallback = local_soc2_extraction(
-                text
+            fallback = (
+                local_soc2_extraction(
+                    text
+                )
             )
 
             fallback[
                 "review_notes"
             ] = (
-                "AI extraction failed; local parser used instead. "
-                "Analyst review is required before accepting metadata."
+                "AI extraction failed; "
+                "local parser used instead. "
+                "Analyst review is required "
+                "before accepting metadata."
             )
 
             return fallback
