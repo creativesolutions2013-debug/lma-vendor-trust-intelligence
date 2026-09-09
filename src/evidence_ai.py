@@ -23,6 +23,7 @@ def _find(pattern: str, text: str, default: str = "") -> str:
         text,
         flags=re.IGNORECASE | re.MULTILINE,
     )
+
     return match.group(1).strip() if match else default
 
 
@@ -53,6 +54,7 @@ def normalize_date(value: str) -> str:
                 value.strip(),
                 fmt,
             ).strftime("%Y-%m-%d")
+
         except ValueError:
             continue
 
@@ -103,8 +105,10 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         text,
     )
 
-    # Identify control-specific sections so exceptions stay
-    # associated with the correct SOC 2 control.
+    # -----------------------------------------------------
+    # Control exception extraction
+    # -----------------------------------------------------
+
     control_blocks = re.findall(
         r"(?ms)^(CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*\n"
         r"(.*?)(?=^(?:CC\d+(?:\.\d+)?|A\d+(?:\.\d+)?)\s*$|\Z)",
@@ -137,8 +141,19 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
 
                 break
 
-    # Extract Complementary User Entity Controls.
-    # Supports numbered and unnumbered section headings.
+    exceptions = [
+        {
+            "control_id": control,
+            "description": description.strip(),
+            "severity": "Moderate",
+        }
+        for control, description in explicit_exception_rows
+    ]
+
+    # -----------------------------------------------------
+    # Complementary User Entity Controls
+    # -----------------------------------------------------
+
     cuec_section = ""
 
     cuec_match = re.search(
@@ -151,8 +166,10 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     if cuec_match:
         cuec_section = cuec_match.group(0).strip()
 
-    # Extract Subservice Organizations.
-    # Supports numbered and unnumbered Analyst Test Notes headings.
+    # -----------------------------------------------------
+    # Subservice organizations
+    # -----------------------------------------------------
+
     subservice_section = ""
 
     sub_match = re.search(
@@ -165,20 +182,10 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
     if sub_match:
         subservice_section = sub_match.group(0).strip()
 
-    exceptions = [
-        {
-            "control_id": control,
-            "description": description.strip(),
-            "severity": "Moderate",
-        }
-        for control, description in explicit_exception_rows
-    ]
+    # -----------------------------------------------------
+    # Dynamic extraction confidence
+    # -----------------------------------------------------
 
-    # Dynamic confidence scoring.
-    #
-    # Base confidence reflects that the local parser produced
-    # readable output. Additional confidence is added when
-    # important SOC 2 metadata is successfully extracted.
     confidence_score = 0.20
 
     if issuer:
@@ -204,6 +211,46 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         2,
     )
 
+    # -----------------------------------------------------
+    # Explain why the confidence score was assigned
+    # -----------------------------------------------------
+
+    confidence_reasons = []
+
+    if issuer:
+        confidence_reasons.append(
+            "Issuer / auditor identified"
+        )
+
+    if report_date:
+        confidence_reasons.append(
+            "Report date identified"
+        )
+
+    if period:
+        confidence_reasons.append(
+            "Coverage period identified"
+        )
+
+    if opinion:
+        confidence_reasons.append(
+            "Auditor opinion identified"
+        )
+
+    if cuec_section:
+        confidence_reasons.append(
+            "Complementary User Entity Controls identified"
+        )
+
+    if subservice_section:
+        confidence_reasons.append(
+            "Subservice organizations identified"
+        )
+
+    # -----------------------------------------------------
+    # Normalize opinion
+    # -----------------------------------------------------
+
     normalized_opinion = ""
 
     if opinion:
@@ -224,6 +271,10 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
         else:
             normalized_opinion = opinion.split(",")[0].strip()
 
+    # -----------------------------------------------------
+    # Return structured extraction result
+    # -----------------------------------------------------
+
     return {
         "document_type": (
             "SOC 2 Type II"
@@ -238,25 +289,36 @@ def local_soc2_extraction(text: str) -> Dict[str, Any]:
             "(Fictional)",
             "",
         ).strip(),
-        "document_date": normalize_date(report_date),
+        "document_date": normalize_date(
+            report_date
+        ),
         "coverage_start": (
-            normalize_date(period.group(1))
+            normalize_date(
+                period.group(1)
+            )
             if period
             else ""
         ),
         "coverage_end": (
-            normalize_date(period.group(2))
+            normalize_date(
+                period.group(2)
+            )
             if period
             else ""
         ),
         "opinion": normalized_opinion,
-        "exceptions_count": len(exceptions),
+        "exceptions_count": len(
+            exceptions
+        ),
         "exceptions": exceptions,
-        "cuecs_summary": cuec_section[:1800],
+        "cuecs_summary": (
+            cuec_section[:1800]
+        ),
         "subservice_organizations_summary": (
             subservice_section[:1800]
         ),
         "confidence": confidence_score,
+        "confidence_reasons": confidence_reasons,
         "extraction_method": "Local parser",
         "review_notes": (
             "Fallback parser used. Analyst review is required "
@@ -272,13 +334,16 @@ def ai_soc2_extraction(
 ) -> Dict[str, Any]:
     from openai import OpenAI
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(
+        api_key=api_key
+    )
 
     prompt = f"""
 You are a third-party security assurance analyst.
 Extract structured metadata from the SOC 2 report text below.
 
 Return ONLY valid JSON with these keys:
+
 document_type,
 issuer,
 document_date,
@@ -290,19 +355,25 @@ exceptions,
 cuecs_summary,
 subservice_organizations_summary,
 confidence,
+confidence_reasons,
 extraction_method,
 review_notes.
 
 Rules:
+
 - Use ISO YYYY-MM-DD dates when the date is unambiguous.
-- exceptions must be an array of objects with:
+- exceptions must be an array of objects containing:
   control_id, description, severity.
-- Do not invent missing facts. Use empty strings or [].
-- confidence is a number from 0 to 1.
+- confidence_reasons must be an array of short explanations
+  describing which report elements supported the confidence score.
+- Do not invent missing facts.
+- Use empty strings or [] when information is unavailable.
+- confidence must be a number from 0 to 1.
 - extraction_method must be "OpenAI".
 - Flag ambiguity or potential issues in review_notes.
 
 REPORT TEXT:
+
 {text[:60000]}
 """
 
@@ -320,8 +391,13 @@ REPORT TEXT:
         flags=re.IGNORECASE,
     )
 
-    result = json.loads(raw)
-    result["extraction_method"] = "OpenAI"
+    result = json.loads(
+        raw
+    )
+
+    result[
+        "extraction_method"
+    ] = "OpenAI"
 
     return result
 
@@ -330,7 +406,9 @@ def extract_soc2_metadata(
     file_bytes: bytes,
     api_key: str | None = None,
 ) -> Dict[str, Any]:
-    text = extract_pdf_text(file_bytes)
+    text = extract_pdf_text(
+        file_bytes
+    )
 
     if not text.strip():
         raise ValueError(
@@ -345,13 +423,19 @@ def extract_soc2_metadata(
             )
 
         except Exception:
-            fallback = local_soc2_extraction(text)
+            fallback = local_soc2_extraction(
+                text
+            )
 
-            fallback["review_notes"] = (
+            fallback[
+                "review_notes"
+            ] = (
                 "AI extraction failed; local parser used instead. "
                 "Analyst review is required before accepting metadata."
             )
 
             return fallback
 
-    return local_soc2_extraction(text)
+    return local_soc2_extraction(
+        text
+    )
