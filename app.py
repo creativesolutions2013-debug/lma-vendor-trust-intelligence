@@ -1466,20 +1466,29 @@ def render_evidence():
 
                 created_findings = 0
 
-                for item in persisted_exceptions:
+                for exception_index, item in enumerate(
+                    persisted_exceptions
+                ):
                     if not isinstance(item, dict):
                         continue
 
+                    control_id = item.get(
+                        "control_id",
+                        "SOC 2",
+                    )
+
                     title = (
-                        f"{item.get('control_id', 'SOC 2')} "
+                        f"{control_id} "
                         "exception"
                     )
 
                     existing = (
                         session.query(Finding)
                         .filter_by(
-                            vendor_id=vendor.id,
-                            title=title,
+                            evidence_id=evidence_item.id,
+                            source_exception_index=(
+                                exception_index
+                            ),
                         )
                         .first()
                     )
@@ -1487,6 +1496,13 @@ def render_evidence():
                     if not existing:
                         finding = Finding(
                             vendor_id=vendor.id,
+                            evidence_id=evidence_item.id,
+                            source_exception_index=(
+                                exception_index
+                            ),
+                            source_control_id=(
+                                control_id
+                            ),
                             title=title,
                             description=item.get(
                                 "description",
@@ -1693,13 +1709,98 @@ def render_evidence():
                 "**Detected exceptions from source evidence**"
             )
             st.caption(
-                "These exceptions were extracted from the original "
-                "evidence artifact and are preserved independently "
-                "from remediation Findings."
+                "Each source exception is preserved on the evidence "
+                "record and linked to its remediation Finding when one "
+                "was generated."
             )
+
+            linked_findings = (
+                session.query(Finding)
+                .filter_by(
+                    evidence_id=selected.id
+                )
+                .all()
+            )
+
+            findings_by_exception = {
+                finding.source_exception_index: finding
+                for finding in linked_findings
+                if finding.source_exception_index
+                is not None
+            }
+
+            traceability_rows = []
+
+            for exception_index, exception in enumerate(
+                persisted_exceptions
+            ):
+                if not isinstance(
+                    exception,
+                    dict,
+                ):
+                    continue
+
+                linked_finding = (
+                    findings_by_exception.get(
+                        exception_index
+                    )
+                )
+
+                traceability_rows.append(
+                    {
+                        "Exception #": (
+                            exception_index + 1
+                        ),
+                        "Control ID": (
+                            exception.get(
+                                "control_id",
+                                "—",
+                            )
+                        ),
+                        "Description": (
+                            exception.get(
+                                "description",
+                                "",
+                            )
+                        ),
+                        "Severity": (
+                            exception.get(
+                                "severity",
+                                "Moderate",
+                            )
+                        ),
+                        "Finding ID": (
+                            linked_finding.id
+                            if linked_finding
+                            else "Not created"
+                        ),
+                        "Remediation Status": (
+                            linked_finding.status
+                            if linked_finding
+                            else "Not linked"
+                        ),
+                        "Owner": (
+                            linked_finding.owner
+                            if (
+                                linked_finding
+                                and linked_finding.owner
+                            )
+                            else "—"
+                        ),
+                        "Target Date": (
+                            linked_finding.target_date
+                            if (
+                                linked_finding
+                                and linked_finding.target_date
+                            )
+                            else "—"
+                        ),
+                    }
+                )
+
             st.dataframe(
                 pd.DataFrame(
-                    persisted_exceptions
+                    traceability_rows
                 ),
                 use_container_width=True,
                 hide_index=True,
@@ -1767,6 +1868,25 @@ def render_findings():
                         "Finding": finding.title,
                         "Severity": finding.severity,
                         "Status": finding.status,
+                        "Evidence ID": (
+                            finding.evidence_id
+                            or "—"
+                        ),
+                        "Control ID": (
+                            finding.source_control_id
+                            or "—"
+                        ),
+                        "Exception #": (
+                            (
+                                finding.source_exception_index
+                                + 1
+                            )
+                            if (
+                                finding.source_exception_index
+                                is not None
+                            )
+                            else "—"
+                        ),
                         "Owner": finding.owner,
                         "Target": finding.target_date,
                     }
