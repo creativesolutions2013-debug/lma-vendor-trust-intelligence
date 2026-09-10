@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date, datetime
 
@@ -139,6 +140,25 @@ def get_openai_api_key():
         )
 
 
+def load_analyst_actions(raw_value):
+    if not raw_value:
+        return []
+
+    try:
+        parsed = json.loads(raw_value)
+
+        if isinstance(parsed, list):
+            return parsed
+
+    except (
+        json.JSONDecodeError,
+        TypeError,
+    ):
+        pass
+
+    return []
+
+
 # ---------------------------------------------------------
 # Control Tower
 # ---------------------------------------------------------
@@ -185,7 +205,9 @@ def render_control_tower():
     evidence_attention = sum(
         1
         for item in evidence
-        if evidence_status(item.expiration_date)
+        if evidence_status(
+            item.expiration_date
+        )
         in [
             "Expired",
             "Expiring Soon",
@@ -296,8 +318,12 @@ def render_control_tower():
             rows.append(
                 {
                     "Vendor": vendor.display_name,
-                    "Residual Risk": vendor.residual_risk_score,
-                    "Rating": vendor.overall_risk_rating,
+                    "Residual Risk": (
+                        vendor.residual_risk_score
+                    ),
+                    "Rating": (
+                        vendor.overall_risk_rating
+                    ),
                     "Reason": reason,
                     "Priority": (
                         "P1"
@@ -327,15 +353,23 @@ def render_control_tower():
             "No vendors currently require attention."
         )
 
-    st.subheader("Risk Portfolio")
+    st.subheader(
+        "Risk Portfolio"
+    )
 
     chart_df = pd.DataFrame(
         [
             {
                 "Vendor": vendor.display_name,
-                "Inherent Risk": vendor.inherent_risk_score,
-                "Residual Risk": vendor.residual_risk_score,
-                "External Risk": vendor.external_risk_score,
+                "Inherent Risk": (
+                    vendor.inherent_risk_score
+                ),
+                "Residual Risk": (
+                    vendor.residual_risk_score
+                ),
+                "External Risk": (
+                    vendor.external_risk_score
+                ),
             }
             for vendor in vendors
         ]
@@ -363,9 +397,13 @@ def render_control_tower():
 # ---------------------------------------------------------
 
 def render_vendors():
-    st.title("🏢 Vendor Inventory")
+    st.title(
+        "🏢 Vendor Inventory"
+    )
 
-    vendors = session.query(Vendor).all()
+    vendors = session.query(
+        Vendor
+    ).all()
 
     df = pd.DataFrame(
         [
@@ -374,9 +412,15 @@ def render_vendors():
                 "Vendor": vendor.display_name,
                 "Industry": vendor.industry,
                 "Criticality": vendor.criticality,
-                "Inherent Risk": vendor.inherent_risk_score,
-                "Residual Risk": vendor.residual_risk_score,
-                "External Risk": vendor.external_risk_score,
+                "Inherent Risk": (
+                    vendor.inherent_risk_score
+                ),
+                "Residual Risk": (
+                    vendor.residual_risk_score
+                ),
+                "External Risk": (
+                    vendor.external_risk_score
+                ),
                 "Rating": vendor.overall_risk_rating,
                 "Status": vendor.relationship_status,
             }
@@ -390,16 +434,22 @@ def render_vendors():
         hide_index=True,
     )
 
-    st.subheader("Vendor 360")
+    st.subheader(
+        "Vendor 360"
+    )
 
     if not vendors:
-        st.info("No vendors available.")
+        st.info(
+            "No vendors available."
+        )
         return
 
     selected = st.selectbox(
         "Select vendor",
         vendors,
-        format_func=lambda vendor: vendor.display_name,
+        format_func=lambda vendor: (
+            vendor.display_name
+        ),
     )
 
     c1, c2, c3, c4 = st.columns(4)
@@ -438,14 +488,28 @@ def render_vendors():
     with tabs[0]:
         st.write(
             {
-                "Legal name": selected.legal_name,
-                "Primary domain": selected.primary_domain,
-                "Industry": selected.industry,
-                "Country": selected.headquarters_country,
-                "Criticality": selected.criticality,
-                "Overall risk": selected.overall_risk_rating,
+                "Legal name": (
+                    selected.legal_name
+                ),
+                "Primary domain": (
+                    selected.primary_domain
+                ),
+                "Industry": (
+                    selected.industry
+                ),
+                "Country": (
+                    selected.headquarters_country
+                ),
+                "Criticality": (
+                    selected.criticality
+                ),
+                "Overall risk": (
+                    selected.overall_risk_rating
+                ),
                 "Recommended assessment": (
-                    recommended_assessment(selected)
+                    recommended_assessment(
+                        selected
+                    )
                 ),
             }
         )
@@ -463,12 +527,24 @@ def render_vendors():
             engagement_df = pd.DataFrame(
                 [
                     {
-                        "Service": engagement.service_name,
-                        "Owner": engagement.business_owner,
-                        "Criticality": engagement.business_criticality,
-                        "Data": engagement.data_classification,
-                        "Production Access": engagement.production_access,
-                        "AI Enabled": engagement.ai_enabled,
+                        "Service": (
+                            engagement.service_name
+                        ),
+                        "Owner": (
+                            engagement.business_owner
+                        ),
+                        "Criticality": (
+                            engagement.business_criticality
+                        ),
+                        "Data": (
+                            engagement.data_classification
+                        ),
+                        "Production Access": (
+                            engagement.production_access
+                        ),
+                        "AI Enabled": (
+                            engagement.ai_enabled
+                        ),
                     }
                     for engagement in engagements
                 ]
@@ -481,7 +557,9 @@ def render_vendors():
             )
 
         else:
-            st.info("No engagements yet.")
+            st.info(
+                "No engagements yet."
+            )
 
     with tabs[2]:
         assessments = (
@@ -496,14 +574,27 @@ def render_vendors():
             assessment_df = pd.DataFrame(
                 [
                     {
-                        "Assessment": assessment.assessment_type,
-                        "Reason": assessment.assessment_reason,
-                        "Status": assessment.status,
-                        "Assigned To": assessment.assigned_to,
-                        "Due": assessment.due_date,
-                        "Approval": assessment.approval_status,
+                        "Assessment": (
+                            assessment.assessment_type
+                        ),
+                        "Reason": (
+                            assessment.assessment_reason
+                        ),
+                        "Status": (
+                            assessment.status
+                        ),
+                        "Assigned To": (
+                            assessment.assigned_to
+                        ),
+                        "Due": (
+                            assessment.due_date
+                        ),
+                        "Approval": (
+                            assessment.approval_status
+                        ),
                     }
-                    for assessment in assessments
+                    for assessment
+                    in assessments
                 ]
             )
 
@@ -514,7 +605,9 @@ def render_vendors():
             )
 
         else:
-            st.info("No assessments yet.")
+            st.info(
+                "No assessments yet."
+            )
 
     with tabs[3]:
         evidence_rows = (
@@ -536,7 +629,9 @@ def render_vendors():
                         "Status": evidence_status(
                             item.expiration_date
                         ),
-                        "Exceptions": item.exceptions_count,
+                        "Exceptions": (
+                            item.exceptions_count
+                        ),
                     }
                     for item in evidence_rows
                 ]
@@ -549,7 +644,9 @@ def render_vendors():
             )
 
         else:
-            st.info("No evidence yet.")
+            st.info(
+                "No evidence yet."
+            )
 
     with tabs[4]:
         findings = (
@@ -582,7 +679,9 @@ def render_vendors():
             )
 
         else:
-            st.success("No findings.")
+            st.success(
+                "No findings."
+            )
 
     with tabs[5]:
         events = (
@@ -600,7 +699,9 @@ def render_vendors():
                         "Event": event.event_type,
                         "Severity": event.severity,
                         "Status": event.status,
-                        "Previous": event.previous_value,
+                        "Previous": (
+                            event.previous_value
+                        ),
                         "New": event.new_value,
                     }
                     for event in events
@@ -614,7 +715,9 @@ def render_vendors():
             )
 
         else:
-            st.info("No monitoring events.")
+            st.info(
+                "No monitoring events."
+            )
 
 
 # ---------------------------------------------------------
@@ -622,14 +725,18 @@ def render_vendors():
 # ---------------------------------------------------------
 
 def render_intake():
-    st.title("📝 New Vendor Intake")
+    st.title(
+        "📝 New Vendor Intake"
+    )
 
     st.caption(
         "Create the vendor + engagement and "
         "automatically calculate inherent risk."
     )
 
-    with st.form("vendor_intake"):
+    with st.form(
+        "vendor_intake"
+    ):
         col1, col2 = st.columns(2)
 
         with col1:
@@ -701,7 +808,9 @@ def render_intake():
                 "AI-enabled service"
             )
 
-        st.markdown("#### Risk factors")
+        st.markdown(
+            "#### Risk factors"
+        )
 
         data_map = {
             "Public": 0,
@@ -774,20 +883,27 @@ def render_intake():
     if submitted:
         if not vendor_name or not service_name:
             st.error(
-                "Vendor name and service name are required."
+                "Vendor name and service name "
+                "are required."
             )
             return
 
         inherent = calculate_inherent_risk(
             InherentRiskInput(
-                data_sensitivity=data_map[data_label],
+                data_sensitivity=(
+                    data_map[data_label]
+                ),
                 system_access=access_score,
-                business_criticality=crit_map[
-                    criticality_label
-                ],
+                business_criticality=(
+                    crit_map[
+                        criticality_label
+                    ]
+                ),
                 data_volume=data_volume,
                 regulatory_exposure=regulatory,
-                fourth_party_dependency=fourth_party,
+                fourth_party_dependency=(
+                    fourth_party
+                ),
                 geographic_risk=geographic,
                 ai_autonomy=ai_autonomy,
             )
@@ -811,8 +927,10 @@ def render_intake():
             external_risk_score=25,
             control_effectiveness=50,
             residual_risk_score=residual,
-            overall_risk_rating=rating_from_score(
-                residual
+            overall_risk_rating=(
+                rating_from_score(
+                    residual
+                )
             ),
         )
 
@@ -824,15 +942,24 @@ def render_intake():
             service_name=service_name,
             business_owner=business_owner,
             department=department,
-            business_criticality=criticality_label,
+            business_criticality=(
+                criticality_label
+            ),
             data_classification=data_label,
-            production_access=production_access,
-            privileged_access=privileged_access,
+            production_access=(
+                production_access
+            ),
+            privileged_access=(
+                privileged_access
+            ),
             network_access=network_access,
             ai_enabled=ai_enabled,
         )
 
-        session.add(engagement)
+        session.add(
+            engagement
+        )
+
         session.commit()
 
         st.success(
@@ -866,7 +993,9 @@ def render_intake():
 # ---------------------------------------------------------
 
 def render_assessments():
-    st.title("🧭 Assessments")
+    st.title(
+        "🧭 Assessments"
+    )
 
     st.caption(
         "Launch, assign, and track risk-based "
@@ -899,12 +1028,20 @@ def render_assessments():
                         if assessment.vendor
                         else assessment.vendor_id
                     ),
-                    "Assessment": assessment.assessment_type,
-                    "Reason": assessment.assessment_reason,
+                    "Assessment": (
+                        assessment.assessment_type
+                    ),
+                    "Reason": (
+                        assessment.assessment_reason
+                    ),
                     "Status": assessment.status,
-                    "Assigned To": assessment.assigned_to,
+                    "Assigned To": (
+                        assessment.assigned_to
+                    ),
                     "Due": assessment.due_date,
-                    "Approval": assessment.approval_status,
+                    "Approval": (
+                        assessment.approval_status
+                    ),
                 }
                 for assessment in assessments
             ]
@@ -937,7 +1074,9 @@ def render_assessments():
         vendor = st.selectbox(
             "Vendor",
             vendors,
-            format_func=lambda item: item.display_name,
+            format_func=lambda item: (
+                item.display_name
+            ),
         )
 
         st.caption(
@@ -990,7 +1129,10 @@ def render_assessments():
                 notes=notes,
             )
 
-            session.add(assessment)
+            session.add(
+                assessment
+            )
+
             session.commit()
 
             st.success(
@@ -1095,7 +1237,9 @@ def render_assessments():
 # ---------------------------------------------------------
 
 def render_evidence():
-    st.title("📁 Evidence Center")
+    st.title(
+        "📁 Evidence Center"
+    )
 
     st.caption(
         "Track assurance artifacts, validity, "
@@ -1131,12 +1275,18 @@ def render_evidence():
                     "Type": item.document_type,
                     "Document": item.document_name,
                     "Issuer": item.issuer,
-                    "Coverage End": item.coverage_end,
-                    "Expiration": item.expiration_date,
+                    "Coverage End": (
+                        item.coverage_end
+                    ),
+                    "Expiration": (
+                        item.expiration_date
+                    ),
                     "Status": evidence_status(
                         item.expiration_date
                     ),
-                    "Exceptions": item.exceptions_count,
+                    "Exceptions": (
+                        item.exceptions_count
+                    ),
                 }
                 for item in evidence_rows
             ]
@@ -1187,7 +1337,9 @@ def render_evidence():
     vendor = st.selectbox(
         "Vendor",
         vendors,
-        format_func=lambda item: item.display_name,
+        format_func=lambda item: (
+            item.display_name
+        ),
         key="evidence_vendor",
     )
 
@@ -1271,12 +1423,14 @@ def render_evidence():
                 with st.spinner(
                     "Analyzing SOC 2 report..."
                 ):
-                    result = extract_soc2_metadata(
-                        uploaded.getvalue(),
-                        api_key=(
-                            api_key
-                            or None
-                        ),
+                    result = (
+                        extract_soc2_metadata(
+                            uploaded.getvalue(),
+                            api_key=(
+                                api_key
+                                or None
+                            ),
+                        )
                     )
 
                     st.session_state[
@@ -1320,8 +1474,10 @@ def render_evidence():
             )
         )
 
-        confidence_text = confidence_label(
-            confidence_score
+        confidence_text = (
+            confidence_label(
+                confidence_score
+            )
         )
 
         c1, c2, c3 = st.columns(3)
@@ -1407,17 +1563,22 @@ def render_evidence():
                         "**Identified**"
                     )
 
-                    for reason in confidence_reasons:
+                    for reason in (
+                        confidence_reasons
+                    ):
                         st.write(
                             f"✓ {reason}"
                         )
 
                 if confidence_gaps:
                     st.markdown(
-                        "**Missing / needs analyst review**"
+                        "**Missing / needs "
+                        "analyst review**"
                     )
 
-                    for gap in confidence_gaps:
+                    for gap in (
+                        confidence_gaps
+                    ):
                         st.write(
                             f"⚠ {gap}"
                         )
@@ -1430,15 +1591,15 @@ def render_evidence():
                     )
 
                 if confidence_actions:
-                    st.markdown(
-                        "---"
-                    )
+                    st.markdown("---")
 
                     st.markdown(
                         "**Recommended analyst actions**"
                     )
 
-                    for item in confidence_actions:
+                    for item in (
+                        confidence_actions
+                    ):
                         gap = item.get(
                             "gap",
                             "Missing metadata",
@@ -1576,9 +1737,11 @@ def render_evidence():
                 "Not Applicable",
             ]
 
-            extracted_opinion = extraction.get(
-                "opinion",
-                "",
+            extracted_opinion = (
+                extraction.get(
+                    "opinion",
+                    "",
+                )
             )
 
             opinion_index = (
@@ -1596,17 +1759,19 @@ def render_evidence():
                 index=opinion_index,
             )
 
-            exceptions_count = st.number_input(
-                "Exceptions / findings count",
-                min_value=0,
-                step=1,
-                value=int(
-                    extraction.get(
-                        "exceptions_count",
-                        0,
-                    )
-                    or 0
-                ),
+            exceptions_count = (
+                st.number_input(
+                    "Exceptions / findings count",
+                    min_value=0,
+                    step=1,
+                    value=int(
+                        extraction.get(
+                            "exceptions_count",
+                            0,
+                        )
+                        or 0
+                    ),
+                )
             )
 
             analyst_notes = st.text_area(
@@ -1631,7 +1796,9 @@ def render_evidence():
             "Save evidence",
             type="primary",
         ):
-            final_name = document_name.strip()
+            final_name = (
+                document_name.strip()
+            )
 
             if not final_name:
                 st.error(
@@ -1658,9 +1825,11 @@ def render_evidence():
                         f"{uploaded.name}"
                     )
 
-                    storage_path = os.path.join(
-                        EVIDENCE_DIR,
-                        safe_name,
+                    storage_path = (
+                        os.path.join(
+                            EVIDENCE_DIR,
+                            safe_name,
+                        )
                     )
 
                     with open(
@@ -1670,6 +1839,22 @@ def render_evidence():
                         evidence_file.write(
                             uploaded.getbuffer()
                         )
+
+                persisted_actions = (
+                    extraction.get(
+                        "confidence_actions",
+                        [],
+                    )
+                )
+
+                analyst_actions_json = (
+                    json.dumps(
+                        persisted_actions,
+                        ensure_ascii=False,
+                    )
+                    if persisted_actions
+                    else None
+                )
 
                 evidence_item = Evidence(
                     vendor_id=vendor.id,
@@ -1683,7 +1868,9 @@ def render_evidence():
                     document_date=document_date,
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
-                    expiration_date=expiration_date,
+                    expiration_date=(
+                        expiration_date
+                    ),
                     issuer=issuer,
                     opinion=opinion,
                     exceptions_count=int(
@@ -1694,6 +1881,9 @@ def render_evidence():
                     ),
                     storage_path=storage_path,
                     analyst_notes=analyst_notes,
+                    analyst_actions=(
+                        analyst_actions_json
+                    ),
                 )
 
                 session.add(
@@ -1754,8 +1944,16 @@ def render_evidence():
 
                 if created_findings:
                     message += (
-                        f" {created_findings} finding(s) "
-                        "created from detected exceptions."
+                        f" {created_findings} "
+                        "finding(s) created from "
+                        "detected exceptions."
+                    )
+
+                if persisted_actions:
+                    message += (
+                        f" {len(persisted_actions)} "
+                        "analyst action(s) preserved "
+                        "with the evidence record."
                     )
 
                 st.success(
@@ -1816,8 +2014,12 @@ def render_evidence():
 
         st.write(
             {
-                "Document": selected.document_name,
-                "Issuer": selected.issuer,
+                "Document": (
+                    selected.document_name
+                ),
+                "Issuer": (
+                    selected.issuer
+                ),
                 "Coverage": (
                     f"{selected.coverage_start or '—'} "
                     f"to "
@@ -1842,6 +2044,44 @@ def render_evidence():
             st.write(
                 selected.analyst_notes
             )
+
+        persisted_actions = (
+            load_analyst_actions(
+                selected.analyst_actions
+            )
+        )
+
+        if persisted_actions:
+            st.markdown(
+                "**Persisted analyst actions**"
+            )
+
+            st.caption(
+                "These recommendations were saved "
+                "with the evidence record during "
+                "the original evidence analysis."
+            )
+
+            for item in (
+                persisted_actions
+            ):
+                gap = item.get(
+                    "gap",
+                    "Missing metadata",
+                )
+
+                action = item.get(
+                    "action",
+                    "Review the report manually.",
+                )
+
+                st.markdown(
+                    f"**⚠ {gap}**"
+                )
+
+                st.write(
+                    f"→ {action}"
+                )
 
 
 # ---------------------------------------------------------
@@ -2016,9 +2256,13 @@ def render_monitoring():
                     "Event": event.event_type,
                     "Severity": event.severity,
                     "Status": event.status,
-                    "Previous": event.previous_value,
+                    "Previous": (
+                        event.previous_value
+                    ),
                     "New": event.new_value,
-                    "Review Required": event.requires_review,
+                    "Review Required": (
+                        event.requires_review
+                    ),
                 }
                 for event in events
             ]
@@ -2164,13 +2408,21 @@ def render_reports():
             {
                 "Vendor": vendor.display_name,
                 "Criticality": vendor.criticality,
-                "Inherent": vendor.inherent_risk_score,
-                "External": vendor.external_risk_score,
+                "Inherent": (
+                    vendor.inherent_risk_score
+                ),
+                "External": (
+                    vendor.external_risk_score
+                ),
                 "Control Effectiveness": (
                     vendor.control_effectiveness
                 ),
-                "Residual": vendor.residual_risk_score,
-                "Rating": vendor.overall_risk_rating,
+                "Residual": (
+                    vendor.residual_risk_score
+                ),
+                "Rating": (
+                    vendor.overall_risk_rating
+                ),
                 "Assessments": sum(
                     1
                     for assessment in assessments
@@ -2224,7 +2476,9 @@ def render_reports():
                     "Status": evidence_status(
                         item.expiration_date
                     ),
-                    "Expiration": item.expiration_date,
+                    "Expiration": (
+                        item.expiration_date
+                    ),
                 }
                 for item in evidence
             ]
