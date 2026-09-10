@@ -160,9 +160,6 @@ def local_soc2_extraction(
 
     # -----------------------------------------------------
     # Control exception extraction
-    #
-    # Break the report into control-specific blocks so
-    # exceptions remain associated with the correct control.
     # -----------------------------------------------------
 
     control_blocks = re.findall(
@@ -225,8 +222,6 @@ def local_soc2_extraction(
 
     # -----------------------------------------------------
     # Complementary User Entity Controls
-    #
-    # Supports both numbered and unnumbered headings.
     # -----------------------------------------------------
 
     cuec_section = ""
@@ -254,8 +249,6 @@ def local_soc2_extraction(
 
     # -----------------------------------------------------
     # Subservice organizations
-    #
-    # Supports both numbered and unnumbered headings.
     # -----------------------------------------------------
 
     subservice_section = ""
@@ -283,10 +276,6 @@ def local_soc2_extraction(
 
     # -----------------------------------------------------
     # Dynamic extraction-confidence scoring
-    #
-    # This is extraction completeness confidence.
-    # It does NOT represent whether the SOC 2 report itself
-    # is trustworthy or whether controls are effective.
     # -----------------------------------------------------
 
     confidence_score = 0.20
@@ -355,9 +344,6 @@ def local_soc2_extraction(
 
     # -----------------------------------------------------
     # Explain what was not identified
-    #
-    # These gaps give the analyst specific areas to review
-    # instead of relying only on a numerical score.
     # -----------------------------------------------------
 
     confidence_gaps = []
@@ -390,6 +376,89 @@ def local_soc2_extraction(
     if not subservice_section:
         confidence_gaps.append(
             "Subservice organizations not identified"
+        )
+
+    # -----------------------------------------------------
+    # Recommended analyst actions for missing metadata
+    # -----------------------------------------------------
+
+    confidence_actions = []
+
+    if not issuer:
+        confidence_actions.append(
+            {
+                "gap": "Issuer / auditor not identified",
+                "action": (
+                    "Review the report cover page, independent "
+                    "service auditor section, or signature page "
+                    "to confirm the audit firm."
+                ),
+            }
+        )
+
+    if not report_date:
+        confidence_actions.append(
+            {
+                "gap": "Report date not identified",
+                "action": (
+                    "Review the report cover page, auditor opinion, "
+                    "or signature section to confirm the report "
+                    "issuance date."
+                ),
+            }
+        )
+
+    if not period:
+        confidence_actions.append(
+            {
+                "gap": "Coverage period not identified",
+                "action": (
+                    "Locate the examination period or system "
+                    "description and confirm the start and end "
+                    "dates covered by the SOC 2 report."
+                ),
+            }
+        )
+
+    if not opinion:
+        confidence_actions.append(
+            {
+                "gap": "Auditor opinion not identified",
+                "action": (
+                    "Review the independent service auditor's "
+                    "opinion and determine whether the report "
+                    "is unmodified, qualified, adverse, or "
+                    "contains other limitations."
+                ),
+            }
+        )
+
+    if not cuec_section:
+        confidence_actions.append(
+            {
+                "gap": (
+                    "Complementary User Entity Controls "
+                    "not identified"
+                ),
+                "action": (
+                    "Review or request the CUEC section to identify "
+                    "customer responsibilities that must be met "
+                    "for the vendor's controls to operate effectively."
+                ),
+            }
+        )
+
+    if not subservice_section:
+        confidence_actions.append(
+            {
+                "gap": "Subservice organizations not identified",
+                "action": (
+                    "Confirm whether the vendor relies on "
+                    "subservice organizations and determine whether "
+                    "they are addressed using the carve-out or "
+                    "inclusive method."
+                ),
+            }
         )
 
     # -----------------------------------------------------
@@ -500,6 +569,10 @@ def local_soc2_extraction(
             confidence_gaps
         ),
 
+        "confidence_actions": (
+            confidence_actions
+        ),
+
         "extraction_method": (
             "Local parser"
         ),
@@ -548,6 +621,7 @@ subservice_organizations_summary,
 confidence,
 confidence_reasons,
 confidence_gaps,
+confidence_actions,
 extraction_method,
 review_notes.
 
@@ -572,6 +646,14 @@ Rules:
 - confidence_gaps must be an array of short statements
   identifying expected SOC 2 metadata that could not
   be reliably identified.
+
+- confidence_actions must be an array of objects containing:
+  gap,
+  action.
+
+- Each confidence_actions entry should give the analyst
+  a practical next step for validating or obtaining the
+  missing metadata.
 
 - Do not invent missing facts.
 
@@ -633,8 +715,6 @@ def extract_soc2_metadata(
             "No readable text was found in the PDF."
         )
 
-    # OpenAI path is optional.
-    # The public MVP currently works without an API key.
     if api_key:
         try:
             return ai_soc2_extraction(
