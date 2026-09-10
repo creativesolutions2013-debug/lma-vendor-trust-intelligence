@@ -39,10 +39,7 @@ Base = declarative_base()
 class Vendor(Base):
     __tablename__ = "vendors"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     legal_name = Column(
         String(255),
@@ -54,21 +51,10 @@ class Vendor(Base):
         nullable=False,
     )
 
-    website = Column(
-        String(255)
-    )
-
-    primary_domain = Column(
-        String(255)
-    )
-
-    industry = Column(
-        String(120)
-    )
-
-    headquarters_country = Column(
-        String(120)
-    )
+    website = Column(String(255))
+    primary_domain = Column(String(255))
+    industry = Column(String(120))
+    headquarters_country = Column(String(120))
 
     relationship_status = Column(
         String(50),
@@ -149,10 +135,7 @@ class Vendor(Base):
 class Engagement(Base):
     __tablename__ = "engagements"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -165,25 +148,11 @@ class Engagement(Base):
         nullable=False,
     )
 
-    service_description = Column(
-        Text
-    )
-
-    business_owner = Column(
-        String(255)
-    )
-
-    department = Column(
-        String(120)
-    )
-
-    business_criticality = Column(
-        String(50)
-    )
-
-    data_classification = Column(
-        String(80)
-    )
+    service_description = Column(Text)
+    business_owner = Column(String(255))
+    department = Column(String(120))
+    business_criticality = Column(String(50))
+    data_classification = Column(String(80))
 
     production_access = Column(
         Boolean,
@@ -219,10 +188,7 @@ class Engagement(Base):
 class Assessment(Base):
     __tablename__ = "assessments"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -245,21 +211,10 @@ class Assessment(Base):
         default="Not Started",
     )
 
-    assigned_to = Column(
-        String(255)
-    )
-
-    due_date = Column(
-        String(40)
-    )
-
-    started_at = Column(
-        DateTime
-    )
-
-    completed_at = Column(
-        DateTime
-    )
+    assigned_to = Column(String(255))
+    due_date = Column(String(40))
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
 
     risk_score = Column(
         Float,
@@ -271,9 +226,7 @@ class Assessment(Base):
         default="Pending",
     )
 
-    notes = Column(
-        Text
-    )
+    notes = Column(Text)
 
     created_at = Column(
         DateTime,
@@ -294,10 +247,7 @@ class Assessment(Base):
 class Evidence(Base):
     __tablename__ = "evidence"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -320,29 +270,12 @@ class Evidence(Base):
         nullable=False,
     )
 
-    document_date = Column(
-        String(40)
-    )
-
-    coverage_start = Column(
-        String(40)
-    )
-
-    coverage_end = Column(
-        String(40)
-    )
-
-    expiration_date = Column(
-        String(40)
-    )
-
-    issuer = Column(
-        String(255)
-    )
-
-    opinion = Column(
-        String(120)
-    )
+    document_date = Column(String(40))
+    coverage_start = Column(String(40))
+    coverage_end = Column(String(40))
+    expiration_date = Column(String(40))
+    issuer = Column(String(255))
+    opinion = Column(String(120))
 
     exceptions_count = Column(
         Integer,
@@ -354,37 +287,18 @@ class Evidence(Base):
         default="Received",
     )
 
-    storage_path = Column(
-        String(500)
-    )
-
-    analyst_notes = Column(
-        Text
-    )
-
-    analyst_actions = Column(
-        Text
-    )
+    storage_path = Column(String(500))
+    analyst_notes = Column(Text)
+    analyst_actions = Column(Text)
 
     # -----------------------------------------------------
     # Evidence provenance
     # -----------------------------------------------------
 
-    file_hash = Column(
-        String(64)
-    )
-
-    extraction_method = Column(
-        String(120)
-    )
-
-    extraction_confidence = Column(
-        Float
-    )
-
-    analyzed_at = Column(
-        DateTime
-    )
+    file_hash = Column(String(64))
+    extraction_method = Column(String(120))
+    extraction_confidence = Column(Float)
+    analyzed_at = Column(DateTime)
 
     # -----------------------------------------------------
     # Explainable extraction history
@@ -393,13 +307,12 @@ class Evidence(Base):
     # PostgreSQL can later use JSON/JSONB.
     # -----------------------------------------------------
 
-    confidence_reasons = Column(
-        Text
-    )
+    confidence_reasons = Column(Text)
+    confidence_gaps = Column(Text)
 
-    confidence_gaps = Column(
-        Text
-    )
+    # Exact structured exceptions extracted from
+    # the source evidence at analysis time.
+    detected_exceptions = Column(Text)
 
     created_at = Column(
         DateTime,
@@ -420,10 +333,7 @@ class Evidence(Base):
 class Finding(Base):
     __tablename__ = "findings"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -436,9 +346,7 @@ class Finding(Base):
         nullable=False,
     )
 
-    description = Column(
-        Text
-    )
+    description = Column(Text)
 
     source = Column(
         String(80),
@@ -455,13 +363,8 @@ class Finding(Base):
         default="Open",
     )
 
-    owner = Column(
-        String(255)
-    )
-
-    target_date = Column(
-        String(40)
-    )
+    owner = Column(String(255))
+    target_date = Column(String(40))
 
     created_at = Column(
         DateTime,
@@ -477,10 +380,7 @@ class Finding(Base):
 class MonitoringEvent(Base):
     __tablename__ = "monitoring_events"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -498,17 +398,9 @@ class MonitoringEvent(Base):
         default="Moderate",
     )
 
-    description = Column(
-        Text
-    )
-
-    previous_value = Column(
-        String(120)
-    )
-
-    new_value = Column(
-        String(120)
-    )
+    description = Column(Text)
+    previous_value = Column(String(120))
+    new_value = Column(String(120))
 
     requires_review = Column(
         Boolean,
