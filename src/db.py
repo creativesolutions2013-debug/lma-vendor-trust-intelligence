@@ -366,6 +366,26 @@ class Evidence(Base):
         Text
     )
 
+    # -----------------------------------------------------
+    # Evidence provenance
+    # -----------------------------------------------------
+
+    file_hash = Column(
+        String(64)
+    )
+
+    extraction_method = Column(
+        String(120)
+    )
+
+    extraction_confidence = Column(
+        Float
+    )
+
+    analyzed_at = Column(
+        DateTime
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow,
