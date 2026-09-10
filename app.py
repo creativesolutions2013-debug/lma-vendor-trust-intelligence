@@ -1,6 +1,6 @@
-import json
+
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pandas as pd
 import plotly.express as px
@@ -786,7 +786,7 @@ def render_assessments():
                 status="In Progress",
                 assigned_to=assigned_to,
                 due_date=str(due_date),
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 notes=notes,
             )
             session.add(assessment)
@@ -858,7 +858,7 @@ def render_assessments():
                 chosen.risk_score = risk_score
 
                 if status in ["Completed", "Closed"]:
-                    chosen.completed_at = datetime.utcnow()
+                    chosen.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 session.commit()
                 st.success("Assessment updated.")
@@ -1021,7 +1021,7 @@ def render_evidence():
         ):
             try:
                 with st.spinner("Analyzing SOC 2 report..."):
-                    analyzed_at = datetime.utcnow()
+                    analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     result = extract_soc2_metadata(
                         uploaded.getvalue(),
                         api_key=api_key or None,
@@ -1334,7 +1334,7 @@ def render_evidence():
                 if uploaded:
                     safe_name = (
                         f"{vendor.id}_"
-                        f"{int(datetime.utcnow().timestamp())}_"
+                        f"{int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp())}_"
                         f"{uploaded.name}"
                     )
                     storage_path = os.path.join(

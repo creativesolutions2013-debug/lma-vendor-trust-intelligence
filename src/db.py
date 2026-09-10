@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -36,6 +36,15 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
+def utc_now():
+    """Return current UTC as a naive datetime for SQLite compatibility."""
+    return datetime.now(
+        timezone.utc
+    ).replace(
+        tzinfo=None
+    )
+
+
 # =========================================================
 # Vendor
 # =========================================================
@@ -58,21 +67,10 @@ class Vendor(Base):
         nullable=False,
     )
 
-    website = Column(
-        String(255)
-    )
-
-    primary_domain = Column(
-        String(255)
-    )
-
-    industry = Column(
-        String(120)
-    )
-
-    headquarters_country = Column(
-        String(120)
-    )
+    website = Column(String(255))
+    primary_domain = Column(String(255))
+    industry = Column(String(120))
+    headquarters_country = Column(String(120))
 
     relationship_status = Column(
         String(50),
@@ -116,7 +114,7 @@ class Vendor(Base):
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     engagements = relationship(
@@ -157,10 +155,7 @@ class Vendor(Base):
 class Engagement(Base):
     __tablename__ = "engagements"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -173,45 +168,16 @@ class Engagement(Base):
         nullable=False,
     )
 
-    service_description = Column(
-        Text
-    )
+    service_description = Column(Text)
+    business_owner = Column(String(255))
+    department = Column(String(120))
+    business_criticality = Column(String(50))
+    data_classification = Column(String(80))
 
-    business_owner = Column(
-        String(255)
-    )
-
-    department = Column(
-        String(120)
-    )
-
-    business_criticality = Column(
-        String(50)
-    )
-
-    data_classification = Column(
-        String(80)
-    )
-
-    production_access = Column(
-        Boolean,
-        default=False,
-    )
-
-    network_access = Column(
-        Boolean,
-        default=False,
-    )
-
-    privileged_access = Column(
-        Boolean,
-        default=False,
-    )
-
-    ai_enabled = Column(
-        Boolean,
-        default=False,
-    )
+    production_access = Column(Boolean, default=False)
+    network_access = Column(Boolean, default=False)
+    privileged_access = Column(Boolean, default=False)
+    ai_enabled = Column(Boolean, default=False)
 
     status = Column(
         String(50),
@@ -231,10 +197,7 @@ class Engagement(Base):
 class Assessment(Base):
     __tablename__ = "assessments"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -257,21 +220,10 @@ class Assessment(Base):
         default="Not Started",
     )
 
-    assigned_to = Column(
-        String(255)
-    )
-
-    due_date = Column(
-        String(40)
-    )
-
-    started_at = Column(
-        DateTime
-    )
-
-    completed_at = Column(
-        DateTime
-    )
+    assigned_to = Column(String(255))
+    due_date = Column(String(40))
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
 
     risk_score = Column(
         Float,
@@ -283,13 +235,11 @@ class Assessment(Base):
         default="Pending",
     )
 
-    notes = Column(
-        Text
-    )
+    notes = Column(Text)
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     vendor = relationship(
@@ -310,10 +260,7 @@ class Assessment(Base):
 class Evidence(Base):
     __tablename__ = "evidence"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -336,29 +283,12 @@ class Evidence(Base):
         nullable=False,
     )
 
-    document_date = Column(
-        String(40)
-    )
-
-    coverage_start = Column(
-        String(40)
-    )
-
-    coverage_end = Column(
-        String(40)
-    )
-
-    expiration_date = Column(
-        String(40)
-    )
-
-    issuer = Column(
-        String(255)
-    )
-
-    opinion = Column(
-        String(120)
-    )
+    document_date = Column(String(40))
+    coverage_start = Column(String(40))
+    coverage_end = Column(String(40))
+    expiration_date = Column(String(40))
+    issuer = Column(String(255))
+    opinion = Column(String(120))
 
     exceptions_count = Column(
         Integer,
@@ -370,57 +300,24 @@ class Evidence(Base):
         default="Received",
     )
 
-    storage_path = Column(
-        String(500)
-    )
+    storage_path = Column(String(500))
+    analyst_notes = Column(Text)
+    analyst_actions = Column(Text)
 
-    analyst_notes = Column(
-        Text
-    )
-
-    analyst_actions = Column(
-        Text
-    )
-
-    # -----------------------------------------------------
     # Evidence provenance
-    # -----------------------------------------------------
+    file_hash = Column(String(64))
+    extraction_method = Column(String(120))
+    extraction_confidence = Column(Float)
+    analyzed_at = Column(DateTime)
 
-    file_hash = Column(
-        String(64)
-    )
-
-    extraction_method = Column(
-        String(120)
-    )
-
-    extraction_confidence = Column(
-        Float
-    )
-
-    analyzed_at = Column(
-        DateTime
-    )
-
-    # -----------------------------------------------------
     # Explainable extraction history
-    # -----------------------------------------------------
-
-    confidence_reasons = Column(
-        Text
-    )
-
-    confidence_gaps = Column(
-        Text
-    )
-
-    detected_exceptions = Column(
-        Text
-    )
+    confidence_reasons = Column(Text)
+    confidence_gaps = Column(Text)
+    detected_exceptions = Column(Text)
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     vendor = relationship(
@@ -446,10 +343,7 @@ class Evidence(Base):
 class Finding(Base):
     __tablename__ = "findings"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -457,35 +351,20 @@ class Finding(Base):
         nullable=False,
     )
 
-    # -----------------------------------------------------
-    # Evidence traceability
-    #
-    # These fields allow a remediation Finding to be traced
-    # back to the exact Evidence record and source exception
-    # that caused it to be created.
-    # -----------------------------------------------------
-
     evidence_id = Column(
         Integer,
         ForeignKey("evidence.id"),
     )
 
-    source_exception_index = Column(
-        Integer
-    )
-
-    source_control_id = Column(
-        String(80)
-    )
+    source_exception_index = Column(Integer)
+    source_control_id = Column(String(80))
 
     title = Column(
         String(255),
         nullable=False,
     )
 
-    description = Column(
-        Text
-    )
+    description = Column(Text)
 
     source = Column(
         String(80),
@@ -502,17 +381,12 @@ class Finding(Base):
         default="Open",
     )
 
-    owner = Column(
-        String(255)
-    )
-
-    target_date = Column(
-        String(40)
-    )
+    owner = Column(String(255))
+    target_date = Column(String(40))
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     vendor = relationship(
@@ -533,10 +407,7 @@ class Finding(Base):
 class MonitoringEvent(Base):
     __tablename__ = "monitoring_events"
 
-    id = Column(
-        Integer,
-        primary_key=True,
-    )
+    id = Column(Integer, primary_key=True)
 
     vendor_id = Column(
         Integer,
@@ -554,17 +425,9 @@ class MonitoringEvent(Base):
         default="Moderate",
     )
 
-    description = Column(
-        Text
-    )
-
-    previous_value = Column(
-        String(120)
-    )
-
-    new_value = Column(
-        String(120)
-    )
+    description = Column(Text)
+    previous_value = Column(String(120))
+    new_value = Column(String(120))
 
     requires_review = Column(
         Boolean,
@@ -578,7 +441,7 @@ class MonitoringEvent(Base):
 
     event_date = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     vendor = relationship(
@@ -586,10 +449,6 @@ class MonitoringEvent(Base):
         back_populates="events",
     )
 
-
-# =========================================================
-# Database helpers
-# =========================================================
 
 def init_db():
     Base.metadata.create_all(
