@@ -386,6 +386,21 @@ class Evidence(Base):
         DateTime
     )
 
+    # -----------------------------------------------------
+    # Explainable extraction history
+    #
+    # Stored as JSON text for the SQLite MVP.
+    # PostgreSQL can later use JSON/JSONB.
+    # -----------------------------------------------------
+
+    confidence_reasons = Column(
+        Text
+    )
+
+    confidence_gaps = Column(
+        Text
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow,
