@@ -4,7 +4,7 @@
 
 **A continuous third-party risk intelligence platform designed to identify which vendors need attention now, why their risk changed, and what action should happen next.**
 
-LMA Vendor Trust Intelligence is a working TPRM MVP that combines vendor intake, inherent-risk scoring, security evidence analysis, findings management, continuous monitoring, and event-driven reassessment into a single workflow.
+LMA Vendor Trust Intelligence is a working TPRM MVP that combines vendor intake, inherent-risk scoring, security evidence analysis, findings management, continuous monitoring, evidence-to-finding traceability, and event-driven reassessment into a single workflow.
 
 ## Why this matters
 
@@ -38,10 +38,13 @@ Current capabilities include:
 - Control-exception detection
 - Exception-to-control association
 - Evidence confidence and analyst review
+- Persistent evidence provenance and extraction rationale
+- Persistent source exceptions independent from remediation findings
+- Evidence-to-finding traceability by Evidence ID, control ID, and exception number
 - Automatic creation of findings from detected exceptions
 - Human confirmation before evidence is saved
 
-The current public MVP supports a deterministic local parsing mode so the demonstration can operate without paid AI API usage. The architecture also supports an optional AI-assisted extraction path for future production use.
+The current public MVP supports deterministic local parsing so the demonstration can operate without paid AI API usage. The architecture also supports an optional AI-assisted extraction path for future production use.
 
 ## Continuous risk model
 
@@ -53,9 +56,7 @@ The platform separates three major dimensions of vendor risk:
 
 These inputs contribute to an explainable residual-risk score and a prioritized Control Tower attention queue.
 
-The goal is not simply to assign vendors a risk score.
-
-The goal is to create an evidence-driven operating system for deciding **where security teams should spend their time next**.
+The goal is not simply to assign vendors a risk score. The goal is to create an evidence-driven operating system for deciding **where security teams should spend their time next**.
 
 ## What makes this different
 
@@ -64,6 +65,7 @@ The goal is to create an evidence-driven operating system for deciding **where s
 - **Vendor + engagement modeling** so one supplier can have multiple services and risk profiles
 - **Human-in-the-loop evidence analysis** with automated extraction and analyst confirmation
 - **Explainable risk scoring** that separates inherent risk, control effectiveness, and external risk
+- **Source-to-remediation traceability** from evidence exception to finding and remediation status
 - **Prioritized attention queues** designed to show security teams where intervention is needed now
 
 ## MVP features
@@ -71,14 +73,20 @@ The goal is to create an evidence-driven operating system for deciding **where s
 - Vendor inventory
 - Vendor/service engagement model
 - New vendor intake workflow
-- Explainable inherent-risk calculation
-- Residual-risk calculation
-- Vendor 360 view
+- Risk-based assessments
+- Evidence Center
+- SOC 2 evidence parsing
+- Explainable extraction confidence
+- Evidence provenance tracking
+- Source exception persistence
+- Evidence-to-finding traceability
 - Findings and remediation tracking
 - Continuous monitoring event ingestion
 - Dynamic external-risk adjustment
 - Control Tower attention queue
 - Risk register export
+- Alembic database migrations
+- Automated regression testing with GitHub Actions
 
 ## Demo & local setup
 
@@ -90,7 +98,8 @@ Open the repository in GitHub Codespaces, then run:
 
 ```bash
 pip install -r requirements.txt
-python -m streamlit run app.py
+alembic upgrade head
+python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
 Codespaces will expose port `8501` and provide a browser preview URL.
@@ -122,10 +131,11 @@ On Windows PowerShell:
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install dependencies:
+Install dependencies and initialize the database schema:
 
 ```bash
 pip install -r requirements.txt
+alembic upgrade head
 ```
 
 Start the application:
@@ -140,9 +150,66 @@ python -m streamlit run app.py
 pytest -q
 ```
 
-The repository includes automated regression tests for the SOC 2 evidence parser, including multiple synthetic report formats and control-exception association checks.
+The regression suite covers multiple synthetic SOC 2 report formats, evidence-state isolation, and evidence-to-finding traceability.
 
-### Demo data and security note
+## Database schema and Alembic migrations
+
+Database schema creation and schema evolution are managed with **Alembic**. The application no longer relies on `Base.metadata.create_all()` to modify the persistent application schema.
+
+### Check the current migration version
+
+```bash
+alembic current
+```
+
+### Apply all pending migrations
+
+```bash
+alembic upgrade head
+```
+
+### Create a migration after changing SQLAlchemy models
+
+```bash
+alembic revision --autogenerate -m "Describe schema change"
+```
+
+Review the generated migration before applying it, then run:
+
+```bash
+alembic upgrade head
+pytest -q
+```
+
+### Roll back one migration
+
+```bash
+alembic downgrade -1
+```
+
+### Important: `stamp` does not create tables
+
+`alembic stamp head` only records a migration version in the database. It does **not** execute migration scripts or create missing tables.
+
+For a new or empty database, use:
+
+```bash
+alembic upgrade head
+```
+
+Use `alembic stamp ...` only when the physical database schema already matches the revision being stamped.
+
+### Current baseline
+
+The repository currently uses:
+
+```text
+0001_baseline (head)
+```
+
+Future schema changes should be added as new migration revisions rather than by deleting `/tmp/vendor_trust.db`.
+
+## Demo data and security note
 
 The current public deployment uses synthetic vendor and evidence data only.
 
@@ -193,71 +260,24 @@ For the production version:
 - Object storage: S3
 - Vector search: pgvector
 - Identity: Entra ID / Auth0 / Clerk
-- AI assurance: OpenAI API
+- AI assurance: optional production AI service
 - Workflow: Temporal or Celery/Redis
 - Integrations: BitSight, Black Kite, SecurityScorecard, CISA KEV, NVD, ServiceNow, Jira
 
 ## Next product sprint
 
-1. Assessments module
-2. Evidence center
-3. SOC 2 / pentest evidence metadata model
-4. Common control framework
-5. AI-assisted evidence analysis
-6. Event-triggered reassessment rules
-7. Risk acceptance workflow
-8. PostgreSQL migration
+1. PostgreSQL migration
+2. Durable object storage for evidence
+3. Authentication and role-based access control
+4. Audit logging
+5. Configurable reassessment triggers
+6. Risk acceptance workflow
+7. External security intelligence integrations
+8. Fourth-party dependency graph
 
 ## Important
 
 The sample vendor data is synthetic and exists only to demonstrate the user experience.
-
-
-## MVP v2 — Assessment & Evidence Center
-
-This version adds:
-
-- Risk-based assessment recommendations
-- Assessment creation, ownership, due dates, status and approval tracking
-- Evidence Center for SOC 2, ISO 27001, PCI AOC, pentest and other artifacts
-- Evidence file upload for demo purposes
-- Evidence coverage dates, expiration, issuer, opinion and exception counts
-- Automatic Valid / Expiring Soon / Expired evidence status
-- Assessment and evidence tabs within Vendor 360
-- Evidence-expiration signals in the Control Tower attention queue
-
-### Important deployment note
-
-Evidence files are currently stored on the local Streamlit filesystem for MVP demonstration only. Streamlit Community Cloud storage is ephemeral. Before using real vendor documents, migrate evidence storage to durable object storage such as AWS S3 and migrate the SQLite database to PostgreSQL.
-
-
-## MVP v3 — AI Evidence Analyst
-
-SOC 2 uploads can now be analyzed before evidence is saved.
-
-The first iteration extracts or summarizes:
-- Auditor / issuer
-- Report date
-- Examination period
-- Opinion
-- Control exceptions
-- Complementary User Entity Controls (CUECs)
-- Subservice organization information
-- Extraction confidence and analyst review notes
-
-Detected SOC 2 exceptions can be converted into open Evidence Review findings after analyst confirmation.
-
-### OpenAI configuration
-
-The application works in demo mode without an API key by using a deterministic local parser. For AI-assisted extraction, add this secret in Streamlit Community Cloud:
-
-```toml
-OPENAI_API_KEY = "your-key-here"
-```
-
-Never commit API keys to GitHub.
-
-The application uses the OpenAI Responses API when the secret is configured. Analyst confirmation remains required before extracted evidence metadata is saved.
 
 ## License
 
