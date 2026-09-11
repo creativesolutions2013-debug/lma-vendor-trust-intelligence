@@ -1,4 +1,4 @@
-
+import json
 import os
 from datetime import date, datetime, timezone
 
@@ -13,9 +13,11 @@ from src.db import (
     Finding,
     MonitoringEvent,
     Vendor,
+    engine,
     get_session,
     init_db,
 )
+from src.db_health import check_database_health
 from src.evidence_ai import extract_soc2_metadata
 from src.evidence_state import (
     extraction_matches_file,
@@ -44,6 +46,21 @@ st.set_page_config(
 )
 
 init_db()
+
+database_health = check_database_health(engine)
+
+if not database_health["healthy"]:
+    st.error("Database startup check failed.")
+    st.write(database_health["message"])
+
+    if database_health["missing_tables"]:
+        st.write(
+            "Missing tables:",
+            ", ".join(database_health["missing_tables"]),
+        )
+
+    st.stop()
+
 session = get_session()
 seed_demo_data(session)
 
