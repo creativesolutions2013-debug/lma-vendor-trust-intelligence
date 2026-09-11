@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -13,12 +14,30 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-DATABASE_URL = "sqlite:////tmp/vendor_trust.db"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
+DEFAULT_DATABASE_URL = "sqlite:////tmp/vendor_trust.db"
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    DEFAULT_DATABASE_URL,
 )
+
+
+def build_engine(database_url: str):
+    engine_kwargs = {}
+
+    if database_url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {
+            "check_same_thread": False,
+        }
+
+    return create_engine(
+        database_url,
+        **engine_kwargs,
+    )
+
+
+engine = build_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -30,8 +49,12 @@ Base = declarative_base()
 
 
 def utc_now():
-    """Return current UTC as a naive datetime for SQLite compatibility."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return current UTC as a naive datetime for current DB compatibility."""
+    return datetime.now(
+        timezone.utc
+    ).replace(
+        tzinfo=None
+    )
 
 
 class Vendor(Base):
@@ -54,18 +77,42 @@ class Vendor(Base):
     security_rating = Column(Float, default=0)
     created_at = Column(DateTime, default=utc_now)
 
-    engagements = relationship("Engagement", back_populates="vendor", cascade="all, delete-orphan")
-    findings = relationship("Finding", back_populates="vendor", cascade="all, delete-orphan")
-    events = relationship("MonitoringEvent", back_populates="vendor", cascade="all, delete-orphan")
-    assessments = relationship("Assessment", back_populates="vendor", cascade="all, delete-orphan")
-    evidence = relationship("Evidence", back_populates="vendor", cascade="all, delete-orphan")
+    engagements = relationship(
+        "Engagement",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+    findings = relationship(
+        "Finding",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+    events = relationship(
+        "MonitoringEvent",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+    assessments = relationship(
+        "Assessment",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+    evidence = relationship(
+        "Evidence",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
 
 
 class Engagement(Base):
     __tablename__ = "engagements"
 
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
     service_name = Column(String(255), nullable=False)
     service_description = Column(Text)
     business_owner = Column(String(255))
@@ -78,14 +125,21 @@ class Engagement(Base):
     ai_enabled = Column(Boolean, default=False)
     status = Column(String(50), default="Active")
 
-    vendor = relationship("Vendor", back_populates="engagements")
+    vendor = relationship(
+        "Vendor",
+        back_populates="engagements",
+    )
 
 
 class Assessment(Base):
     __tablename__ = "assessments"
 
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
     assessment_type = Column(String(120), nullable=False)
     assessment_reason = Column(String(120), default="New vendor")
     status = Column(String(50), default="Not Started")
@@ -98,16 +152,29 @@ class Assessment(Base):
     notes = Column(Text)
     created_at = Column(DateTime, default=utc_now)
 
-    vendor = relationship("Vendor", back_populates="assessments")
-    evidence = relationship("Evidence", back_populates="assessment")
+    vendor = relationship(
+        "Vendor",
+        back_populates="assessments",
+    )
+    evidence = relationship(
+        "Evidence",
+        back_populates="assessment",
+    )
 
 
 class Evidence(Base):
     __tablename__ = "evidence"
 
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
-    assessment_id = Column(Integer, ForeignKey("assessments.id"))
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+    )
     document_type = Column(String(120), nullable=False)
     document_name = Column(String(255), nullable=False)
     document_date = Column(String(40))
@@ -130,17 +197,33 @@ class Evidence(Base):
     detected_exceptions = Column(Text)
     created_at = Column(DateTime, default=utc_now)
 
-    vendor = relationship("Vendor", back_populates="evidence")
-    assessment = relationship("Assessment", back_populates="evidence")
-    findings = relationship("Finding", back_populates="evidence")
+    vendor = relationship(
+        "Vendor",
+        back_populates="evidence",
+    )
+    assessment = relationship(
+        "Assessment",
+        back_populates="evidence",
+    )
+    findings = relationship(
+        "Finding",
+        back_populates="evidence",
+    )
 
 
 class Finding(Base):
     __tablename__ = "findings"
 
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
-    evidence_id = Column(Integer, ForeignKey("evidence.id"))
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+    evidence_id = Column(
+        Integer,
+        ForeignKey("evidence.id"),
+    )
     source_exception_index = Column(Integer)
     source_control_id = Column(String(80))
     title = Column(String(255), nullable=False)
@@ -152,15 +235,25 @@ class Finding(Base):
     target_date = Column(String(40))
     created_at = Column(DateTime, default=utc_now)
 
-    vendor = relationship("Vendor", back_populates="findings")
-    evidence = relationship("Evidence", back_populates="findings")
+    vendor = relationship(
+        "Vendor",
+        back_populates="findings",
+    )
+    evidence = relationship(
+        "Evidence",
+        back_populates="findings",
+    )
 
 
 class MonitoringEvent(Base):
     __tablename__ = "monitoring_events"
 
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
     event_type = Column(String(120), nullable=False)
     severity = Column(String(40), default="Moderate")
     description = Column(Text)
@@ -170,7 +263,10 @@ class MonitoringEvent(Base):
     status = Column(String(50), default="Open")
     event_date = Column(DateTime, default=utc_now)
 
-    vendor = relationship("Vendor", back_populates="events")
+    vendor = relationship(
+        "Vendor",
+        back_populates="events",
+    )
 
 
 def init_db():
