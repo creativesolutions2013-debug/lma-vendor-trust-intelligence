@@ -86,6 +86,10 @@ The goal is not simply to assign vendors a risk score. The goal is to create an 
 - Control Tower attention queue
 - Risk register export
 - Alembic database migrations
+- Configurable database connection through `DATABASE_URL`
+- Database startup health and schema validation
+- SQLite development support
+- PostgreSQL compatibility validation
 - Automated regression testing with GitHub Actions
 
 ## Demo & local setup
@@ -150,7 +154,47 @@ python -m streamlit run app.py
 pytest -q
 ```
 
-The regression suite covers multiple synthetic SOC 2 report formats, evidence-state isolation, and evidence-to-finding traceability.
+The local regression suite covers synthetic SOC 2 report formats, evidence-state isolation, evidence-to-finding traceability, database configuration, startup health checks, and database seed/read-back behavior.
+
+The PostgreSQL-specific smoke test is intentionally skipped when the application is running with the default SQLite configuration. In CI, the PostgreSQL job supplies a PostgreSQL `DATABASE_URL`, so that test executes against a real PostgreSQL service.
+
+## Database configuration
+
+The application uses SQLite by default for local MVP development:
+
+```text
+sqlite:////tmp/vendor_trust.db
+```
+
+A different database can be selected through the `DATABASE_URL` environment variable.
+
+Example PostgreSQL configuration:
+
+```bash
+export DATABASE_URL="postgresql+psycopg://USER:PASSWORD@HOST:5432/vendor_trust"
+alembic upgrade head
+python -m streamlit run app.py
+```
+
+Do not commit production database credentials to the repository. Use environment variables or a managed secret store.
+
+## Database startup health check
+
+Before the application opens a database session or seeds demo data, it validates:
+
+- Database connectivity
+- Presence of the expected application tables
+- Presence of the Alembic version table
+
+If connectivity succeeds but the schema is incomplete, the application stops with a clear message instructing the operator to run:
+
+```bash
+alembic upgrade head
+```
+
+This prevents late SQLAlchemy failures after the UI has already started.
+
+The health-check output intentionally excludes the database connection string and credentials.
 
 ## Database schema and Alembic migrations
 
@@ -209,6 +253,27 @@ The repository currently uses:
 
 Future schema changes should be added as new migration revisions rather than by deleting `/tmp/vendor_trust.db`.
 
+## PostgreSQL CI validation
+
+GitHub Actions runs two independent jobs on pushes and pull requests to `main`.
+
+### Unit tests
+
+The standard job runs the regression suite with the default application configuration.
+
+### PostgreSQL compatibility
+
+The PostgreSQL job starts an ephemeral PostgreSQL 16 service and then:
+
+1. Installs the application dependencies.
+2. Sets `DATABASE_URL` to the CI PostgreSQL service.
+3. Applies the Alembic migration chain with `alembic upgrade head`.
+4. Verifies that the expected tables exist.
+5. Runs the complete pytest suite against the PostgreSQL configuration.
+6. Executes a PostgreSQL-specific seed/query smoke test that writes demo records, reads them back, verifies expected relationships and risk values, and cleans the records afterward.
+
+This provides automated validation that the application models, Alembic schema, seed logic, and basic read/write behavior work with PostgreSQL rather than only SQLite.
+
 ## Demo data and security note
 
 The current public deployment uses synthetic vendor and evidence data only.
@@ -266,14 +331,14 @@ For the production version:
 
 ## Next product sprint
 
-1. PostgreSQL migration
-2. Durable object storage for evidence
-3. Authentication and role-based access control
-4. Audit logging
-5. Configurable reassessment triggers
-6. Risk acceptance workflow
-7. External security intelligence integrations
-8. Fourth-party dependency graph
+1. Durable object storage for evidence
+2. Authentication and role-based access control
+3. Audit logging
+4. Configurable reassessment triggers
+5. Risk acceptance workflow
+6. External security intelligence integrations
+7. Fourth-party dependency graph
+8. Production deployment hardening
 
 ## Important
 
@@ -284,3 +349,4 @@ The sample vendor data is synthetic and exists only to demonstrate the user expe
 Copyright © 2026 LMA Creative Solutions LLC. All rights reserved.
 
 This repository is provided for demonstration, evaluation, educational, and portfolio purposes. See [LICENSE](LICENSE) for permitted uses.
+
