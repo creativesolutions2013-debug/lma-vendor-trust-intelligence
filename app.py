@@ -33,6 +33,7 @@ from src.scoring import (
     tier_from_score,
 )
 from src.seed import seed_demo_data
+from src.storage import build_evidence_key, get_evidence_storage
 
 
 # =========================================================
@@ -64,8 +65,7 @@ if not database_health["healthy"]:
 session = get_session()
 seed_demo_data(session)
 
-EVIDENCE_DIR = "uploaded_evidence"
-os.makedirs(EVIDENCE_DIR, exist_ok=True)
+EVIDENCE_STORAGE = get_evidence_storage()
 
 ASSESSMENT_TYPES = [
     "Full Security Assessment",
@@ -1349,23 +1349,22 @@ def render_evidence():
                 storage_path = None
 
                 if uploaded:
-                    safe_name = (
-                        f"{vendor.id}_"
-                        f"{int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp())}_"
-                        f"{uploaded.name}"
-                    )
-                    storage_path = os.path.join(
-                        EVIDENCE_DIR,
-                        safe_name,
+                    storage_key = build_evidence_key(
+                        vendor.id,
+                        uploaded.name,
                     )
 
-                    with open(
-                        storage_path,
-                        "wb",
-                    ) as evidence_file:
-                        evidence_file.write(
-                            uploaded.getbuffer()
+                    try:
+                        storage_path = EVIDENCE_STORAGE.save(
+                            storage_key,
+                            uploaded.getvalue(),
                         )
+                    except Exception as exc:
+                        st.error(
+                            "Could not securely store the evidence file. "
+                            f"Storage error: {exc.__class__.__name__}."
+                        )
+                        return
 
                 persisted_actions = extraction.get(
                     "confidence_actions",
