@@ -17,6 +17,17 @@ from src.db import (
     get_session,
     init_db,
 )
+from src.auth_context import get_current_principal
+from src.authz import (
+    PERMISSION_ASSESSMENT_MANAGE,
+    PERMISSION_EVIDENCE_UPLOAD,
+    PERMISSION_FINDING_MANAGE,
+    PERMISSION_MONITORING_MANAGE,
+    PERMISSION_REPORT_EXPORT,
+    PERMISSION_VENDOR_READ,
+    PERMISSION_VENDOR_WRITE,
+    can,
+)
 from src.db_health import check_database_health
 from src.evidence_ai import extract_soc2_metadata
 from src.evidence_state import (
@@ -66,6 +77,18 @@ session = get_session()
 seed_demo_data(session)
 
 EVIDENCE_STORAGE = get_evidence_storage()
+CURRENT_USER = get_current_principal()
+
+PAGE_PERMISSIONS = {
+    "Control Tower": PERMISSION_VENDOR_READ,
+    "Vendors": PERMISSION_VENDOR_READ,
+    "New Vendor Intake": PERMISSION_VENDOR_WRITE,
+    "Assessments": PERMISSION_ASSESSMENT_MANAGE,
+    "Evidence Center": PERMISSION_EVIDENCE_UPLOAD,
+    "Findings": PERMISSION_FINDING_MANAGE,
+    "Monitoring": PERMISSION_MONITORING_MANAGE,
+    "Reports": PERMISSION_REPORT_EXPORT,
+}
 
 ASSESSMENT_TYPES = [
     "Full Security Assessment",
@@ -2173,18 +2196,27 @@ def render_reports():
 
 st.sidebar.title("LMA Vendor Trust Intelligence")
 
+st.sidebar.caption("Development identity — not production authentication")
+st.sidebar.write(
+    {
+        "User": CURRENT_USER.display_name,
+        "Role": CURRENT_USER.role,
+    }
+)
+
+available_pages = [
+    page_name
+    for page_name, permission in PAGE_PERMISSIONS.items()
+    if can(CURRENT_USER, permission)
+]
+
+if not available_pages:
+    st.error("Your role does not have access to any application pages.")
+    st.stop()
+
 page = st.sidebar.radio(
     "Navigation",
-    [
-        "Control Tower",
-        "Vendors",
-        "New Vendor Intake",
-        "Assessments",
-        "Evidence Center",
-        "Findings",
-        "Monitoring",
-        "Reports",
-    ],
+    available_pages,
 )
 
 if page == "Control Tower":
