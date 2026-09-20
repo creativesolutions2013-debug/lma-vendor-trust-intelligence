@@ -17,6 +17,7 @@ from src.db import (
     get_session,
     init_db,
 )
+from src.audit import record_audit_event
 from src.auth_context import get_current_principal
 from src.authz import (
     PERMISSION_ASSESSMENT_MANAGE,
@@ -1558,6 +1559,30 @@ def render_evidence():
 
                         session.add(finding)
                         created_findings += 1
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="evidence.register",
+                    object_type="evidence",
+                    object_id=evidence_item.id,
+                    vendor_id=vendor.id,
+                    details={
+                        "document_type": document_type,
+                        "document_name": final_name,
+                        "assessment_id": (
+                            assessment.id
+                            if assessment
+                            else None
+                        ),
+                        "storage_backend": (
+                            EVIDENCE_STORAGE.__class__.__name__
+                        ),
+                        "file_hash": current_file_hash,
+                        "created_findings": created_findings,
+                        "extraction_method": extraction_method,
+                    },
+                )
 
                 session.commit()
 

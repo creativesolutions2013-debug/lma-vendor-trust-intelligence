@@ -245,6 +245,23 @@ class Finding(Base):
     )
 
 
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True)
+    actor_subject = Column(String(255), nullable=False)
+    actor_name = Column(String(255))
+    actor_email = Column(String(255))
+    actor_role = Column(String(80))
+    action = Column(String(120), nullable=False)
+    object_type = Column(String(120), nullable=False)
+    object_id = Column(String(120))
+    vendor_id = Column(Integer, ForeignKey("vendors.id"))
+    outcome = Column(String(40), nullable=False, default="success")
+    details_json = Column(Text)
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+
+
 class MonitoringEvent(Base):
     __tablename__ = "monitoring_events"
 
