@@ -2,6 +2,7 @@ import pytest
 
 from src.authz import (
     PERMISSION_ADMIN,
+    PERMISSION_AUDIT_READ,
     PERMISSION_EVIDENCE_UPLOAD,
     PERMISSION_FINDING_MANAGE,
     PERMISSION_REPORT_EXPORT,
@@ -62,3 +63,10 @@ def test_unknown_role_is_rejected():
 def test_permissions_for_role_rejects_unknown_role():
     with pytest.raises(ValueError, match="Unsupported role"):
         permissions_for_role("Unknown")
+
+
+def test_admin_and_risk_manager_can_read_audit_log():
+    assert can(principal(ROLE_ADMIN), PERMISSION_AUDIT_READ)
+    assert can(principal(ROLE_RISK_MANAGER), PERMISSION_AUDIT_READ)
+    assert not can(principal(ROLE_ANALYST), PERMISSION_AUDIT_READ)
+    assert not can(principal(ROLE_VIEWER), PERMISSION_AUDIT_READ)

@@ -8,6 +8,7 @@ import streamlit as st
 
 from src.db import (
     Assessment,
+    AuditLog,
     Engagement,
     Evidence,
     Finding,
@@ -21,6 +22,7 @@ from src.audit import record_audit_event
 from src.auth_context import get_current_principal
 from src.authz import (
     PERMISSION_ASSESSMENT_MANAGE,
+    PERMISSION_AUDIT_READ,
     PERMISSION_EVIDENCE_UPLOAD,
     PERMISSION_FINDING_MANAGE,
     PERMISSION_MONITORING_MANAGE,
@@ -89,6 +91,7 @@ PAGE_PERMISSIONS = {
     "Findings": PERMISSION_FINDING_MANAGE,
     "Monitoring": PERMISSION_MONITORING_MANAGE,
     "Reports": PERMISSION_REPORT_EXPORT,
+    "Audit Log": PERMISSION_AUDIT_READ,
 }
 
 ASSESSMENT_TYPES = [
@@ -721,6 +724,25 @@ def render_intake():
         )
 
         session.add(engagement)
+        session.flush()
+
+        record_audit_event(
+            session,
+            principal=CURRENT_USER,
+            action="vendor.create",
+            object_type="vendor",
+            object_id=vendor.id,
+            vendor_id=vendor.id,
+            details={
+                "vendor_name": vendor_name,
+                "engagement_id": engagement.id,
+                "service_name": service_name,
+                "inherent_risk_score": inherent,
+                "residual_risk_score": residual,
+                "tier": tier_from_score(inherent),
+            },
+        )
+
         session.commit()
 
         st.success(f"{vendor_name} created.")
@@ -831,6 +853,23 @@ def render_assessments():
                 notes=notes,
             )
             session.add(assessment)
+            session.flush()
+
+            record_audit_event(
+                session,
+                principal=CURRENT_USER,
+                action="assessment.create",
+                object_type="assessment",
+                object_id=assessment.id,
+                vendor_id=vendor.id,
+                details={
+                    "assessment_type": assessment_type,
+                    "reason": reason,
+                    "assigned_to": assigned_to,
+                    "due_date": str(due_date),
+                },
+            )
+
             session.commit()
 
             st.success(
@@ -900,6 +939,20 @@ def render_assessments():
 
                 if status in ["Completed", "Closed"]:
                     chosen.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="assessment.update",
+                    object_type="assessment",
+                    object_id=chosen.id,
+                    vendor_id=chosen.vendor_id,
+                    details={
+                        "status": status,
+                        "approval_status": approval,
+                        "risk_score": risk_score,
+                    },
+                )
 
                 session.commit()
                 st.success("Assessment updated.")
@@ -2008,8 +2061,93 @@ def render_findings():
                     target_date=target_date,
                 )
                 session.add(finding)
+                session.flush()
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="finding.create",
+                    object_type="finding",
+                    object_id=finding.id,
+                    vendor_id=vendor.id,
+                    details={
+                        "title": title,
+                        "severity": severity,
+                        "source": source,
+                        "owner": owner,
+                        "target_date": target_date,
+                    },
+                )
+
                 session.commit()
                 st.success("Finding created.")
+
+
+
+    st.subheader("Update finding")
+
+    current_findings = (
+        session.query(Finding)
+        .order_by(Finding.created_at.desc())
+        .all()
+    )
+
+    if current_findings:
+        finding_status_options = [
+            "Open",
+            "In Remediation",
+            "Risk Accepted",
+            "Closed",
+        ]
+
+        with st.form("update_finding"):
+            chosen_finding = st.selectbox(
+                "Finding",
+                current_findings,
+                format_func=lambda item: f"#{item.id} — {item.title}",
+            )
+
+            current_status_index = (
+                finding_status_options.index(chosen_finding.status)
+                if chosen_finding.status in finding_status_options
+                else 0
+            )
+
+            finding_status = st.selectbox(
+                "Status",
+                finding_status_options,
+                index=current_status_index,
+            )
+            finding_owner = st.text_input(
+                "Owner",
+                value=chosen_finding.owner or "",
+            )
+            finding_target = st.text_input(
+                "Target date",
+                value=chosen_finding.target_date or "",
+            )
+
+            if st.form_submit_button("Save finding update"):
+                chosen_finding.status = finding_status
+                chosen_finding.owner = finding_owner
+                chosen_finding.target_date = finding_target
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="finding.update",
+                    object_type="finding",
+                    object_id=chosen_finding.id,
+                    vendor_id=chosen_finding.vendor_id,
+                    details={
+                        "status": finding_status,
+                        "owner": finding_owner,
+                        "target_date": finding_target,
+                    },
+                )
+
+                session.commit()
+                st.success("Finding updated.")
 
 
 # =========================================================
@@ -2123,6 +2261,25 @@ def render_monitoring():
                 )
             )
 
+            session.flush()
+
+            record_audit_event(
+                session,
+                principal=CURRENT_USER,
+                action="monitoring.create",
+                object_type="monitoring_event",
+                object_id=event.id,
+                vendor_id=vendor.id,
+                details={
+                    "event_type": event_type,
+                    "severity": severity,
+                    "previous_value": previous_value,
+                    "new_value": new_value,
+                    "residual_risk_score": vendor.residual_risk_score,
+                    "overall_risk_rating": vendor.overall_risk_rating,
+                },
+            )
+
             session.commit()
 
             st.success(
@@ -2133,6 +2290,20 @@ def render_monitoring():
 # =========================================================
 # Reports
 # =========================================================
+
+def log_risk_register_export():
+    record_audit_event(
+        session,
+        principal=CURRENT_USER,
+        action="report.export",
+        object_type="risk_register",
+        details={
+            "format": "csv",
+            "report": "vendor_risk_register",
+        },
+    )
+    session.commit()
+
 
 def render_reports():
     st.title("📊 Reports")
@@ -2175,6 +2346,7 @@ def render_reports():
         df.to_csv(index=False).encode("utf-8"),
         file_name="vendor_risk_register.csv",
         mime="text/csv",
+        on_click=log_risk_register_export,
     )
 
     if evidence:
@@ -2213,6 +2385,80 @@ def render_reports():
             use_container_width=True,
             hide_index=True,
         )
+
+
+
+# =========================================================
+# Audit Log
+# =========================================================
+
+def render_audit_log():
+    st.title("🧾 Audit Log")
+    st.caption(
+        "Trace high-value user actions across vendor risk workflows."
+    )
+
+    events = (
+        session.query(AuditLog)
+        .order_by(AuditLog.created_at.desc())
+        .limit(500)
+        .all()
+    )
+
+    if not events:
+        st.info("No audit events recorded yet.")
+        return
+
+    rows = []
+
+    for event in events:
+        details = {}
+
+        if event.details_json:
+            try:
+                details = json.loads(event.details_json)
+            except (json.JSONDecodeError, TypeError):
+                details = {"raw": event.details_json}
+
+        rows.append(
+            {
+                "Time": format_analysis_time(event.created_at),
+                "Actor": event.actor_name or event.actor_subject,
+                "Role": event.actor_role,
+                "Action": event.action,
+                "Object Type": event.object_type,
+                "Object ID": event.object_id or "—",
+                "Vendor ID": event.vendor_id or "—",
+                "Outcome": event.outcome,
+                "Details": (
+                    json.dumps(details, ensure_ascii=False)
+                    if details
+                    else "—"
+                ),
+            }
+        )
+
+    audit_df = pd.DataFrame(rows)
+
+    action_options = ["All"] + sorted(
+        audit_df["Action"].dropna().unique().tolist()
+    )
+
+    selected_action = st.selectbox(
+        "Filter by action",
+        action_options,
+    )
+
+    if selected_action != "All":
+        audit_df = audit_df[
+            audit_df["Action"] == selected_action
+        ]
+
+    st.dataframe(
+        audit_df,
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 # =========================================================
@@ -2260,3 +2506,5 @@ elif page == "Monitoring":
     render_monitoring()
 elif page == "Reports":
     render_reports()
+elif page == "Audit Log":
+    render_audit_log()
