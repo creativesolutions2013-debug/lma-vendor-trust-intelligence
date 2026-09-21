@@ -48,6 +48,7 @@ from src.scoring import (
 )
 from src.seed import seed_demo_data
 from src.storage import build_evidence_key, get_evidence_storage
+from src.tiering import get_tier_profile, tier_label
 
 
 # =========================================================
@@ -151,15 +152,28 @@ def confidence_label(score):
     return "Low"
 
 
-def recommended_assessment(vendor):
-    if vendor.inherent_risk_score >= 75:
-        return "Full Security Assessment"
-    if vendor.inherent_risk_score >= 50:
-        return "Enhanced Security Assessment"
-    if vendor.inherent_risk_score >= 25:
-        return "Targeted Security Review"
-    return "Basic Security Screening"
+def vendor_tier_profile(vendor):
+    engagements = (
+        session.query(Engagement)
+        .filter_by(vendor_id=vendor.id)
+        .all()
+    )
 
+    ai_enabled = any(bool(item.ai_enabled) for item in engagements)
+    regulated_data = any(
+        "PHI / PCI / Credentials" in (item.data_classification or "")
+        for item in engagements
+    )
+
+    return get_tier_profile(
+        int(vendor.inherent_risk_score or 0),
+        ai_enabled=ai_enabled,
+        regulated_data=regulated_data,
+    )
+
+
+def recommended_assessment(vendor):
+    return vendor_tier_profile(vendor).assessment_type
 
 def get_openai_api_key():
     try:
@@ -439,9 +453,33 @@ def render_vendors():
                 "Country": selected.headquarters_country,
                 "Criticality": selected.criticality,
                 "Overall risk": selected.overall_risk_rating,
+                "Tier": tier_label(vendor_tier_profile(selected)),
                 "Recommended assessment": recommended_assessment(selected),
             }
         )
+
+        profile = vendor_tier_profile(selected)
+
+        st.markdown("#### Tier-driven assurance profile")
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown("**Required controls**")
+            for item in profile.required_controls:
+                st.write(f"• {item}")
+
+            st.markdown("**Required evidence**")
+            for item in profile.required_evidence:
+                st.write(f"• {item}")
+
+        with c2:
+            st.markdown("**Monitoring rules**")
+            for item in profile.monitoring_rules:
+                st.write(f"• {item}")
+
+            st.markdown("**Reassessment triggers**")
+            for item in profile.reassessment_rules:
+                st.write(f"• {item}")
 
     with tabs[1]:
         engagements = (
@@ -755,6 +793,37 @@ def render_intake():
             f"**Initial residual risk:** "
             f"{residual} — {rating_from_score(residual)}"
         )
+
+        profile = get_tier_profile(
+            inherent,
+            ai_enabled=ai_enabled,
+            regulated_data=(
+                data_label == "PHI / PCI / Credentials"
+            ),
+        )
+
+        st.markdown("### Tier-driven assurance requirements")
+        st.write(f"**Assessment profile:** {profile.assessment_type}")
+
+        r1, r2 = st.columns(2)
+
+        with r1:
+            st.markdown("**Required evidence**")
+            for item in profile.required_evidence:
+                st.write(f"• {item}")
+
+            st.markdown("**Required controls**")
+            for item in profile.required_controls:
+                st.write(f"• {item}")
+
+        with r2:
+            st.markdown("**Monitoring rules**")
+            for item in profile.monitoring_rules:
+                st.write(f"• {item}")
+
+            st.markdown("**Reassessment triggers**")
+            for item in profile.reassessment_rules:
+                st.write(f"• {item}")
 
 
 # =========================================================
