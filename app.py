@@ -18,6 +18,8 @@ from src.db import (
     get_session,
     init_db,
 )
+from src.assurance import evaluate_evidence_coverage
+from src.attention import calculate_vendor_attention
 from src.audit import record_audit_event
 from src.auth_context import get_current_principal
 from src.authz import (
@@ -313,54 +315,74 @@ def render_control_tower():
         vendor_events = [
             event
             for event in events
-            if event.vendor_id == vendor.id and event.status != "Closed"
+            if event.vendor_id == vendor.id
         ]
         vendor_findings = [
             finding
             for finding in findings
-            if finding.vendor_id == vendor.id and finding.status != "Closed"
+            if finding.vendor_id == vendor.id
         ]
-        stale = [
+        vendor_evidence = [
             item
             for item in evidence
             if item.vendor_id == vendor.id
-            and evidence_status(item.expiration_date)
-            in ["Expired", "Expiring Soon"]
         ]
 
-        reason = ""
+        profile = vendor_tier_profile(vendor)
+        coverage = evaluate_evidence_coverage(
+            profile.required_evidence,
+            vendor_evidence,
+        )
 
-        if vendor_events:
-            reason = vendor_events[0].event_type
-        elif vendor_findings:
-            reason = vendor_findings[0].title
-        elif stale:
-            reason = (
-                f"{stale[0].document_type}: "
-                f"{evidence_status(stale[0].expiration_date)}"
-            )
-        elif vendor.residual_risk_score >= 50:
-            reason = "Elevated residual risk"
+        attention = calculate_vendor_attention(
+            tier_code=profile.tier,
+            residual_risk=vendor.residual_risk_score or 0,
+            evidence_coverage=coverage,
+            findings=vendor_findings,
+            monitoring_events=vendor_events,
+        )
 
-        if reason:
-            rows.append(
-                {
-                    "Vendor": vendor.display_name,
-                    "Residual Risk": vendor.residual_risk_score,
-                    "Rating": vendor.overall_risk_rating,
-                    "Reason": reason,
-                    "Priority": "P1" if vendor.residual_risk_score >= 75 else "P2",
-                }
-            )
+        if attention.priority == "P4":
+            continue
+
+        top_reason = (
+            attention.reasons[0].reason
+            if attention.reasons
+            else "Risk review required"
+        )
+
+        evidence_gap_count = sum(
+            1
+            for item in coverage.items
+            if item.required
+            and item.status in {"Missing", "Expired", "Expiring Soon"}
+        )
+
+        rows.append(
+            {
+                "Vendor": vendor.display_name,
+                "Attention Score": attention.score,
+                "Priority": attention.priority,
+                "Tier": tier_label(profile),
+                "Residual Risk": vendor.residual_risk_score,
+                "Evidence Coverage": f"{coverage.completion_percent}%",
+                "Evidence Gaps": evidence_gap_count,
+                "Top Attention Reason": top_reason,
+            }
+        )
 
     if rows:
         attention_df = pd.DataFrame(rows).sort_values(
-            "Residual Risk",
-            ascending=False,
+            ["Attention Score", "Residual Risk"],
+            ascending=[False, False],
         )
-        st.dataframe(attention_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            attention_df,
+            use_container_width=True,
+            hide_index=True,
+        )
     else:
-        st.success("No vendors currently require attention.")
+        st.success("No vendors currently require analyst attention.")
 
     st.subheader("Risk Portfolio")
     chart_df = pd.DataFrame(
@@ -480,6 +502,60 @@ def render_vendors():
             st.markdown("**Reassessment triggers**")
             for item in profile.reassessment_rules:
                 st.write(f"• {item}")
+
+        evidence_records = (
+            session.query(Evidence)
+            .filter_by(vendor_id=selected.id)
+            .order_by(Evidence.created_at.desc())
+            .all()
+        )
+
+        coverage = evaluate_evidence_coverage(
+            profile.required_evidence,
+            evidence_records,
+        )
+
+        st.markdown("#### Evidence coverage")
+
+        e1, e2, e3 = st.columns(3)
+        e1.metric("Coverage", f"{coverage.completion_percent}%")
+        e2.metric(
+            "Required evidence satisfied",
+            f"{coverage.satisfied_required} / {coverage.total_required}",
+        )
+        e3.metric("Evidence records on file", len(evidence_records))
+
+        coverage_rows = []
+
+        for item in coverage.items:
+            if item.status == "Satisfied":
+                indicator = "✅"
+            elif item.status == "Expiring Soon":
+                indicator = "⚠️"
+            elif item.status == "Expired":
+                indicator = "⛔"
+            else:
+                indicator = "❌"
+
+            coverage_rows.append(
+                {
+                    "Status": f"{indicator} {item.status}",
+                    "Requirement": item.requirement,
+                    "Required": "Yes" if item.required else "Optional",
+                    "Matched evidence": item.document_name or "—",
+                    "Document type": item.document_type or "—",
+                    "Expiration": item.expiration_date or "—",
+                }
+            )
+
+        if coverage_rows:
+            st.dataframe(
+                pd.DataFrame(coverage_rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("No evidence requirements are configured for this tier.")
 
     with tabs[1]:
         engagements = (
