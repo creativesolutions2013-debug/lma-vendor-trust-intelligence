@@ -41,6 +41,8 @@ from src.evidence_state import (
     file_hash,
     form_key,
 )
+from src.reassessment import evaluate_reassessment_trigger
+from src.reassessment_trace import parse_reassessment_trace
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -105,6 +107,8 @@ ASSESSMENT_TYPES = [
     "PCI Review",
     "Incident-Triggered Reassessment",
     "Material Change Reassessment",
+    "Evidence-Triggered Reassessment",
+    "Risk-Triggered Reassessment",
 ]
 
 EVIDENCE_TYPES = [
@@ -949,6 +953,194 @@ def render_assessments():
         )
     else:
         st.info("No assessments created yet.")
+
+    # -----------------------------------------------------
+    # Triggered reassessment traceability
+    # -----------------------------------------------------
+
+    triggered_assessments = [
+        assessment
+        for assessment in assessments
+        if parse_reassessment_trace(
+            assessment.notes
+        ).triggered
+    ]
+
+    if triggered_assessments:
+        st.subheader("Triggered reassessment trace")
+
+        st.caption(
+            "See which monitoring event caused a reassessment "
+            "and why renewed review was required."
+        )
+
+        traced_assessment = st.selectbox(
+            "Triggered reassessment",
+            triggered_assessments,
+            format_func=lambda item: (
+                f"#{item.id} — "
+                f"{item.vendor.display_name} — "
+                f"{item.assessment_type}"
+            ),
+            key="triggered_reassessment_trace",
+        )
+
+        trace = parse_reassessment_trace(
+            traced_assessment.notes
+        )
+
+        linked_event = None
+
+        if trace.event_id is not None:
+            linked_event = (
+                session.query(MonitoringEvent)
+                .filter_by(
+                    id=trace.event_id,
+                    vendor_id=(
+                        traced_assessment.vendor_id
+                    ),
+                )
+                .first()
+            )
+
+        trigger_priority = "Not available"
+        decision_rationale = trace.rationale
+
+        if linked_event and traced_assessment.vendor:
+            profile = vendor_tier_profile(
+                traced_assessment.vendor
+            )
+
+            decision = (
+                evaluate_reassessment_trigger(
+                    event_type=(
+                        linked_event.event_type
+                    ),
+                    severity=(
+                        linked_event.severity
+                    ),
+                    tier_code=profile.tier,
+                )
+            )
+
+            trigger_priority = (
+                decision.priority
+                or "Not triggered"
+            )
+
+            if not decision_rationale:
+                decision_rationale = (
+                    decision.rationale
+                )
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Trigger Source",
+            trace.source,
+        )
+
+        c2.metric(
+            "Linked Event",
+            (
+                f"#{linked_event.id}"
+                if linked_event
+                else (
+                    f"#{trace.event_id}"
+                    if trace.event_id
+                    is not None
+                    else "Unavailable"
+                )
+            ),
+        )
+
+        c3.metric(
+            "Event Type",
+            (
+                linked_event.event_type
+                if linked_event
+                else (
+                    traced_assessment
+                    .assessment_reason
+                )
+            ),
+        )
+
+        c4.metric(
+            "Severity",
+            (
+                linked_event.severity
+                if linked_event
+                else "Unavailable"
+            ),
+        )
+
+        st.write(
+            {
+                "Assessment ID":
+                    traced_assessment.id,
+                "Assessment Type":
+                    traced_assessment
+                    .assessment_type,
+                "Assessment Status":
+                    traced_assessment.status,
+                "Trigger Priority":
+                    trigger_priority,
+                "Event Status": (
+                    linked_event.status
+                    if linked_event
+                    else "Unavailable"
+                ),
+                "Review Required": (
+                    linked_event
+                    .requires_review
+                    if linked_event
+                    else "Unavailable"
+                ),
+            }
+        )
+
+        st.markdown(
+            "**Trigger rationale**"
+        )
+
+        st.write(
+            decision_rationale
+            or (
+                "No trigger rationale "
+                "was recorded."
+            )
+        )
+
+        if (
+            linked_event
+            and linked_event.description
+        ):
+            with st.expander(
+                "Monitoring event details"
+            ):
+                st.write(
+                    linked_event.description
+                )
+
+                st.write(
+                    {
+                        "Previous Value": (
+                            linked_event
+                            .previous_value
+                            or "—"
+                        ),
+                        "New Value": (
+                            linked_event
+                            .new_value
+                            or "—"
+                        ),
+                        "Event Date": (
+                            linked_event
+                            .event_date
+                        ),
+                    }
+                )
 
     st.subheader("Create assessment")
 
@@ -2408,6 +2600,75 @@ def render_monitoring():
 
             session.flush()
 
+            profile = vendor_tier_profile(vendor)
+            reassessment_decision = evaluate_reassessment_trigger(
+                event_type=event_type,
+                severity=severity,
+                tier_code=profile.tier,
+            )
+
+            triggered_assessment = None
+            assessment_created = False
+
+            if reassessment_decision.triggered:
+                triggered_assessment = (
+                    session.query(Assessment)
+                    .filter(
+                        Assessment.vendor_id == vendor.id,
+                        Assessment.assessment_type
+                        == reassessment_decision.assessment_type,
+                        Assessment.assessment_reason
+                        == reassessment_decision.assessment_reason,
+                        Assessment.status.notin_(["Completed", "Closed"]),
+                    )
+                    .order_by(Assessment.created_at.desc())
+                    .first()
+                )
+
+                if triggered_assessment is None:
+                    triggered_assessment = Assessment(
+                        vendor_id=vendor.id,
+                        assessment_type=(
+                            reassessment_decision.assessment_type
+                        ),
+                        assessment_reason=(
+                            reassessment_decision.assessment_reason
+                        ),
+                        status="Not Started",
+                        approval_status="Pending",
+                        notes=(
+                            "Automatically triggered from monitoring event "
+                            f"#{event.id}. "
+                            f"{reassessment_decision.rationale}"
+                        ),
+                    )
+                    session.add(triggered_assessment)
+                    session.flush()
+                    assessment_created = True
+
+                    record_audit_event(
+                        session,
+                        principal=CURRENT_USER,
+                        action="assessment.create",
+                        object_type="assessment",
+                        object_id=triggered_assessment.id,
+                        vendor_id=vendor.id,
+                        details={
+                            "assessment_type": (
+                                reassessment_decision.assessment_type
+                            ),
+                            "assessment_reason": (
+                                reassessment_decision.assessment_reason
+                            ),
+                            "trigger_source": "monitoring_event",
+                            "monitoring_event_id": event.id,
+                            "trigger_priority": (
+                                reassessment_decision.priority
+                            ),
+                            "rationale": reassessment_decision.rationale,
+                        },
+                    )
+
             record_audit_event(
                 session,
                 principal=CURRENT_USER,
@@ -2422,14 +2683,44 @@ def render_monitoring():
                     "new_value": new_value,
                     "residual_risk_score": vendor.residual_risk_score,
                     "overall_risk_rating": vendor.overall_risk_rating,
+                    "reassessment_triggered": (
+                        reassessment_decision.triggered
+                    ),
+                    "triggered_assessment_id": (
+                        triggered_assessment.id
+                        if triggered_assessment
+                        else None
+                    ),
+                    "trigger_priority": (
+                        reassessment_decision.priority
+                    ),
                 },
             )
 
             session.commit()
 
-            st.success(
-                "Monitoring event recorded and vendor risk recalculated."
-            )
+            if reassessment_decision.triggered:
+                if assessment_created:
+                    st.success(
+                        "Monitoring event recorded and vendor risk "
+                        "recalculated. "
+                        f"{reassessment_decision.assessment_type} "
+                        f"#{triggered_assessment.id} was automatically "
+                        "created."
+                    )
+                    st.caption(reassessment_decision.rationale)
+                else:
+                    st.info(
+                        "Monitoring event recorded and vendor risk "
+                        "recalculated. An existing open reassessment "
+                        f"#{triggered_assessment.id} already covers this "
+                        "trigger."
+                    )
+            else:
+                st.success(
+                    "Monitoring event recorded and vendor risk recalculated."
+                )
+                st.caption(reassessment_decision.rationale)
 
 
 # =========================================================
