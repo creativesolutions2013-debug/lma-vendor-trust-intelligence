@@ -33,6 +33,7 @@ from src.authz import (
     PERMISSION_VENDOR_WRITE,
     can,
 )
+from src.decision_gate import evaluate_vendor_decision
 from src.db_health import check_database_health
 from src.evidence_ai import extract_soc2_metadata
 from src.evidence_state import (
@@ -518,6 +519,70 @@ def render_vendors():
             profile.required_evidence,
             evidence_records,
         )
+
+        vendor_findings = (
+            session.query(Finding)
+            .filter_by(vendor_id=selected.id)
+            .all()
+        )
+
+        vendor_assessments = (
+            session.query(Assessment)
+            .filter_by(vendor_id=selected.id)
+            .all()
+        )
+
+        decision = evaluate_vendor_decision(
+            evidence_completion_percent=(
+                coverage.completion_percent
+            ),
+            findings=vendor_findings,
+            assessments=vendor_assessments,
+            residual_risk=(
+                selected.residual_risk_score or 0
+            ),
+        )
+
+        st.markdown("#### Risk decision gate")
+
+        if decision.outcome == "Approve":
+            st.success("Approve")
+
+        elif decision.outcome == (
+            "Approve with Conditions"
+        ):
+            st.warning(
+                "Approve with Conditions"
+            )
+
+        else:
+            st.error(
+                "Further Review Required"
+            )
+
+        if decision.reasons:
+            st.caption(
+                "The recommendation is based on "
+                "current evidence, findings, "
+                "reassessment status, and residual risk."
+            )
+
+            for reason in decision.reasons:
+                prefix = (
+                    "⛔"
+                    if reason.blocking
+                    else "⚠️"
+                )
+
+                st.write(
+                    f"{prefix} {reason.message}"
+                )
+
+        else:
+            st.caption(
+                "No current approval blockers or "
+                "conditions were identified."
+            )
 
         st.markdown("#### Evidence coverage")
 
