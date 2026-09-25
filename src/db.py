@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -15,7 +16,27 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 
-DEFAULT_DATABASE_URL = "sqlite:////tmp/vendor_trust.db"
+DATA_DIR = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+    / "data"
+)
+
+DATA_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+DEFAULT_DATABASE_PATH = (
+    DATA_DIR
+    / "vendor_trust.db"
+)
+
+DEFAULT_DATABASE_URL = (
+    f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

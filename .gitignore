@@ -8,3 +8,6 @@ venv/
 .streamlit/secrets.toml
 .pytest_cache/
 uploaded_evidence/
+data/*.db
+data/*.db-wal
+data/*.db-shm
