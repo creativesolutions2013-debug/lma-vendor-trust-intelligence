@@ -102,6 +102,11 @@ class Vendor(Base):
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+    approval_decisions = relationship(
+        "ApprovalDecision",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
 
 
 class Engagement(Base):
@@ -242,6 +247,53 @@ class Finding(Base):
     evidence = relationship(
         "Evidence",
         back_populates="findings",
+    )
+
+
+class ApprovalDecision(Base):
+    __tablename__ = "approval_decisions"
+
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    system_recommendation = Column(
+        String(80),
+        nullable=False,
+    )
+    system_reasons_json = Column(Text)
+
+    evidence_completion_percent = Column(Float)
+    residual_risk_score = Column(Float)
+
+    decision = Column(
+        String(80),
+        nullable=False,
+    )
+
+    approver_subject = Column(
+        String(255),
+        nullable=False,
+    )
+    approver_name = Column(String(255))
+    approver_email = Column(String(255))
+    approver_role = Column(String(80))
+
+    rationale = Column(Text)
+    conditions = Column(Text)
+
+    decided_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="approval_decisions",
     )
 
 

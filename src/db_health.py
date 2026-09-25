@@ -10,6 +10,7 @@ REQUIRED_TABLES = {
     "findings",
     "monitoring_events",
     "audit_logs",
+    "approval_decisions",
     "alembic_version",
 }
 

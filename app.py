@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.db import (
+    ApprovalDecision,
     Assessment,
     AuditLog,
     Engagement,
@@ -583,6 +584,295 @@ def render_vendors():
                 "No current approval blockers or "
                 "conditions were identified."
             )
+
+        st.markdown("#### Approval decision")
+
+        approval_history = (
+            session.query(ApprovalDecision)
+            .filter_by(vendor_id=selected.id)
+            .order_by(
+                ApprovalDecision.decided_at.desc()
+            )
+            .all()
+        )
+
+        if approval_history:
+            latest_approval = approval_history[0]
+
+            a1, a2, a3 = st.columns(3)
+
+            a1.metric(
+                "Latest decision",
+                latest_approval.decision,
+            )
+
+            a2.metric(
+                "Approver",
+                (
+                    latest_approval.approver_name
+                    or latest_approval.approver_subject
+                ),
+            )
+
+            a3.metric(
+                "System recommendation",
+                latest_approval.system_recommendation,
+            )
+
+            if latest_approval.rationale:
+                st.write(
+                    "**Decision rationale:** "
+                    f"{latest_approval.rationale}"
+                )
+
+            if latest_approval.conditions:
+                st.write(
+                    "**Conditions:** "
+                    f"{latest_approval.conditions}"
+                )
+
+        else:
+            st.info(
+                "No human approval decision has been "
+                "recorded for this vendor."
+            )
+
+        recommendation_to_decision = {
+            "Approve": "Approved",
+            "Approve with Conditions":
+                "Approved with Conditions",
+            "Further Review Required": "Deferred",
+        }
+
+        decision_options = [
+            "Approved",
+            "Approved with Conditions",
+            "Rejected",
+            "Deferred",
+        ]
+
+        recommended_decision = (
+            recommendation_to_decision.get(
+                decision.outcome,
+                "Deferred",
+            )
+        )
+
+        default_index = decision_options.index(
+            recommended_decision
+        )
+
+        with st.form(
+            f"approval_decision_{selected.id}"
+        ):
+            st.caption(
+                "System recommendation: "
+                f"{decision.outcome}"
+            )
+
+            human_decision = st.selectbox(
+                "Human decision",
+                decision_options,
+                index=default_index,
+            )
+
+            st.write(
+                f"**Approver:** "
+                f"{CURRENT_USER.display_name} "
+                f"({CURRENT_USER.role})"
+            )
+
+            rationale = st.text_area(
+                "Decision rationale *",
+                placeholder=(
+                    "Explain the basis for the decision, "
+                    "including any accepted risk."
+                ),
+            )
+
+            conditions = st.text_area(
+                "Conditions / required follow-up",
+                placeholder=(
+                    "Example: remediation required within "
+                    "30 days; updated penetration test "
+                    "required before production access."
+                ),
+            )
+
+            is_override = (
+                decision.outcome
+                == "Further Review Required"
+                and human_decision
+                in {
+                    "Approved",
+                    "Approved with Conditions",
+                }
+            )
+
+            override_ack = True
+
+            if is_override:
+                st.warning(
+                    "This decision overrides a system "
+                    "recommendation of Further Review Required."
+                )
+
+                override_ack = st.checkbox(
+                    "I acknowledge this approval overrides "
+                    "current system-identified blockers."
+                )
+
+            submitted = st.form_submit_button(
+                "Record approval decision",
+                type="primary",
+            )
+
+        if submitted:
+            validation_errors = []
+
+            if not rationale.strip():
+                validation_errors.append(
+                    "Decision rationale is required."
+                )
+
+            if (
+                human_decision
+                == "Approved with Conditions"
+                and not conditions.strip()
+            ):
+                validation_errors.append(
+                    "Conditions are required for "
+                    "Approved with Conditions."
+                )
+
+            if is_override and not override_ack:
+                validation_errors.append(
+                    "Override acknowledgement is required."
+                )
+
+            if validation_errors:
+                for error in validation_errors:
+                    st.error(error)
+
+            else:
+                snapshot_reasons = [
+                    {
+                        "code": reason.code,
+                        "message": reason.message,
+                        "blocking": reason.blocking,
+                    }
+                    for reason in decision.reasons
+                ]
+
+                approval = ApprovalDecision(
+                    vendor_id=selected.id,
+                    system_recommendation=(
+                        decision.outcome
+                    ),
+                    system_reasons_json=json.dumps(
+                        snapshot_reasons
+                    ),
+                    evidence_completion_percent=(
+                        coverage.completion_percent
+                    ),
+                    residual_risk_score=(
+                        selected.residual_risk_score
+                        or 0
+                    ),
+                    decision=human_decision,
+                    approver_subject=(
+                        CURRENT_USER.subject
+                    ),
+                    approver_name=(
+                        CURRENT_USER.display_name
+                    ),
+                    approver_email=(
+                        CURRENT_USER.email
+                    ),
+                    approver_role=(
+                        CURRENT_USER.role
+                    ),
+                    rationale=rationale.strip(),
+                    conditions=conditions.strip(),
+                )
+
+                session.add(approval)
+                session.flush()
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="approval_decision.create",
+                    object_type="approval_decision",
+                    object_id=approval.id,
+                    vendor_id=selected.id,
+                    details={
+                        "decision":
+                            human_decision,
+                        "system_recommendation":
+                            decision.outcome,
+                        "evidence_completion_percent":
+                            coverage.completion_percent,
+                        "residual_risk_score":
+                            selected.residual_risk_score,
+                        "override":
+                            is_override,
+                        "conditions":
+                            conditions.strip(),
+                    },
+                )
+
+                session.commit()
+
+                st.success(
+                    f"{human_decision} decision "
+                    "recorded successfully."
+                )
+
+                st.rerun()
+
+        if approval_history:
+            with st.expander(
+                "Approval decision history"
+            ):
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Decision":
+                                    item.decision,
+                                "System Recommendation":
+                                    item.system_recommendation,
+                                "Approver":
+                                    (
+                                        item.approver_name
+                                        or item.approver_subject
+                                    ),
+                                "Role":
+                                    item.approver_role,
+                                "Residual Risk":
+                                    item.residual_risk_score,
+                                "Evidence Coverage":
+                                    (
+                                        f"{item.evidence_completion_percent:.0f}%"
+                                        if item.evidence_completion_percent
+                                        is not None
+                                        else "—"
+                                    ),
+                                "Rationale":
+                                    item.rationale,
+                                "Conditions":
+                                    item.conditions,
+                                "Decided At":
+                                    item.decided_at,
+                            }
+                            for item
+                            in approval_history
+                        ]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
         st.markdown("#### Evidence coverage")
 
