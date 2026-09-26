@@ -47,6 +47,7 @@ from src.reassessment import evaluate_reassessment_trigger
 from src.reassessment_trace import parse_reassessment_trace
 from src.remediation import calculate_target_date, evaluate_remediation
 from src.remediation_dashboard import summarize_remediation
+from src.escalation_dashboard import summarize_vendor_escalations
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -320,6 +321,21 @@ def render_control_tower():
         findings
     )
 
+    escalation_summary = (
+        summarize_vendor_escalations(
+            findings
+        )
+    )
+
+    active_escalations = sum(
+        item.active_count
+        for item in escalation_summary.values()
+    )
+
+    vendors_with_active_escalations = len(
+        escalation_summary
+    )
+
     st.subheader("Remediation Health")
 
     r1, r2, r3, r4, r5 = st.columns(5)
@@ -372,6 +388,18 @@ def render_control_tower():
                 "Findings": remediation_summary.aging_61_plus,
             },
         ]
+    )
+
+    e1, e2 = st.columns(2)
+
+    e1.metric(
+        "Active Escalations",
+        active_escalations,
+    )
+
+    e2.metric(
+        "Vendors with Active Escalations",
+        vendors_with_active_escalations,
     )
 
     st.caption("Overdue remediation aging")
@@ -466,6 +494,12 @@ def render_control_tower():
             and item.status in {"Missing", "Expired", "Expiring Soon"}
         )
 
+        vendor_escalation = (
+            escalation_summary.get(
+                vendor.id
+            )
+        )
+
         rows.append(
             {
                 "Vendor": vendor.display_name,
@@ -475,7 +509,31 @@ def render_control_tower():
                 "Residual Risk": vendor.residual_risk_score,
                 "Evidence Coverage": f"{coverage.completion_percent}%",
                 "Evidence Gaps": evidence_gap_count,
-                "Top Attention Reason": top_reason,
+                "Escalation Status": (
+                    vendor_escalation.highest_status
+                    if vendor_escalation
+                    else "None"
+                ),
+                "Escalation Owner": (
+                    vendor_escalation.owner
+                    if vendor_escalation
+                    else "—"
+                ),
+                "Escalation Age": (
+                    f"{vendor_escalation.age_days} days"
+                    if vendor_escalation
+                    and vendor_escalation.age_days
+                    is not None
+                    else "—"
+                ),
+                "Top Attention Reason": (
+                    (
+                        f"{vendor_escalation.highest_status}: "
+                        f"{vendor_escalation.finding_title}"
+                    )
+                    if vendor_escalation
+                    else top_reason
+                ),
             }
         )
 
@@ -491,6 +549,53 @@ def render_control_tower():
         )
     else:
         st.success("No vendors currently require analyst attention.")
+
+    st.subheader("Active Escalations")
+
+    escalation_rows = []
+
+    vendor_names = {
+        vendor.id: vendor.display_name
+        for vendor in vendors
+    }
+
+    for vendor_id, item in escalation_summary.items():
+        escalation_rows.append(
+            {
+                "Vendor": vendor_names.get(
+                    vendor_id,
+                    vendor_id,
+                ),
+                "Status": item.highest_status,
+                "Finding": item.finding_title,
+                "Owner": item.owner,
+                "Age": (
+                    f"{item.age_days} days"
+                    if item.age_days is not None
+                    else "—"
+                ),
+                "Active Items": item.active_count,
+                "Required Action / Note": item.note,
+            }
+        )
+
+    if escalation_rows:
+        escalation_df = pd.DataFrame(
+            escalation_rows
+        ).sort_values(
+            ["Active Items", "Vendor"],
+            ascending=[False, True],
+        )
+
+        st.dataframe(
+            escalation_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.success(
+            "No active remediation escalations."
+        )
 
     st.subheader("Remediation Portfolio")
 
