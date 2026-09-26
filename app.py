@@ -48,6 +48,7 @@ from src.reassessment_trace import parse_reassessment_trace
 from src.remediation import calculate_target_date, evaluate_remediation
 from src.remediation_dashboard import summarize_remediation
 from src.escalation_dashboard import summarize_vendor_escalations
+from src.material_change import evaluate_material_change
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -3395,6 +3396,235 @@ def render_monitoring():
             use_container_width=True,
             hide_index=True,
         )
+
+    # -----------------------------------------------------
+    # Material Change Decision Intelligence
+    # -----------------------------------------------------
+
+    vendors_by_id = {
+        vendor.id: vendor
+        for vendor in session.query(Vendor).all()
+    }
+
+    engagements = (
+        session.query(Engagement)
+        .all()
+    )
+
+    engagements_by_vendor = {}
+
+    for engagement in engagements:
+        engagements_by_vendor.setdefault(
+            engagement.vendor_id,
+            [],
+        ).append(engagement)
+
+    approvals = (
+        session.query(ApprovalDecision)
+        .order_by(
+            ApprovalDecision.decided_at.desc()
+        )
+        .all()
+    )
+
+    latest_approval_by_vendor = {}
+
+    for approval in approvals:
+        if approval.vendor_id not in latest_approval_by_vendor:
+            latest_approval_by_vendor[
+                approval.vendor_id
+            ] = approval
+
+    material_change_rows = []
+
+    for event in events:
+        vendor = vendors_by_id.get(
+            event.vendor_id
+        )
+
+        if vendor is None:
+            continue
+
+        vendor_engagements = (
+            engagements_by_vendor.get(
+                vendor.id,
+                [],
+            )
+        )
+
+        # Use the highest-risk engagement context
+        # rather than averaging away meaningful exposure.
+        context_engagement = None
+
+        if vendor_engagements:
+            context_engagement = sorted(
+                vendor_engagements,
+                key=lambda item: (
+                    1
+                    if item.privileged_access
+                    else 0,
+                    1
+                    if item.production_access
+                    else 0,
+                    1
+                    if (
+                        item.business_criticality
+                        or ""
+                    ).lower()
+                    == "critical"
+                    else 0,
+                    1
+                    if (
+                        item.data_classification
+                        or ""
+                    ).lower()
+                    in {
+                        "restricted",
+                        "regulated",
+                        "confidential",
+                        "sensitive",
+                    }
+                    else 0,
+                ),
+                reverse=True,
+            )[0]
+
+        profile = vendor_tier_profile(
+            vendor
+        )
+
+        latest_approval = (
+            latest_approval_by_vendor.get(
+                vendor.id
+            )
+        )
+
+        decision = evaluate_material_change(
+            event_type=event.event_type,
+            severity=event.severity,
+            tier_code=profile.tier,
+            business_criticality=(
+                context_engagement.business_criticality
+                if context_engagement
+                else None
+            ),
+            data_classification=(
+                context_engagement.data_classification
+                if context_engagement
+                else None
+            ),
+            production_access=(
+                bool(
+                    context_engagement.production_access
+                )
+                if context_engagement
+                else False
+            ),
+            privileged_access=(
+                bool(
+                    context_engagement.privileged_access
+                )
+                if context_engagement
+                else False
+            ),
+            ai_enabled=(
+                bool(
+                    context_engagement.ai_enabled
+                )
+                if context_engagement
+                else False
+            ),
+            has_current_approval=(
+                latest_approval is not None
+            ),
+        )
+
+        if (
+            decision.recommended_action
+            == "No Action"
+        ):
+            continue
+
+        material_change_rows.append(
+            {
+                "Vendor": vendor.display_name,
+                "Event": event.event_type,
+                "Severity": event.severity,
+                "Materiality":
+                    decision.materiality,
+                "Decision Impact":
+                    decision.decision_impact,
+                "Recommended Action":
+                    decision.recommended_action,
+                "Affected Domain":
+                    decision.affected_domain,
+                "Context": (
+                    context_engagement.service_name
+                    if context_engagement
+                    else "Vendor-level"
+                ),
+                "Why It Matters":
+                    decision.rationale,
+                "Confidence":
+                    decision.confidence,
+                "_priority": {
+                    "Critical": 0,
+                    "High": 1,
+                    "Moderate": 2,
+                    "Low": 3,
+                }.get(
+                    decision.materiality,
+                    4,
+                ),
+            }
+        )
+
+    st.subheader(
+        "Material Change Queue"
+    )
+
+    st.caption(
+        "Events are prioritized by decision impact "
+        "and relationship context. The goal is to "
+        "direct analysts to the smallest appropriate "
+        "action rather than trigger unnecessary "
+        "full reassessments."
+    )
+
+    if material_change_rows:
+        material_change_df = (
+            pd.DataFrame(
+                material_change_rows
+            )
+            .sort_values(
+                [
+                    "_priority",
+                    "Vendor",
+                ],
+                ascending=[
+                    True,
+                    True,
+                ],
+            )
+            .drop(
+                columns=[
+                    "_priority"
+                ]
+            )
+        )
+
+        st.dataframe(
+            material_change_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+        st.success(
+            "No monitoring events currently require "
+            "material-change action."
+        )
+
 
     st.subheader("Record monitoring event")
 
