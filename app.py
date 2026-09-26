@@ -2907,6 +2907,18 @@ def render_findings():
                             ).escalation_required
                             else "No"
                         ),
+                        "Escalation Status": (
+                            finding.escalation_status
+                            or "Not Escalated"
+                        ),
+                        "Escalated By": (
+                            finding.escalated_by
+                            or "—"
+                        ),
+                        "Escalated At": (
+                            finding.escalated_at
+                            or "—"
+                        ),
                     }
                     for finding in findings
                 ]
@@ -3057,6 +3069,185 @@ def render_findings():
 
                 session.commit()
                 st.success("Finding updated.")
+
+
+    st.subheader("Remediation escalation")
+
+    escalation_findings = (
+        session.query(Finding)
+        .order_by(Finding.created_at.desc())
+        .all()
+    )
+
+    if escalation_findings:
+        with st.form("finding_escalation"):
+            escalation_finding = st.selectbox(
+                "Finding to escalate",
+                escalation_findings,
+                format_func=lambda item: (
+                    f"#{item.id} — {item.title}"
+                ),
+            )
+
+            escalation_status_options = [
+                "Not Escalated",
+                "Escalated",
+                "Vendor Action Required",
+                "Management Review",
+                "Risk Acceptance Review",
+                "Resolved",
+            ]
+
+            current_escalation_status = (
+                escalation_finding.escalation_status
+                or "Not Escalated"
+            )
+
+            current_escalation_index = (
+                escalation_status_options.index(
+                    current_escalation_status
+                )
+                if current_escalation_status
+                in escalation_status_options
+                else 0
+            )
+
+            escalation_status = st.selectbox(
+                "Escalation status",
+                escalation_status_options,
+                index=current_escalation_index,
+            )
+
+            escalation_note = st.text_area(
+                "Escalation note / required action",
+                value=(
+                    escalation_finding.escalation_note
+                    or ""
+                ),
+                placeholder=(
+                    "Example: Vendor remediation plan "
+                    "required within 5 business days."
+                ),
+            )
+
+            escalation_owner = st.text_input(
+                "Remediation owner",
+                value=(
+                    escalation_finding.owner
+                    or ""
+                ),
+            )
+
+            escalation_target = st.text_input(
+                "Target date",
+                value=(
+                    escalation_finding.target_date
+                    or ""
+                ),
+            )
+
+            submit_escalation = (
+                st.form_submit_button(
+                    "Save escalation"
+                )
+            )
+
+        if submit_escalation:
+            from datetime import datetime, timezone
+
+            try:
+                finding_to_update = (
+                    session.query(Finding)
+                    .filter(
+                        Finding.id
+                        == escalation_finding.id
+                    )
+                    .one()
+                )
+
+                old_status = (
+                    finding_to_update.escalation_status
+                    or "Not Escalated"
+                )
+
+                finding_to_update.escalation_status = (
+                    escalation_status
+                )
+
+                finding_to_update.escalation_note = (
+                    escalation_note.strip()
+                )
+
+                finding_to_update.owner = (
+                    escalation_owner.strip()
+                )
+
+                finding_to_update.target_date = (
+                    escalation_target.strip()
+                )
+
+                if (
+                    escalation_status
+                    != "Not Escalated"
+                ):
+                    finding_to_update.escalated_by = (
+                        CURRENT_USER.display_name
+                    )
+
+                    finding_to_update.escalated_at = (
+                        datetime.now(timezone.utc)
+                    )
+
+                record_audit_event(
+                    session,
+                    principal=CURRENT_USER,
+                    action="finding.escalation_update",
+                    object_type="finding",
+                    object_id=finding_to_update.id,
+                    vendor_id=(
+                        finding_to_update.vendor_id
+                    ),
+                    details={
+                        "previous_escalation_status":
+                            old_status,
+                        "escalation_status":
+                            escalation_status,
+                        "escalation_note":
+                            escalation_note.strip(),
+                        "owner":
+                            escalation_owner.strip(),
+                        "target_date":
+                            escalation_target.strip(),
+                    },
+                )
+
+                session.commit()
+
+                session.refresh(
+                    finding_to_update
+                )
+
+                st.success(
+                    "Remediation escalation updated."
+                )
+
+                st.write(
+                    "**Saved escalation status:** "
+                    f"{finding_to_update.escalation_status}"
+                )
+
+                st.write(
+                    "**Escalated by:** "
+                    f"{finding_to_update.escalated_by}"
+                )
+
+            except Exception as exc:
+                session.rollback()
+
+                st.error(
+                    "Unable to save remediation "
+                    f"escalation: {exc}"
+                )
 
 
 # =========================================================

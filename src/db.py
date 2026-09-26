@@ -259,6 +259,15 @@ class Finding(Base):
     status = Column(String(50), default="Open")
     owner = Column(String(255))
     target_date = Column(String(40))
+
+    escalation_status = Column(
+        String(50),
+        default="Not Escalated",
+    )
+    escalation_note = Column(Text)
+    escalated_by = Column(String(255))
+    escalated_at = Column(DateTime)
+
     created_at = Column(DateTime, default=utc_now)
 
     vendor = relationship(
