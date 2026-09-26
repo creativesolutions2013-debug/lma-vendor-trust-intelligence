@@ -45,6 +45,7 @@ from src.evidence_state import (
 )
 from src.reassessment import evaluate_reassessment_trigger
 from src.reassessment_trace import parse_reassessment_trace
+from src.remediation import calculate_target_date, evaluate_remediation
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -351,11 +352,45 @@ def render_control_tower():
         if attention.priority == "P4":
             continue
 
-        top_reason = (
-            attention.reasons[0].reason
-            if attention.reasons
-            else "Risk review required"
-        )
+        remediation_escalations = [
+            (
+                finding,
+                evaluate_remediation(finding),
+            )
+            for finding in vendor_findings
+            if evaluate_remediation(
+                finding
+            ).escalation_required
+        ]
+
+        if remediation_escalations:
+            remediation_escalations.sort(
+                key=lambda item: (
+                    0
+                    if item[1].status == "Overdue"
+                    else 1,
+                    item[1].days_remaining
+                    if item[1].days_remaining
+                    is not None
+                    else 9999,
+                )
+            )
+
+            escalated_finding, remediation_state = (
+                remediation_escalations[0]
+            )
+
+            top_reason = (
+                f"{remediation_state.status} remediation: "
+                f"{escalated_finding.title}"
+            )
+
+        else:
+            top_reason = (
+                attention.reasons[0].reason
+                if attention.reasons
+                else "Risk review required"
+            )
 
         evidence_gap_count = sum(
             1
@@ -2698,6 +2733,33 @@ def render_findings():
                         ),
                         "Owner": finding.owner,
                         "Target": finding.target_date,
+                        "SLA Days": (
+                            evaluate_remediation(
+                                finding
+                            ).sla_days
+                        ),
+                        "Days Remaining": (
+                            evaluate_remediation(
+                                finding
+                            ).days_remaining
+                            if evaluate_remediation(
+                                finding
+                            ).days_remaining
+                            is not None
+                            else "—"
+                        ),
+                        "Remediation Status": (
+                            evaluate_remediation(
+                                finding
+                            ).status
+                        ),
+                        "Escalation": (
+                            "Yes"
+                            if evaluate_remediation(
+                                finding
+                            ).escalation_required
+                            else "No"
+                        ),
                     }
                     for finding in findings
                 ]
@@ -2743,6 +2805,14 @@ def render_findings():
             if not title:
                 st.error("Finding title is required.")
             else:
+                effective_target_date = (
+                    target_date.strip()
+                    if target_date.strip()
+                    else calculate_target_date(
+                        severity
+                    ).isoformat()
+                )
+
                 finding = Finding(
                     vendor_id=vendor.id,
                     title=title,
@@ -2750,7 +2820,7 @@ def render_findings():
                     source=source,
                     severity=severity,
                     owner=owner,
-                    target_date=target_date,
+                    target_date=effective_target_date,
                 )
                 session.add(finding)
                 session.flush()
@@ -2767,7 +2837,7 @@ def render_findings():
                         "severity": severity,
                         "source": source,
                         "owner": owner,
-                        "target_date": target_date,
+                        "target_date": effective_target_date,
                     },
                 )
 
