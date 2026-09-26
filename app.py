@@ -46,6 +46,7 @@ from src.evidence_state import (
 from src.reassessment import evaluate_reassessment_trigger
 from src.reassessment_trace import parse_reassessment_trace
 from src.remediation import calculate_target_date, evaluate_remediation
+from src.remediation_dashboard import summarize_remediation
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -315,6 +316,72 @@ def render_control_tower():
         open_findings + open_events + evidence_attention,
     )
 
+    remediation_summary = summarize_remediation(
+        findings
+    )
+
+    st.subheader("Remediation Health")
+
+    r1, r2, r3, r4, r5 = st.columns(5)
+
+    r1.metric(
+        "Overdue Findings",
+        remediation_summary.overdue_findings,
+    )
+
+    r2.metric(
+        "Due Soon",
+        remediation_summary.due_soon_findings,
+    )
+
+    r3.metric(
+        "Vendors Escalated",
+        remediation_summary.vendors_with_escalations,
+    )
+
+    r4.metric(
+        "SLA Breach Rate",
+        f"{remediation_summary.sla_breach_rate}%",
+    )
+
+    r5.metric(
+        "Oldest Overdue",
+        (
+            f"{remediation_summary.oldest_overdue_days} days"
+            if remediation_summary.oldest_overdue_days
+            else "0 days"
+        ),
+    )
+
+    aging_df = pd.DataFrame(
+        [
+            {
+                "Aging Bucket": "1–7 days overdue",
+                "Findings": remediation_summary.aging_1_7,
+            },
+            {
+                "Aging Bucket": "8–30 days overdue",
+                "Findings": remediation_summary.aging_8_30,
+            },
+            {
+                "Aging Bucket": "31–60 days overdue",
+                "Findings": remediation_summary.aging_31_60,
+            },
+            {
+                "Aging Bucket": "61+ days overdue",
+                "Findings": remediation_summary.aging_61_plus,
+            },
+        ]
+    )
+
+    st.caption("Overdue remediation aging")
+
+    st.dataframe(
+        aging_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.subheader("Vendor Attention Queue")
     rows = []
 
@@ -424,6 +491,86 @@ def render_control_tower():
         )
     else:
         st.success("No vendors currently require analyst attention.")
+
+    st.subheader("Remediation Portfolio")
+
+    remediation_rows = []
+
+    vendor_names = {
+        vendor.id: vendor.display_name
+        for vendor in vendors
+    }
+
+    for finding in findings:
+        remediation_state = evaluate_remediation(
+            finding
+        )
+
+        if remediation_state.status == "Closed":
+            continue
+
+        remediation_rows.append(
+            {
+                "Vendor": vendor_names.get(
+                    finding.vendor_id,
+                    finding.vendor_id,
+                ),
+                "Finding": finding.title,
+                "Severity": finding.severity,
+                "Finding Status": finding.status,
+                "Owner": finding.owner or "Unassigned",
+                "Target Date": (
+                    finding.target_date or "—"
+                ),
+                "SLA Days": remediation_state.sla_days,
+                "Days Remaining": (
+                    remediation_state.days_remaining
+                    if remediation_state.days_remaining
+                    is not None
+                    else "—"
+                ),
+                "Remediation Status":
+                    remediation_state.status,
+                "Escalation Required": (
+                    "Yes"
+                    if remediation_state.escalation_required
+                    else "No"
+                ),
+                "_priority": (
+                    0
+                    if remediation_state.status == "Overdue"
+                    else 1
+                    if remediation_state.status == "Due Soon"
+                    else 2
+                    if remediation_state.status
+                    == "Target Date Missing"
+                    else 3
+                ),
+            }
+        )
+
+    if remediation_rows:
+        remediation_df = pd.DataFrame(
+            remediation_rows
+        ).sort_values(
+            ["_priority", "Vendor"],
+            ascending=[True, True],
+        )
+
+        remediation_df = remediation_df.drop(
+            columns=["_priority"]
+        )
+
+        st.dataframe(
+            remediation_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+        st.success(
+            "No open remediation items."
+        )
 
     st.subheader("Risk Portfolio")
     chart_df = pd.DataFrame(
