@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0006_add_targeted_scope_snapshot"
-down_revision = "0005_add_material_change_action_fields"
+revision = "0006_targeted_scope"
+down_revision = "0005_material_change"
 branch_labels = None
 depends_on = None
 

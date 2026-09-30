@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0005_add_material_change_action_fields"
+revision = "0005_material_change"
 down_revision = "0004_add_finding_escalation"
 branch_labels = None
 depends_on = None
