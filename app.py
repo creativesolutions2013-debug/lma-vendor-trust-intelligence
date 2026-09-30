@@ -49,6 +49,8 @@ from src.remediation import calculate_target_date, evaluate_remediation
 from src.remediation_dashboard import summarize_remediation
 from src.escalation_dashboard import summarize_vendor_escalations
 from src.material_change import evaluate_material_change
+from src.material_action import plan_material_action
+from src.targeted_scope import build_targeted_review_scope
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -1596,6 +1598,536 @@ def render_assessments():
         )
     else:
         st.info("No assessments created yet.")
+
+    # -----------------------------------------------------
+    # Targeted material-change review scope
+    # -----------------------------------------------------
+
+    targeted_reviews = [
+        assessment
+        for assessment in assessments
+        if assessment.assessment_type
+        == "Targeted Material Change Review"
+    ]
+
+    if targeted_reviews:
+        st.subheader(
+            "Targeted Review Scope"
+        )
+
+        st.caption(
+            "Focus only on the controls and evidence "
+            "affected by the material change. Reuse "
+            "current evidence where appropriate and "
+            "avoid reopening unrelated domains."
+        )
+
+        scoped_assessment = st.selectbox(
+            "Targeted review",
+            targeted_reviews,
+            format_func=lambda item: (
+                f"#{item.id} — "
+                f"{item.vendor.display_name} — "
+                f"{item.assessment_reason}"
+            ),
+            key="targeted_review_scope",
+        )
+
+        event_id = None
+        notes_text = (
+            scoped_assessment.notes
+            or ""
+        )
+
+        marker = "Monitoring event #"
+
+        if marker in notes_text:
+            remainder = notes_text.split(
+                marker,
+                1,
+            )[1]
+
+            event_token = (
+                remainder
+                .split(".", 1)[0]
+                .strip()
+            )
+
+            try:
+                event_id = int(
+                    event_token
+                )
+            except ValueError:
+                event_id = None
+
+        linked_event = None
+
+        if event_id is not None:
+            linked_event = (
+                session.query(
+                    MonitoringEvent
+                )
+                .filter_by(
+                    id=event_id,
+                    vendor_id=(
+                        scoped_assessment.vendor_id
+                    ),
+                )
+                .first()
+            )
+
+        if linked_event is None:
+            st.warning(
+                "The monitoring event linked to this "
+                "targeted review could not be resolved."
+            )
+
+        else:
+            vendor = scoped_assessment.vendor
+
+            vendor_engagements = (
+                session.query(Engagement)
+                .filter(
+                    Engagement.vendor_id
+                    == vendor.id
+                )
+                .all()
+            )
+
+            ai_enabled = any(
+                bool(
+                    getattr(
+                        engagement,
+                        "ai_enabled",
+                        False,
+                    )
+                )
+                for engagement
+                in vendor_engagements
+            )
+
+            regulated_data = any(
+                (
+                    getattr(
+                        engagement,
+                        "data_classification",
+                        "",
+                    )
+                    or ""
+                )
+                .strip()
+                .lower()
+                in {
+                    "regulated",
+                    "restricted",
+                }
+                for engagement
+                in vendor_engagements
+            )
+
+            profile = vendor_tier_profile(
+                vendor
+            )
+
+            scope = (
+                build_targeted_review_scope(
+                    affected_domain=(
+                        linked_event.affected_domain
+                        or "General"
+                    ),
+                    event_type=(
+                        linked_event.event_type
+                    ),
+                    tier_code=profile.tier,
+                    ai_enabled=ai_enabled,
+                    regulated_data=(
+                        regulated_data
+                    ),
+                )
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                st.markdown(
+                    "#### Review"
+                )
+
+                if scope.review_controls:
+                    for item in (
+                        scope.review_controls
+                    ):
+                        st.write(
+                            f"• {item}"
+                        )
+                else:
+                    st.write(
+                        "No control reassessment "
+                        "required at this stage."
+                    )
+
+                st.markdown(
+                    "#### Request"
+                )
+
+                for item in (
+                    scope.request_evidence
+                ):
+                    st.write(
+                        f"• {item}"
+                    )
+
+            with c2:
+                st.markdown(
+                    "#### Reuse"
+                )
+
+                for item in (
+                    scope.reusable_evidence
+                ):
+                    st.write(
+                        f"• {item}"
+                    )
+
+                st.markdown(
+                    "#### Exclude"
+                )
+
+                for item in (
+                    scope.excluded_domains
+                ):
+                    st.write(
+                        f"• {item}"
+                    )
+
+            st.info(
+                scope.rationale
+            )
+
+            st.caption(
+                "Scope is system-recommended. "
+                "Analyst judgment may expand or "
+                "narrow the review when supported "
+                "by documented rationale."
+            )
+
+            proposed_scope = {
+                "review_controls":
+                    list(scope.review_controls),
+                "request_evidence":
+                    list(scope.request_evidence),
+                "reusable_evidence":
+                    list(scope.reusable_evidence),
+                "excluded_domains":
+                    list(scope.excluded_domains),
+                "rationale":
+                    scope.rationale,
+                "affected_domain":
+                    scope.affected_domain,
+            }
+
+            # Persist the original system proposal once.
+            if not scoped_assessment.proposed_scope_json:
+                scoped_assessment.proposed_scope_json = (
+                    json.dumps(
+                        proposed_scope,
+                        sort_keys=True,
+                    )
+                )
+                session.commit()
+
+            if scoped_assessment.approved_scope_json:
+                approved = json.loads(
+                    scoped_assessment.approved_scope_json
+                )
+
+                st.success(
+                    "Scope confirmed."
+                )
+
+                st.write(
+                    "**Confirmed by:** "
+                    f"{scoped_assessment.scope_confirmed_by}"
+                )
+
+                st.write(
+                    "**Confirmed at:** "
+                    f"{scoped_assessment.scope_confirmed_at}"
+                )
+
+                if (
+                    scoped_assessment.scope_override_rationale
+                ):
+                    st.write(
+                        "**Override rationale:** "
+                        f"{scoped_assessment.scope_override_rationale}"
+                    )
+
+                with st.expander(
+                    "View approved scope"
+                ):
+                    st.markdown("**Review**")
+                    for item in approved.get(
+                        "review_controls",
+                        [],
+                    ):
+                        st.write(f"• {item}")
+
+                    st.markdown("**Request**")
+                    for item in approved.get(
+                        "request_evidence",
+                        [],
+                    ):
+                        st.write(f"• {item}")
+
+                    st.markdown("**Reuse**")
+                    for item in approved.get(
+                        "reusable_evidence",
+                        [],
+                    ):
+                        st.write(f"• {item}")
+
+                    st.markdown("**Exclude**")
+                    for item in approved.get(
+                        "excluded_domains",
+                        [],
+                    ):
+                        st.write(f"• {item}")
+
+            else:
+                st.markdown(
+                    "### Confirm Targeted Review Scope"
+                )
+
+                st.caption(
+                    "Accept the proposed scope as-is, "
+                    "or adjust it. Rationale is required "
+                    "only when the system proposal changes."
+                )
+
+                review_options = sorted(
+                    set(
+                        list(scope.review_controls)
+                        + list(
+                            profile.required_controls
+                        )
+                    )
+                )
+
+                evidence_options = sorted(
+                    set(
+                        list(scope.request_evidence)
+                        + list(
+                            profile.required_evidence
+                        )
+                    )
+                )
+
+                reuse_options = sorted(
+                    set(
+                        list(scope.reusable_evidence)
+                        + list(
+                            profile.required_evidence
+                        )
+                    )
+                )
+
+                exclude_options = sorted(
+                    set(
+                        list(scope.excluded_domains)
+                        + [
+                            "Business continuity and disaster recovery",
+                            "Identity and access management",
+                            "Vulnerability management",
+                            "Incident response",
+                            "Privacy governance",
+                            "Physical security",
+                            "Personnel security",
+                            "Third- and fourth-party risk management",
+                            "Data protection and retention",
+                        ]
+                    )
+                )
+
+                with st.form(
+                    f"confirm_targeted_scope_{scoped_assessment.id}"
+                ):
+                    final_review = st.multiselect(
+                        "Review controls",
+                        review_options,
+                        default=list(
+                            scope.review_controls
+                        ),
+                    )
+
+                    final_request = st.multiselect(
+                        "Request evidence",
+                        evidence_options,
+                        default=list(
+                            scope.request_evidence
+                        ),
+                    )
+
+                    final_reuse = st.multiselect(
+                        "Reuse existing evidence",
+                        reuse_options,
+                        default=list(
+                            scope.reusable_evidence
+                        ),
+                    )
+
+                    final_exclude = st.multiselect(
+                        "Exclude from this review",
+                        exclude_options,
+                        default=list(
+                            scope.excluded_domains
+                        ),
+                    )
+
+                    override_rationale = st.text_area(
+                        "Scope adjustment rationale",
+                        placeholder=(
+                            "Required only if you change "
+                            "the system-proposed scope."
+                        ),
+                    )
+
+                    confirm_scope = (
+                        st.form_submit_button(
+                            "Confirm review scope"
+                        )
+                    )
+
+                if confirm_scope:
+                    final_scope = {
+                        "review_controls":
+                            final_review,
+                        "request_evidence":
+                            final_request,
+                        "reusable_evidence":
+                            final_reuse,
+                        "excluded_domains":
+                            final_exclude,
+                        "rationale":
+                            scope.rationale,
+                        "affected_domain":
+                            scope.affected_domain,
+                    }
+
+                    proposal_changed = (
+                        final_scope["review_controls"]
+                        != proposed_scope["review_controls"]
+                        or final_scope["request_evidence"]
+                        != proposed_scope["request_evidence"]
+                        or final_scope["reusable_evidence"]
+                        != proposed_scope["reusable_evidence"]
+                        or final_scope["excluded_domains"]
+                        != proposed_scope["excluded_domains"]
+                    )
+
+                    if (
+                        proposal_changed
+                        and not override_rationale.strip()
+                    ):
+                        st.error(
+                            "Provide a rationale when "
+                            "changing the system-proposed scope."
+                        )
+                    else:
+                        from datetime import datetime, timezone
+
+                        # Re-query the assessment inside the
+                        # confirmation transaction so we persist
+                        # against a fresh ORM instance.
+                        assessment_to_update = (
+                            session.query(Assessment)
+                            .filter(
+                                Assessment.id
+                                == scoped_assessment.id
+                            )
+                            .first()
+                        )
+
+                        if assessment_to_update is None:
+                            st.error(
+                                "Unable to locate the assessment "
+                                "for scope confirmation."
+                            )
+                        else:
+                            assessment_to_update.proposed_scope_json = (
+                                json.dumps(
+                                    proposed_scope,
+                                    sort_keys=True,
+                                )
+                            )
+
+                            assessment_to_update.approved_scope_json = (
+                                json.dumps(
+                                    final_scope,
+                                    sort_keys=True,
+                                )
+                            )
+
+                            assessment_to_update.scope_override_rationale = (
+                                override_rationale.strip()
+                                if proposal_changed
+                                else None
+                            )
+
+                            assessment_to_update.scope_confirmed_by = (
+                                CURRENT_USER.display_name
+                            )
+
+                            assessment_to_update.scope_confirmed_at = (
+                                datetime.now(
+                                    timezone.utc
+                                ).replace(
+                                    tzinfo=None
+                                )
+                            )
+
+                            record_audit_event(
+                                session,
+                                principal=CURRENT_USER,
+                                action="assessment.scope_confirm",
+                                object_type="assessment",
+                                object_id=(
+                                    assessment_to_update.id
+                                ),
+                                vendor_id=(
+                                    assessment_to_update.vendor_id
+                                ),
+                                details={
+                                    "proposal_changed":
+                                        proposal_changed,
+                                    "override_rationale":
+                                        (
+                                            override_rationale.strip()
+                                            if proposal_changed
+                                            else None
+                                        ),
+                                    "approved_scope":
+                                        final_scope,
+                                },
+                            )
+
+                            session.commit()
+                            session.refresh(
+                                assessment_to_update
+                            )
+
+                            if (
+                                assessment_to_update.approved_scope_json
+                                and assessment_to_update.scope_confirmed_at
+                            ):
+                                st.success(
+                                    "Targeted review scope confirmed."
+                                )
+                            else:
+                                st.error(
+                                    "Scope confirmation did not persist."
+                                )
+
 
     # -----------------------------------------------------
     # Triggered reassessment traceability
@@ -3539,6 +4071,28 @@ def render_monitoring():
             ),
         )
 
+        # Persist decision intelligence for older
+        # monitoring events that predate the new model.
+        if not event.recommended_action:
+            event.materiality = (
+                decision.materiality
+            )
+            event.decision_impact = (
+                decision.decision_impact
+            )
+            event.recommended_action = (
+                decision.recommended_action
+            )
+            event.affected_domain = (
+                decision.affected_domain
+            )
+            event.recommendation_rationale = (
+                decision.rationale
+            )
+            event.recommendation_confidence = (
+                decision.confidence
+            )
+
         if (
             decision.recommended_action
             == "No Action"
@@ -3547,6 +4101,7 @@ def render_monitoring():
 
         material_change_rows.append(
             {
+                "_event_id": event.id,
                 "Vendor": vendor.display_name,
                 "Event": event.event_type,
                 "Severity": event.severity,
@@ -3579,6 +4134,9 @@ def render_monitoring():
             }
         )
 
+    # Persist any decision snapshots populated above.
+    session.commit()
+
     st.subheader(
         "Material Change Queue"
     )
@@ -3608,7 +4166,8 @@ def render_monitoring():
             )
             .drop(
                 columns=[
-                    "_priority"
+                    "_priority",
+                    "_event_id",
                 ]
             )
         )
@@ -3623,6 +4182,298 @@ def render_monitoring():
         st.success(
             "No monitoring events currently require "
             "material-change action."
+        )
+
+
+    # -----------------------------------------------------
+    # Analyst material-change decision
+    # -----------------------------------------------------
+
+    actionable_events = [
+        event
+        for event in events
+        if event.recommended_action
+        and event.recommended_action != "No Action"
+        and not event.analyst_action
+        and event.status != "Closed"
+    ]
+
+    st.subheader(
+        "Analyst Decision"
+    )
+
+    st.caption(
+        "Review the system recommendation, confirm the "
+        "smallest appropriate action, or override it with "
+        "a documented rationale."
+    )
+
+    if actionable_events:
+        with st.form(
+            "material_change_analyst_action"
+        ):
+            selected_event = st.selectbox(
+                "Material-change item",
+                actionable_events,
+                format_func=lambda item: (
+                    f"#{item.id} — "
+                    f"{vendors_by_id[item.vendor_id].display_name} — "
+                    f"{item.event_type}"
+                ),
+            )
+
+            st.write(
+                "**Decision impact:** "
+                f"{selected_event.decision_impact}"
+            )
+
+            st.write(
+                "**System recommendation:** "
+                f"{selected_event.recommended_action}"
+            )
+
+            st.caption(
+                selected_event.recommendation_rationale
+                or ""
+            )
+
+            available_actions = [
+                "Monitor",
+                "Request Evidence",
+                "Targeted Review",
+                "Full Reassessment",
+                "Escalate",
+                "Dismiss",
+            ]
+
+            recommended = (
+                selected_event.recommended_action
+                if selected_event.recommended_action
+                in available_actions
+                else "Monitor"
+            )
+
+            selected_action = st.selectbox(
+                "Analyst action",
+                available_actions,
+                index=available_actions.index(
+                    recommended
+                ),
+            )
+
+            analyst_rationale = st.text_area(
+                "Analyst rationale",
+                placeholder=(
+                    "Required when overriding the recommendation, "
+                    "dismissing, escalating, or initiating a full "
+                    "reassessment."
+                ),
+            )
+
+            submit_action = (
+                st.form_submit_button(
+                    "Apply analyst decision"
+                )
+            )
+
+        if submit_action:
+            try:
+                plan = plan_material_action(
+                    selected_action
+                )
+
+                followed_recommendation = (
+                    selected_action
+                    == selected_event.recommended_action
+                )
+
+                rationale_required = (
+                    plan.requires_rationale
+                    or not followed_recommendation
+                )
+
+                if (
+                    rationale_required
+                    and not analyst_rationale.strip()
+                ):
+                    st.error(
+                        "Provide a rationale for this decision."
+                    )
+                else:
+                    from datetime import datetime, timezone
+
+                    selected_event.analyst_action = (
+                        selected_action
+                    )
+                    selected_event.analyst_rationale = (
+                        analyst_rationale.strip()
+                    )
+                    selected_event.analyst_followed_recommendation = (
+                        followed_recommendation
+                    )
+                    selected_event.acted_by = (
+                        CURRENT_USER.display_name
+                    )
+                    selected_event.acted_at = (
+                        datetime.now(timezone.utc)
+                    )
+
+                    created_assessment = None
+
+                    if plan.create_assessment:
+                        event_marker = (
+                            f"Monitoring event "
+                            f"#{selected_event.id}"
+                        )
+
+                        created_assessment = (
+                            session.query(Assessment)
+                            .filter(
+                                Assessment.vendor_id
+                                == selected_event.vendor_id,
+                                Assessment.assessment_type
+                                == plan.assessment_type,
+                                Assessment.status.notin_(
+                                    [
+                                        "Completed",
+                                        "Closed",
+                                    ]
+                                ),
+                                Assessment.notes.contains(
+                                    event_marker
+                                ),
+                            )
+                            .first()
+                        )
+
+                        if created_assessment is None:
+                            created_assessment = Assessment(
+                                vendor_id=(
+                                    selected_event.vendor_id
+                                ),
+                                assessment_type=(
+                                    plan.assessment_type
+                                ),
+                                assessment_reason=(
+                                    selected_event.event_type
+                                ),
+                                status="Not Started",
+                                approval_status="Pending",
+                                notes=(
+                                    f"{event_marker}. "
+                                    f"Decision impact: "
+                                    f"{selected_event.decision_impact}. "
+                                    f"System recommendation: "
+                                    f"{selected_event.recommended_action}. "
+                                    f"Analyst action: "
+                                    f"{selected_action}. "
+                                    f"Rationale: "
+                                    f"{analyst_rationale.strip() or 'N/A'}"
+                                ),
+                            )
+
+                            session.add(
+                                created_assessment
+                            )
+                            session.flush()
+
+                            record_audit_event(
+                                session,
+                                principal=CURRENT_USER,
+                                action="assessment.create",
+                                object_type="assessment",
+                                object_id=(
+                                    created_assessment.id
+                                ),
+                                vendor_id=(
+                                    selected_event.vendor_id
+                                ),
+                                details={
+                                    "source":
+                                        "material_change_decision",
+                                    "monitoring_event_id":
+                                        selected_event.id,
+                                    "assessment_type":
+                                        plan.assessment_type,
+                                    "analyst_action":
+                                        selected_action,
+                                },
+                            )
+
+                    if selected_action == "Dismiss":
+                        selected_event.status = "Closed"
+                        selected_event.requires_review = False
+
+                    elif selected_action == "Monitor":
+                        selected_event.status = "Monitoring"
+                        selected_event.requires_review = False
+
+                    elif selected_action == "Request Evidence":
+                        selected_event.status = "Evidence Requested"
+                        selected_event.requires_review = True
+
+                    elif selected_action == "Escalate":
+                        selected_event.status = "Escalated"
+                        selected_event.requires_review = True
+
+                    else:
+                        selected_event.status = "In Review"
+                        selected_event.requires_review = True
+
+                    record_audit_event(
+                        session,
+                        principal=CURRENT_USER,
+                        action="material_change.decision",
+                        object_type="monitoring_event",
+                        object_id=selected_event.id,
+                        vendor_id=selected_event.vendor_id,
+                        details={
+                            "system_recommendation":
+                                selected_event.recommended_action,
+                            "analyst_action":
+                                selected_action,
+                            "followed_recommendation":
+                                followed_recommendation,
+                            "analyst_rationale":
+                                analyst_rationale.strip(),
+                            "assessment_id": (
+                                created_assessment.id
+                                if created_assessment
+                                else None
+                            ),
+                        },
+                    )
+
+                    session.commit()
+
+                    st.success(
+                        "Analyst decision recorded."
+                    )
+
+                    st.write(
+                        "**Action applied:** "
+                        f"{selected_action}"
+                    )
+
+                    if created_assessment:
+                        st.write(
+                            "**Assessment created:** "
+                            f"#{created_assessment.id} — "
+                            f"{created_assessment.assessment_type}"
+                        )
+
+            except Exception as exc:
+                session.rollback()
+
+                st.error(
+                    "Unable to apply analyst decision: "
+                    f"{exc}"
+                )
+
+    else:
+        st.info(
+            "No material-change items are currently "
+            "awaiting analyst action."
         )
 
 
@@ -3698,74 +4549,123 @@ def render_monitoring():
 
             session.flush()
 
-            profile = vendor_tier_profile(vendor)
-            reassessment_decision = evaluate_reassessment_trigger(
-                event_type=event_type,
-                severity=severity,
-                tier_code=profile.tier,
+            # -------------------------------------------------
+            # Material-change decision snapshot
+            # -------------------------------------------------
+
+            profile = vendor_tier_profile(
+                vendor
             )
 
-            triggered_assessment = None
-            assessment_created = False
-
-            if reassessment_decision.triggered:
-                triggered_assessment = (
-                    session.query(Assessment)
-                    .filter(
-                        Assessment.vendor_id == vendor.id,
-                        Assessment.assessment_type
-                        == reassessment_decision.assessment_type,
-                        Assessment.assessment_reason
-                        == reassessment_decision.assessment_reason,
-                        Assessment.status.notin_(["Completed", "Closed"]),
-                    )
-                    .order_by(Assessment.created_at.desc())
-                    .first()
+            vendor_engagements = (
+                engagements_by_vendor.get(
+                    vendor.id,
+                    [],
                 )
+            )
 
-                if triggered_assessment is None:
-                    triggered_assessment = Assessment(
-                        vendor_id=vendor.id,
-                        assessment_type=(
-                            reassessment_decision.assessment_type
-                        ),
-                        assessment_reason=(
-                            reassessment_decision.assessment_reason
-                        ),
-                        status="Not Started",
-                        approval_status="Pending",
-                        notes=(
-                            "Automatically triggered from monitoring event "
-                            f"#{event.id}. "
-                            f"{reassessment_decision.rationale}"
-                        ),
-                    )
-                    session.add(triggered_assessment)
-                    session.flush()
-                    assessment_created = True
+            context_engagement = None
 
-                    record_audit_event(
-                        session,
-                        principal=CURRENT_USER,
-                        action="assessment.create",
-                        object_type="assessment",
-                        object_id=triggered_assessment.id,
-                        vendor_id=vendor.id,
-                        details={
-                            "assessment_type": (
-                                reassessment_decision.assessment_type
-                            ),
-                            "assessment_reason": (
-                                reassessment_decision.assessment_reason
-                            ),
-                            "trigger_source": "monitoring_event",
-                            "monitoring_event_id": event.id,
-                            "trigger_priority": (
-                                reassessment_decision.priority
-                            ),
-                            "rationale": reassessment_decision.rationale,
-                        },
-                    )
+            if vendor_engagements:
+                context_engagement = sorted(
+                    vendor_engagements,
+                    key=lambda item: (
+                        1
+                        if item.privileged_access
+                        else 0,
+                        1
+                        if item.production_access
+                        else 0,
+                        1
+                        if (
+                            item.business_criticality
+                            or ""
+                        ).lower()
+                        == "critical"
+                        else 0,
+                        1
+                        if (
+                            item.data_classification
+                            or ""
+                        ).lower()
+                        in {
+                            "restricted",
+                            "regulated",
+                            "confidential",
+                            "sensitive",
+                        }
+                        else 0,
+                    ),
+                    reverse=True,
+                )[0]
+
+            latest_approval = (
+                latest_approval_by_vendor.get(
+                    vendor.id
+                )
+            )
+
+            material_decision = (
+                evaluate_material_change(
+                    event_type=event_type,
+                    severity=severity,
+                    tier_code=profile.tier,
+                    business_criticality=(
+                        context_engagement.business_criticality
+                        if context_engagement
+                        else None
+                    ),
+                    data_classification=(
+                        context_engagement.data_classification
+                        if context_engagement
+                        else None
+                    ),
+                    production_access=(
+                        bool(
+                            context_engagement.production_access
+                        )
+                        if context_engagement
+                        else False
+                    ),
+                    privileged_access=(
+                        bool(
+                            context_engagement.privileged_access
+                        )
+                        if context_engagement
+                        else False
+                    ),
+                    ai_enabled=(
+                        bool(
+                            context_engagement.ai_enabled
+                        )
+                        if context_engagement
+                        else False
+                    ),
+                    has_current_approval=(
+                        latest_approval
+                        is not None
+                    ),
+                )
+            )
+
+            event.materiality = (
+                material_decision.materiality
+            )
+            event.decision_impact = (
+                material_decision.decision_impact
+            )
+            event.recommended_action = (
+                material_decision.recommended_action
+            )
+            event.affected_domain = (
+                material_decision.affected_domain
+            )
+            event.recommendation_rationale = (
+                material_decision.rationale
+            )
+            event.recommendation_confidence = (
+                material_decision.confidence
+            )
 
             record_audit_event(
                 session,
@@ -3777,48 +4677,49 @@ def render_monitoring():
                 details={
                     "event_type": event_type,
                     "severity": severity,
-                    "previous_value": previous_value,
-                    "new_value": new_value,
-                    "residual_risk_score": vendor.residual_risk_score,
-                    "overall_risk_rating": vendor.overall_risk_rating,
-                    "reassessment_triggered": (
-                        reassessment_decision.triggered
-                    ),
-                    "triggered_assessment_id": (
-                        triggered_assessment.id
-                        if triggered_assessment
-                        else None
-                    ),
-                    "trigger_priority": (
-                        reassessment_decision.priority
-                    ),
+                    "previous_value":
+                        previous_value,
+                    "new_value":
+                        new_value,
+                    "residual_risk_score":
+                        vendor.residual_risk_score,
+                    "overall_risk_rating":
+                        vendor.overall_risk_rating,
+                    "materiality":
+                        material_decision.materiality,
+                    "decision_impact":
+                        material_decision.decision_impact,
+                    "recommended_action":
+                        material_decision.recommended_action,
+                    "affected_domain":
+                        material_decision.affected_domain,
+                    "recommendation_confidence":
+                        material_decision.confidence,
+                    "automatic_reassessment_created":
+                        False,
                 },
             )
 
             session.commit()
 
-            if reassessment_decision.triggered:
-                if assessment_created:
-                    st.success(
-                        "Monitoring event recorded and vendor risk "
-                        "recalculated. "
-                        f"{reassessment_decision.assessment_type} "
-                        f"#{triggered_assessment.id} was automatically "
-                        "created."
-                    )
-                    st.caption(reassessment_decision.rationale)
-                else:
-                    st.info(
-                        "Monitoring event recorded and vendor risk "
-                        "recalculated. An existing open reassessment "
-                        f"#{triggered_assessment.id} already covers this "
-                        "trigger."
-                    )
-            else:
-                st.success(
-                    "Monitoring event recorded and vendor risk recalculated."
-                )
-                st.caption(reassessment_decision.rationale)
+            st.success(
+                "Monitoring event recorded and "
+                "material-change analysis completed."
+            )
+
+            st.write(
+                "**Decision impact:** "
+                f"{material_decision.decision_impact}"
+            )
+
+            st.write(
+                "**Recommended action:** "
+                f"{material_decision.recommended_action}"
+            )
+
+            st.caption(
+                material_decision.rationale
+            )
 
 
 # =========================================================

@@ -176,6 +176,13 @@ class Assessment(Base):
     risk_score = Column(Float, default=0)
     approval_status = Column(String(80), default="Pending")
     notes = Column(Text)
+
+    proposed_scope_json = Column(Text)
+    approved_scope_json = Column(Text)
+    scope_override_rationale = Column(Text)
+    scope_confirmed_by = Column(String(255))
+    scope_confirmed_at = Column(DateTime)
+
     created_at = Column(DateTime, default=utc_now)
 
     vendor = relationship(
@@ -360,6 +367,20 @@ class MonitoringEvent(Base):
     new_value = Column(String(120))
     requires_review = Column(Boolean, default=True)
     status = Column(String(50), default="Open")
+
+    materiality = Column(String(40))
+    decision_impact = Column(String(80))
+    recommended_action = Column(String(80))
+    affected_domain = Column(String(120))
+    recommendation_rationale = Column(Text)
+    recommendation_confidence = Column(String(40))
+
+    analyst_action = Column(String(80))
+    analyst_rationale = Column(Text)
+    analyst_followed_recommendation = Column(Boolean)
+    acted_by = Column(String(255))
+    acted_at = Column(DateTime)
+
     event_date = Column(DateTime, default=utc_now)
 
     vendor = relationship(
