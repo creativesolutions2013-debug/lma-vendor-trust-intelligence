@@ -51,6 +51,7 @@ from src.escalation_dashboard import summarize_vendor_escalations
 from src.material_change import evaluate_material_change
 from src.material_action import plan_material_action
 from src.targeted_scope import build_targeted_review_scope
+from src.targeted_gap import analyze_targeted_evidence_gaps
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -1893,6 +1894,139 @@ def render_assessments():
                         [],
                     ):
                         st.write(f"• {item}")
+
+                # -----------------------------------------
+                # Evidence Work Plan
+                # -----------------------------------------
+
+                st.markdown(
+                    "### Evidence Work Plan"
+                )
+
+                st.caption(
+                    "Use evidence already on file where it "
+                    "is still reliable. Send work to the "
+                    "vendor only when evidence is genuinely "
+                    "missing or stale."
+                )
+
+                approved_requirements = list(
+                    dict.fromkeys(
+                        approved.get(
+                            "request_evidence",
+                            [],
+                        )
+                        + approved.get(
+                            "reusable_evidence",
+                            [],
+                        )
+                    )
+                )
+
+                vendor_evidence = (
+                    session.query(Evidence)
+                    .filter(
+                        Evidence.vendor_id
+                        == scoped_assessment.vendor_id
+                    )
+                    .all()
+                )
+
+                work_plan = (
+                    analyze_targeted_evidence_gaps(
+                        approved_requirements,
+                        vendor_evidence,
+                    )
+                )
+
+                m1, m2, m3, m4 = st.columns(4)
+
+                m1.metric(
+                    "Scoped Evidence",
+                    work_plan.total_requirements,
+                )
+                m2.metric(
+                    "Reuse",
+                    work_plan.reusable,
+                )
+                m3.metric(
+                    "Validate",
+                    work_plan.analyst_validation,
+                )
+                m4.metric(
+                    "Request Vendor",
+                    work_plan.vendor_requests,
+                )
+
+                if work_plan.items:
+                    work_plan_rows = []
+
+                    for item in work_plan.items:
+                        work_plan_rows.append(
+                            {
+                                "Requirement":
+                                    item.requirement,
+                                "Evidence State":
+                                    item.evidence_state,
+                                "Action":
+                                    item.workflow_action,
+                                "Evidence":
+                                    (
+                                        item.document_name
+                                        or item.document_type
+                                        or "—"
+                                    ),
+                                "Expiration":
+                                    (
+                                        item.expiration_date
+                                        or "—"
+                                    ),
+                                "Why":
+                                    item.reason,
+                            }
+                        )
+
+                    st.dataframe(
+                        pd.DataFrame(
+                            work_plan_rows
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    request_items = [
+                        item
+                        for item in work_plan.items
+                        if item.workflow_action
+                        == "Request Vendor"
+                    ]
+
+                    if request_items:
+                        st.warning(
+                            f"{len(request_items)} evidence "
+                            "item(s) require vendor outreach."
+                        )
+
+                        with st.expander(
+                            "Vendor request package"
+                        ):
+                            for item in request_items:
+                                st.write(
+                                    f"• {item.requirement}"
+                                )
+
+                    else:
+                        st.success(
+                            "No vendor evidence request is "
+                            "currently required for this "
+                            "targeted review."
+                        )
+
+                else:
+                    st.info(
+                        "The approved scope contains no "
+                        "evidence requirements."
+                    )
 
             else:
                 st.markdown(
