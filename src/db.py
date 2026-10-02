@@ -244,6 +244,56 @@ class Evidence(Base):
     )
 
 
+class EvidenceRequestPackage(Base):
+    __tablename__ = "evidence_request_packages"
+
+    id = Column(Integer, primary_key=True)
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+        nullable=False,
+    )
+
+    status = Column(
+        String(40),
+        default="Draft",
+        nullable=False,
+    )
+
+    requested_items_json = Column(
+        Text,
+        nullable=False,
+    )
+
+    validation_items_json = Column(Text)
+    avoided_requests_json = Column(Text)
+
+    analyst_notes = Column(Text)
+
+    created_by = Column(
+        String(255),
+        nullable=False,
+    )
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    sent_by = Column(String(255))
+    sent_at = Column(DateTime)
+
+    received_at = Column(DateTime)
+    closed_at = Column(DateTime)
+
+
 class Finding(Base):
     __tablename__ = "findings"
 

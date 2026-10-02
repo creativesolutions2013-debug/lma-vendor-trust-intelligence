@@ -12,6 +12,7 @@ from src.db import (
     AuditLog,
     Engagement,
     Evidence,
+    EvidenceRequestPackage,
     Finding,
     MonitoringEvent,
     Vendor,
@@ -52,6 +53,10 @@ from src.material_change import evaluate_material_change
 from src.material_action import plan_material_action
 from src.targeted_scope import build_targeted_review_scope
 from src.targeted_gap import analyze_targeted_evidence_gaps
+from src.evidence_request import (
+    build_evidence_request_draft,
+    can_transition_request,
+)
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -2015,6 +2020,389 @@ def render_assessments():
                                     f"• {item.requirement}"
                                 )
 
+                        request_draft = (
+                            build_evidence_request_draft(
+                                work_plan.items
+                            )
+                        )
+
+                        existing_package = (
+                            session.query(
+                                EvidenceRequestPackage
+                            )
+                            .filter(
+                                EvidenceRequestPackage.assessment_id
+                                == scoped_assessment.id
+                            )
+                            .order_by(
+                                EvidenceRequestPackage.id.desc()
+                            )
+                            .first()
+                        )
+
+                        st.markdown(
+                            "### Evidence Request"
+                        )
+
+                        if existing_package is None:
+                            st.caption(
+                                "Review the true evidence gaps "
+                                "before creating a vendor request. "
+                                "Creating a draft does not send "
+                                "anything."
+                            )
+
+                            analyst_request_notes = (
+                                st.text_area(
+                                    "Request notes",
+                                    key=(
+                                        "request_notes_"
+                                        f"{scoped_assessment.id}"
+                                    ),
+                                    placeholder=(
+                                        "Optional context for the "
+                                        "vendor or internal record."
+                                    ),
+                                )
+                            )
+
+                            if st.button(
+                                "Create request draft",
+                                key=(
+                                    "create_request_"
+                                    f"{scoped_assessment.id}"
+                                ),
+                            ):
+                                package = (
+                                    EvidenceRequestPackage(
+                                        vendor_id=(
+                                            scoped_assessment.vendor_id
+                                        ),
+                                        assessment_id=(
+                                            scoped_assessment.id
+                                        ),
+                                        status="Draft",
+                                        requested_items_json=(
+                                            json.dumps(
+                                                list(
+                                                    request_draft
+                                                    .requested_items
+                                                )
+                                            )
+                                        ),
+                                        validation_items_json=(
+                                            json.dumps(
+                                                list(
+                                                    request_draft
+                                                    .validation_items
+                                                )
+                                            )
+                                        ),
+                                        avoided_requests_json=(
+                                            json.dumps(
+                                                list(
+                                                    request_draft
+                                                    .avoided_requests
+                                                )
+                                            )
+                                        ),
+                                        analyst_notes=(
+                                            analyst_request_notes
+                                            .strip()
+                                            or None
+                                        ),
+                                        created_by=(
+                                            CURRENT_USER.display_name
+                                        ),
+                                        created_at=(
+                                            datetime.now(
+                                                timezone.utc
+                                            ).replace(
+                                                tzinfo=None
+                                            )
+                                        ),
+                                    )
+                                )
+
+                                session.add(package)
+
+                                record_audit_event(
+                                    session,
+                                    principal=CURRENT_USER,
+                                    action=(
+                                        "evidence_request.create"
+                                    ),
+                                    object_type=(
+                                        "evidence_request_package"
+                                    ),
+                                    object_id=None,
+                                    vendor_id=(
+                                        scoped_assessment.vendor_id
+                                    ),
+                                    details={
+                                        "assessment_id":
+                                            scoped_assessment.id,
+                                        "requested_items":
+                                            list(
+                                                request_draft
+                                                .requested_items
+                                            ),
+                                        "avoided_requests":
+                                            list(
+                                                request_draft
+                                                .avoided_requests
+                                            ),
+                                    },
+                                )
+
+                                session.commit()
+                                session.refresh(package)
+
+                                st.success(
+                                    "Evidence request draft created. "
+                                    "Nothing has been sent."
+                                )
+                                st.rerun()
+
+                        else:
+                            requested_snapshot = json.loads(
+                                existing_package
+                                .requested_items_json
+                                or "[]"
+                            )
+
+                            validation_snapshot = json.loads(
+                                existing_package
+                                .validation_items_json
+                                or "[]"
+                            )
+
+                            avoided_snapshot = json.loads(
+                                existing_package
+                                .avoided_requests_json
+                                or "[]"
+                            )
+
+                            r1, r2, r3 = st.columns(3)
+
+                            r1.metric(
+                                "Request Status",
+                                existing_package.status,
+                            )
+
+                            r2.metric(
+                                "Vendor Items",
+                                len(requested_snapshot),
+                            )
+
+                            r3.metric(
+                                "Avoided Requests",
+                                len(avoided_snapshot),
+                            )
+
+                            st.write(
+                                "**Requested from vendor**"
+                            )
+
+                            for requirement in requested_snapshot:
+                                st.write(
+                                    f"• {requirement}"
+                                )
+
+                            if validation_snapshot:
+                                with st.expander(
+                                    "Analyst validation kept internal"
+                                ):
+                                    for requirement in (
+                                        validation_snapshot
+                                    ):
+                                        st.write(
+                                            f"• {requirement}"
+                                        )
+
+                            if avoided_snapshot:
+                                with st.expander(
+                                    "Avoided vendor requests"
+                                ):
+                                    for requirement in (
+                                        avoided_snapshot
+                                    ):
+                                        st.write(
+                                            f"• {requirement}"
+                                        )
+
+                            st.caption(
+                                "Created by "
+                                f"{existing_package.created_by} "
+                                f"at {existing_package.created_at}"
+                            )
+
+                            if existing_package.analyst_notes:
+                                st.write(
+                                    "**Notes:** "
+                                    f"{existing_package.analyst_notes}"
+                                )
+
+                            if (
+                                existing_package.status
+                                == "Draft"
+                                and st.button(
+                                    "Mark as sent",
+                                    key=(
+                                        "mark_request_sent_"
+                                        f"{existing_package.id}"
+                                    ),
+                                )
+                            ):
+                                if can_transition_request(
+                                    existing_package.status,
+                                    "Sent",
+                                ):
+                                    existing_package.status = "Sent"
+                                    existing_package.sent_by = (
+                                        CURRENT_USER.display_name
+                                    )
+                                    existing_package.sent_at = (
+                                        datetime.now(
+                                            timezone.utc
+                                        ).replace(
+                                            tzinfo=None
+                                        )
+                                    )
+
+                                    record_audit_event(
+                                        session,
+                                        principal=CURRENT_USER,
+                                        action=(
+                                            "evidence_request.sent"
+                                        ),
+                                        object_type=(
+                                            "evidence_request_package"
+                                        ),
+                                        object_id=(
+                                            existing_package.id
+                                        ),
+                                        vendor_id=(
+                                            scoped_assessment.vendor_id
+                                        ),
+                                        details={
+                                            "assessment_id":
+                                                scoped_assessment.id,
+                                        },
+                                    )
+
+                                    session.commit()
+                                    st.success(
+                                        "Request marked as sent."
+                                    )
+                                    st.rerun()
+
+                            elif (
+                                existing_package.status
+                                == "Sent"
+                                and st.button(
+                                    "Mark response received",
+                                    key=(
+                                        "mark_request_received_"
+                                        f"{existing_package.id}"
+                                    ),
+                                )
+                            ):
+                                if can_transition_request(
+                                    existing_package.status,
+                                    "Received",
+                                ):
+                                    existing_package.status = (
+                                        "Received"
+                                    )
+                                    existing_package.received_at = (
+                                        datetime.now(
+                                            timezone.utc
+                                        ).replace(
+                                            tzinfo=None
+                                        )
+                                    )
+
+                                    record_audit_event(
+                                        session,
+                                        principal=CURRENT_USER,
+                                        action=(
+                                            "evidence_request.received"
+                                        ),
+                                        object_type=(
+                                            "evidence_request_package"
+                                        ),
+                                        object_id=(
+                                            existing_package.id
+                                        ),
+                                        vendor_id=(
+                                            scoped_assessment.vendor_id
+                                        ),
+                                        details={
+                                            "assessment_id":
+                                                scoped_assessment.id,
+                                        },
+                                    )
+
+                                    session.commit()
+                                    st.success(
+                                        "Vendor response recorded."
+                                    )
+                                    st.rerun()
+
+                            elif (
+                                existing_package.status
+                                == "Received"
+                                and st.button(
+                                    "Close request",
+                                    key=(
+                                        "close_request_"
+                                        f"{existing_package.id}"
+                                    ),
+                                )
+                            ):
+                                if can_transition_request(
+                                    existing_package.status,
+                                    "Closed",
+                                ):
+                                    existing_package.status = (
+                                        "Closed"
+                                    )
+                                    existing_package.closed_at = (
+                                        datetime.now(
+                                            timezone.utc
+                                        ).replace(
+                                            tzinfo=None
+                                        )
+                                    )
+
+                                    record_audit_event(
+                                        session,
+                                        principal=CURRENT_USER,
+                                        action=(
+                                            "evidence_request.close"
+                                        ),
+                                        object_type=(
+                                            "evidence_request_package"
+                                        ),
+                                        object_id=(
+                                            existing_package.id
+                                        ),
+                                        vendor_id=(
+                                            scoped_assessment.vendor_id
+                                        ),
+                                        details={
+                                            "assessment_id":
+                                                scoped_assessment.id,
+                                        },
+                                    )
+
+                                    session.commit()
+                                    st.success(
+                                        "Evidence request closed."
+                                    )
+                                    st.rerun()
+
                     else:
                         st.success(
                             "No vendor evidence request is "
@@ -2168,7 +2556,6 @@ def render_assessments():
                             "changing the system-proposed scope."
                         )
                     else:
-                        from datetime import datetime, timezone
 
                         # Re-query the assessment inside the
                         # confirmation transaction so we persist

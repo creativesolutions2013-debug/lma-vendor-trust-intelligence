@@ -11,6 +11,7 @@ REQUIRED_TABLES = {
     "monitoring_events",
     "audit_logs",
     "approval_decisions",
+    "evidence_request_packages",
     "alembic_version",
 }
 
