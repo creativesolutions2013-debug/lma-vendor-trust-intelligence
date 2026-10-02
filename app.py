@@ -57,6 +57,9 @@ from src.evidence_request import (
     build_evidence_request_draft,
     can_transition_request,
 )
+from src.response_reconciliation import (
+    reconcile_evidence_response,
+)
 from src.scoring import (
     InherentRiskInput,
     calculate_inherent_risk,
@@ -2243,6 +2246,117 @@ def render_assessments():
                                     f"{existing_package.analyst_notes}"
                                 )
 
+                            # ---------------------------------
+                            # Response reconciliation
+                            # ---------------------------------
+
+                            current_response_evidence = (
+                                session.query(Evidence)
+                                .filter(
+                                    Evidence.vendor_id
+                                    == existing_package.vendor_id
+                                )
+                                .all()
+                            )
+
+                            reconciliation = (
+                                reconcile_evidence_response(
+                                    requested_snapshot,
+                                    current_response_evidence,
+                                )
+                            )
+
+                            st.markdown(
+                                "### Response Reconciliation"
+                            )
+
+                            st.caption(
+                                "A vendor response is not treated "
+                                "as complete until the requested "
+                                "evidence is actually satisfied "
+                                "or reviewed."
+                            )
+
+                            q1, q2, q3, q4 = st.columns(4)
+
+                            q1.metric(
+                                "Satisfied",
+                                reconciliation.satisfied,
+                            )
+
+                            q2.metric(
+                                "Validate",
+                                (
+                                    reconciliation
+                                    .validation_required
+                                ),
+                            )
+
+                            q3.metric(
+                                "Outstanding",
+                                reconciliation.outstanding,
+                            )
+
+                            q4.metric(
+                                "Completion",
+                                (
+                                    f"{reconciliation.completion_percent}%"
+                                ),
+                            )
+
+                            reconciliation_rows = []
+
+                            for item in reconciliation.items:
+                                reconciliation_rows.append(
+                                    {
+                                        "Requirement":
+                                            item.requirement,
+                                        "Status":
+                                            item.status,
+                                        "Evidence State":
+                                            item.evidence_state,
+                                        "Evidence":
+                                            (
+                                                item.document_name
+                                                or "—"
+                                            ),
+                                        "Why":
+                                            item.reason,
+                                    }
+                                )
+
+                            if reconciliation_rows:
+                                st.dataframe(
+                                    pd.DataFrame(
+                                        reconciliation_rows
+                                    ),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+                            if reconciliation.outstanding:
+                                st.warning(
+                                    f"{reconciliation.outstanding} "
+                                    "requested evidence item(s) "
+                                    "remain outstanding."
+                                )
+
+                            elif (
+                                reconciliation.validation_required
+                            ):
+                                st.info(
+                                    f"{reconciliation.validation_required} "
+                                    "item(s) require analyst validation "
+                                    "before the request can be fully "
+                                    "resolved."
+                                )
+
+                            else:
+                                st.success(
+                                    "All requested evidence is "
+                                    "currently satisfied."
+                                )
+
                             if (
                                 existing_package.status
                                 == "Draft"
@@ -2353,17 +2467,37 @@ def render_assessments():
                             elif (
                                 existing_package.status
                                 == "Received"
-                                and st.button(
+                            ):
+                                reconciliation_complete = (
+                                    reconciliation.outstanding == 0
+                                    and reconciliation.validation_required == 0
+                                )
+
+                                if not reconciliation_complete:
+                                    st.warning(
+                                        "This request cannot be closed "
+                                        "normally while evidence remains "
+                                        "outstanding or requires analyst "
+                                        "validation."
+                                    )
+
+                                close_request = st.button(
                                     "Close request",
                                     key=(
                                         "close_request_"
                                         f"{existing_package.id}"
                                     ),
+                                    disabled=(
+                                        not reconciliation_complete
+                                    ),
                                 )
-                            ):
-                                if can_transition_request(
-                                    existing_package.status,
-                                    "Closed",
+
+                                if (
+                                    close_request
+                                    and can_transition_request(
+                                        existing_package.status,
+                                        "Closed",
+                                    )
                                 ):
                                     existing_package.status = (
                                         "Closed"
