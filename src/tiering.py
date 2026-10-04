@@ -2,143 +2,313 @@ from dataclasses import dataclass
 from typing import Tuple
 
 
+TIER_POLICY_VERSION = "TP-2.0"
+
+
+@dataclass(frozen=True)
+class ControlRequirement:
+    control_id: str
+    domain: str
+    requirement: str
+    mandatory: bool = True
+    rationale: str = ""
+
+
+@dataclass(frozen=True)
+class EvidenceRequirement:
+    evidence_id: str
+    evidence_type: str
+    mandatory: bool = True
+    freshness_months: int | None = None
+    rationale: str = ""
+
+
 @dataclass(frozen=True)
 class TierProfile:
     tier: str
     name: str
     assessment_type: str
-    required_controls: Tuple[str, ...]
-    required_evidence: Tuple[str, ...]
+    required_controls: Tuple[ControlRequirement, ...]
+    required_evidence: Tuple[EvidenceRequirement, ...]
     monitoring_rules: Tuple[str, ...]
     reassessment_rules: Tuple[str, ...]
+    policy_version: str = TIER_POLICY_VERSION
 
 
-_BASE_PROFILES = {
-    "T1": TierProfile(
-        tier="T1",
-        name="Critical",
-        assessment_type="Full Security Assessment",
-        required_controls=(
-            "Security governance and ownership",
-            "Identity and access management",
-            "Privileged access management",
-            "Encryption and key management",
-            "Vulnerability and patch management",
-            "Secure software development",
-            "Logging, monitoring, and incident response",
-            "Business continuity and disaster recovery",
-            "Third- and fourth-party risk management",
-            "Data protection and retention",
-        ),
-        required_evidence=(
-            "SOC 2 Type II or equivalent assurance report",
-            "Penetration Test",
-            "BCP / DR Test",
-            "Incident Response Plan",
-            "Security Policy",
-            "Architecture Diagram",
-        ),
-        monitoring_rules=(
-            "Continuous external security monitoring",
-            "Evidence freshness monitoring",
-            "Open critical/high finding monitoring",
-            "Material change monitoring",
-        ),
-        reassessment_rules=(
-            "At least annually",
-            "Security incident or breach",
-            "Material service or architecture change",
-            "Critical evidence expiration",
-            "Significant security rating deterioration",
-        ),
+CONTROL_LIBRARY = {
+    "GOV-01": ControlRequirement(
+        control_id="GOV-01",
+        domain="Governance",
+        requirement="Security governance and ownership",
+        rationale="Establishes accountable ownership for the vendor security program.",
     ),
-    "T2": TierProfile(
-        tier="T2",
-        name="High",
-        assessment_type="Enhanced Security Assessment",
-        required_controls=(
-            "Security governance and ownership",
-            "Identity and access management",
-            "Encryption and data protection",
-            "Vulnerability management",
-            "Incident response",
-            "Business continuity",
-            "Logging and monitoring",
-        ),
-        required_evidence=(
-            "SOC 2 Type II or equivalent assurance report",
-            "Penetration Test",
-            "Incident Response Plan",
-            "Security Policy",
-        ),
-        monitoring_rules=(
-            "Continuous external security monitoring",
-            "Evidence freshness monitoring",
-            "Open high finding monitoring",
-        ),
-        reassessment_rules=(
-            "Risk-based periodic review",
-            "Security incident or breach",
-            "Material service change",
-            "Evidence expiration",
-            "Significant security rating deterioration",
-        ),
+    "IAM-01": ControlRequirement(
+        control_id="IAM-01",
+        domain="Identity and Access Management",
+        requirement="Identity and access management",
     ),
-    "T3": TierProfile(
-        tier="T3",
-        name="Moderate",
-        assessment_type="Targeted Security Review",
-        required_controls=(
-            "Security governance",
-            "Access control",
-            "Data protection",
-            "Vulnerability management",
-            "Incident response",
-        ),
-        required_evidence=(
-            "Security questionnaire or equivalent",
-            "Security Policy",
-            "SOC 2 / ISO 27001 if available",
-        ),
-        monitoring_rules=(
-            "Evidence freshness monitoring",
-            "Material change monitoring",
-        ),
-        reassessment_rules=(
-            "Event-triggered review",
-            "Material service change",
-            "Security incident",
-            "Evidence expiration when relied upon",
-        ),
+    "PAM-01": ControlRequirement(
+        control_id="PAM-01",
+        domain="Privileged Access Management",
+        requirement="Privileged access management",
     ),
-    "T4": TierProfile(
-        tier="T4",
-        name="Low",
-        assessment_type="Basic Security Screening",
-        required_controls=(
-            "Basic security ownership",
-            "Access control",
-            "Incident contact and escalation",
-        ),
-        required_evidence=("Basic security attestation",),
-        monitoring_rules=("Exception-based monitoring",),
-        reassessment_rules=(
-            "Material scope change",
-            "Security incident",
-            "Increase in business criticality or data sensitivity",
-        ),
+    "ENC-01": ControlRequirement(
+        control_id="ENC-01",
+        domain="Data Protection",
+        requirement="Encryption and key management",
+    ),
+    "VM-01": ControlRequirement(
+        control_id="VM-01",
+        domain="Vulnerability Management",
+        requirement="Vulnerability and patch management",
+    ),
+    "SDLC-01": ControlRequirement(
+        control_id="SDLC-01",
+        domain="Secure Development",
+        requirement="Secure software development",
+    ),
+    "LOG-01": ControlRequirement(
+        control_id="LOG-01",
+        domain="Logging and Monitoring",
+        requirement="Logging and security monitoring",
+    ),
+    "IR-01": ControlRequirement(
+        control_id="IR-01",
+        domain="Incident Response",
+        requirement="Incident response capability",
+    ),
+    "BCP-01": ControlRequirement(
+        control_id="BCP-01",
+        domain="Business Continuity",
+        requirement="Business continuity and disaster recovery",
+    ),
+    "TPRM-01": ControlRequirement(
+        control_id="TPRM-01",
+        domain="Fourth-Party Risk",
+        requirement="Third- and fourth-party risk management",
+    ),
+    "DATA-01": ControlRequirement(
+        control_id="DATA-01",
+        domain="Data Protection",
+        requirement="Data protection, retention, and secure disposal",
+    ),
+    "AI-01": ControlRequirement(
+        control_id="AI-01",
+        domain="AI Governance",
+        requirement="AI governance and model accountability",
+    ),
+    "AI-02": ControlRequirement(
+        control_id="AI-02",
+        domain="AI Security",
+        requirement="AI data handling and model access controls",
+    ),
+    "AI-03": ControlRequirement(
+        control_id="AI-03",
+        domain="AI Operations",
+        requirement="AI change, evaluation, and incident management",
+    ),
+    "REG-01": ControlRequirement(
+        control_id="REG-01",
+        domain="Regulatory",
+        requirement="Regulated data handling and minimization",
+    ),
+}
+
+
+EVIDENCE_LIBRARY = {
+    "EVID-SOC2": EvidenceRequirement(
+        evidence_id="EVID-SOC2",
+        evidence_type="SOC 2 Type II or equivalent assurance report",
+        freshness_months=12,
+    ),
+    "EVID-PENTEST": EvidenceRequirement(
+        evidence_id="EVID-PENTEST",
+        evidence_type="Penetration Test",
+        freshness_months=12,
+    ),
+    "EVID-BCP": EvidenceRequirement(
+        evidence_id="EVID-BCP",
+        evidence_type="BCP / DR Test",
+        freshness_months=12,
+    ),
+    "EVID-IR": EvidenceRequirement(
+        evidence_id="EVID-IR",
+        evidence_type="Incident Response Plan",
+        freshness_months=12,
+    ),
+    "EVID-POLICY": EvidenceRequirement(
+        evidence_id="EVID-POLICY",
+        evidence_type="Security Policy",
+        freshness_months=12,
+    ),
+    "EVID-ARCH": EvidenceRequirement(
+        evidence_id="EVID-ARCH",
+        evidence_type="Architecture Diagram",
+        freshness_months=12,
+    ),
+    "EVID-QUESTIONNAIRE": EvidenceRequirement(
+        evidence_id="EVID-QUESTIONNAIRE",
+        evidence_type="Security questionnaire or equivalent",
+        freshness_months=12,
+    ),
+    "EVID-BASIC": EvidenceRequirement(
+        evidence_id="EVID-BASIC",
+        evidence_type="Basic security attestation",
+        freshness_months=12,
+    ),
+    "EVID-AI-GOV": EvidenceRequirement(
+        evidence_id="EVID-AI-GOV",
+        evidence_type="AI governance / acceptable use documentation",
+        freshness_months=12,
+    ),
+    "EVID-AI-ARCH": EvidenceRequirement(
+        evidence_id="EVID-AI-ARCH",
+        evidence_type="AI architecture or data-flow documentation",
+        freshness_months=12,
+    ),
+    "EVID-REG": EvidenceRequirement(
+        evidence_id="EVID-REG",
+        evidence_type="Applicable regulatory assurance evidence",
+        freshness_months=12,
+    ),
+}
+
+
+_TIER_CONTROL_IDS = {
+    "T1": (
+        "GOV-01",
+        "IAM-01",
+        "PAM-01",
+        "ENC-01",
+        "VM-01",
+        "SDLC-01",
+        "LOG-01",
+        "IR-01",
+        "BCP-01",
+        "TPRM-01",
+        "DATA-01",
+    ),
+    "T2": (
+        "GOV-01",
+        "IAM-01",
+        "ENC-01",
+        "VM-01",
+        "LOG-01",
+        "IR-01",
+        "BCP-01",
+        "DATA-01",
+    ),
+    "T3": (
+        "GOV-01",
+        "IAM-01",
+        "ENC-01",
+        "VM-01",
+        "IR-01",
+    ),
+    "T4": (
+        "GOV-01",
+        "IAM-01",
+        "IR-01",
+    ),
+}
+
+
+_TIER_EVIDENCE_IDS = {
+    "T1": (
+        "EVID-SOC2",
+        "EVID-PENTEST",
+        "EVID-BCP",
+        "EVID-IR",
+        "EVID-POLICY",
+        "EVID-ARCH",
+    ),
+    "T2": (
+        "EVID-SOC2",
+        "EVID-PENTEST",
+        "EVID-IR",
+        "EVID-POLICY",
+    ),
+    "T3": (
+        "EVID-QUESTIONNAIRE",
+        "EVID-POLICY",
+    ),
+    "T4": (
+        "EVID-BASIC",
+    ),
+}
+
+
+_ASSESSMENT_TYPES = {
+    "T1": "Full Security Assessment",
+    "T2": "Enhanced Security Assessment",
+    "T3": "Targeted Security Review",
+    "T4": "Basic Security Screening",
+}
+
+
+_MONITORING_RULES = {
+    "T1": (
+        "Continuous external security monitoring",
+        "Evidence freshness monitoring",
+        "Open critical/high finding monitoring",
+        "Material change monitoring",
+    ),
+    "T2": (
+        "Continuous external security monitoring",
+        "Evidence freshness monitoring",
+        "Open high finding monitoring",
+    ),
+    "T3": (
+        "Evidence freshness monitoring",
+        "Material change monitoring",
+    ),
+    "T4": (
+        "Exception-based monitoring",
+    ),
+}
+
+
+_REASSESSMENT_RULES = {
+    "T1": (
+        "At least annually",
+        "Security incident or breach",
+        "Material service or architecture change",
+        "Critical evidence expiration",
+        "Significant security rating deterioration",
+    ),
+    "T2": (
+        "Risk-based periodic review",
+        "Security incident or breach",
+        "Material service change",
+        "Evidence expiration",
+        "Significant security rating deterioration",
+    ),
+    "T3": (
+        "Event-triggered review",
+        "Material service change",
+        "Security incident",
+        "Evidence expiration when relied upon",
+    ),
+    "T4": (
+        "Material scope change",
+        "Security incident",
+        "Increase in business criticality or data sensitivity",
     ),
 }
 
 
 def tier_code_from_score(score: int) -> str:
     score = max(0, min(100, int(score)))
+
     if score >= 75:
         return "T1"
+
     if score >= 50:
         return "T2"
+
     if score >= 25:
         return "T3"
+
     return "T4"
 
 
@@ -147,41 +317,85 @@ def get_tier_profile(
     *,
     ai_enabled: bool = False,
     regulated_data: bool = False,
+    privileged_access: bool = False,
 ) -> TierProfile:
-    base = _BASE_PROFILES[tier_code_from_score(score)]
+    tier = tier_code_from_score(score)
 
-    controls = list(base.required_controls)
-    evidence = list(base.required_evidence)
-    monitoring = list(base.monitoring_rules)
-    reassessment = list(base.reassessment_rules)
+    control_ids = list(_TIER_CONTROL_IDS[tier])
+    evidence_ids = list(_TIER_EVIDENCE_IDS[tier])
+
+    monitoring = list(_MONITORING_RULES[tier])
+    reassessment = list(_REASSESSMENT_RULES[tier])
 
     if ai_enabled:
-        controls += [
-            "AI governance and model accountability",
-            "AI data handling and model access controls",
-            "AI change, evaluation, and incident management",
-        ]
-        evidence += [
-            "AI governance / acceptable use documentation",
-            "AI architecture or data-flow documentation",
-        ]
-        monitoring.append("Material AI model or capability change monitoring")
-        reassessment.append("Material AI capability, model, or data-use change")
+        control_ids.extend(
+            [
+                "AI-01",
+                "AI-02",
+                "AI-03",
+            ]
+        )
+
+        evidence_ids.extend(
+            [
+                "EVID-AI-GOV",
+                "EVID-AI-ARCH",
+            ]
+        )
+
+        monitoring.append(
+            "Material AI model or capability change monitoring"
+        )
+
+        reassessment.append(
+            "Material AI capability, model, or data-use change"
+        )
 
     if regulated_data:
-        controls += [
-            "Regulated data handling and minimization",
-            "Data retention and secure disposal",
-        ]
-        evidence.append("Applicable regulatory assurance evidence")
-        reassessment.append("Change in regulated data scope or processing purpose")
+        control_ids.append("REG-01")
+        control_ids.append("DATA-01")
+
+        evidence_ids.append("EVID-REG")
+
+        reassessment.append(
+            "Change in regulated data scope or processing purpose"
+        )
+
+    if privileged_access:
+        control_ids.append("PAM-01")
+        control_ids.append("IAM-01")
+
+        if tier in ("T3", "T4"):
+            evidence_ids.append("EVID-POLICY")
+
+        monitoring.append(
+            "Privileged access material-change monitoring"
+        )
+
+    control_ids = tuple(dict.fromkeys(control_ids))
+    evidence_ids = tuple(dict.fromkeys(evidence_ids))
+
+    controls = tuple(
+        CONTROL_LIBRARY[control_id]
+        for control_id in control_ids
+    )
+
+    evidence = tuple(
+        EVIDENCE_LIBRARY[evidence_id]
+        for evidence_id in evidence_ids
+    )
 
     return TierProfile(
-        tier=base.tier,
-        name=base.name,
-        assessment_type=base.assessment_type,
-        required_controls=tuple(dict.fromkeys(controls)),
-        required_evidence=tuple(dict.fromkeys(evidence)),
+        tier=tier,
+        name={
+            "T1": "Critical",
+            "T2": "High",
+            "T3": "Moderate",
+            "T4": "Low",
+        }[tier],
+        assessment_type=_ASSESSMENT_TYPES[tier],
+        required_controls=controls,
+        required_evidence=evidence,
         monitoring_rules=tuple(dict.fromkeys(monitoring)),
         reassessment_rules=tuple(dict.fromkeys(reassessment)),
     )
