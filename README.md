@@ -306,11 +306,21 @@ Risk tiers:
 
 ### Residual risk
 
+The platform uses residual-risk policy **RR-2.0**.
+
 ```text
-Residual Risk =
-(Inherent Risk × 0.40)
-+ ((100 - Control Effectiveness) × 0.35)
-+ (External Risk × 0.25)
+Control Deficiency =
+100 - Control Effectiveness
+
+Base Residual Risk =
+(Inherent Risk × 0.60)
++
+(Control Deficiency × 0.40)
+
+Final Residual Risk =
+Base Residual Risk
++
+External Risk Adjustment
 ```
 
 This is intentionally transparent and should become configurable in later versions.
