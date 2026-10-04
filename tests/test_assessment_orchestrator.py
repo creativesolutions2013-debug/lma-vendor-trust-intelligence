@@ -10,6 +10,10 @@ from src.assessment_orchestrator import (
     build_assessment_work_plan,
 )
 
+from src.control_sufficiency import (
+    EvidenceControlClaim,
+)
+
 from src.tiering import get_tier_profile
 
 
@@ -222,4 +226,196 @@ def test_policy_version_is_exposed():
         == ORCHESTRATOR_POLICY_VERSION
     )
 
-    assert work_plan.policy_version == "AO-1.0"
+    assert work_plan.policy_version == "AO-1.1"
+
+
+def test_supported_control_claim_suppresses_vendor_question():
+    applicability = evaluate_applicability(
+        get_tier_profile(30),
+        VendorRiskContext(),
+    )
+
+    evidence = [
+        EvidenceStub(
+            id=100,
+            document_type="SOC 2 Type II",
+        ),
+    ]
+
+    claims = [
+        EvidenceControlClaim(
+            evidence_id=100,
+            control_id="IAM-01",
+            covered=True,
+            tested=True,
+            scope_matches=True,
+            service_matches=True,
+            extraction_confidence=0.95,
+        ),
+    ]
+
+    work_plan = build_assessment_work_plan(
+        applicability,
+        evidence,
+        claims,
+    )
+
+    iam = next(
+        item
+        for item in work_plan.items
+        if item.control_id == "IAM-01"
+    )
+
+    assert iam.sufficiency_status == "SUPPORTED"
+    assert iam.workflow_action == "Reuse Evidence"
+    assert iam.question is None
+    assert 100 in iam.supporting_evidence_ids
+
+
+def test_soc2_presence_alone_does_not_prove_unmapped_control():
+    applicability = evaluate_applicability(
+        get_tier_profile(30),
+        VendorRiskContext(),
+    )
+
+    evidence = [
+        EvidenceStub(
+            id=101,
+            document_type="SOC 2 Type II",
+        ),
+    ]
+
+    claims = [
+        EvidenceControlClaim(
+            evidence_id=101,
+            control_id="GOV-01",
+        ),
+    ]
+
+    work_plan = build_assessment_work_plan(
+        applicability,
+        evidence,
+        claims,
+    )
+
+    iam = next(
+        item
+        for item in work_plan.items
+        if item.control_id == "IAM-01"
+    )
+
+    assert iam.sufficiency_status == "UNSUPPORTED"
+    assert iam.workflow_action == "Ask Vendor"
+    assert iam.question is not None
+
+
+def test_partial_control_routes_to_analyst_not_vendor():
+    applicability = evaluate_applicability(
+        get_tier_profile(30),
+        VendorRiskContext(),
+    )
+
+    evidence = [
+        EvidenceStub(
+            id=102,
+            document_type="SOC 2 Type II",
+        ),
+    ]
+
+    claims = [
+        EvidenceControlClaim(
+            evidence_id=102,
+            control_id="IAM-01",
+            exception_present=True,
+        ),
+    ]
+
+    work_plan = build_assessment_work_plan(
+        applicability,
+        evidence,
+        claims,
+    )
+
+    iam = next(
+        item
+        for item in work_plan.items
+        if item.control_id == "IAM-01"
+    )
+
+    assert iam.sufficiency_status == "PARTIAL"
+    assert iam.workflow_action == "Analyst Validate"
+    assert iam.question is None
+
+
+def test_scope_mismatch_routes_to_analyst():
+    applicability = evaluate_applicability(
+        get_tier_profile(30),
+        VendorRiskContext(),
+    )
+
+    evidence = [
+        EvidenceStub(
+            id=103,
+            document_type="SOC 2 Type II",
+        ),
+    ]
+
+    claims = [
+        EvidenceControlClaim(
+            evidence_id=103,
+            control_id="IAM-01",
+            scope_matches=False,
+        ),
+    ]
+
+    work_plan = build_assessment_work_plan(
+        applicability,
+        evidence,
+        claims,
+    )
+
+    iam = next(
+        item
+        for item in work_plan.items
+        if item.control_id == "IAM-01"
+    )
+
+    assert iam.sufficiency_status == "REVIEW"
+    assert iam.workflow_action == "Analyst Validate"
+    assert 103 in iam.review_evidence_ids
+
+
+def test_control_claim_mode_preserves_question_traceability():
+    applicability = evaluate_applicability(
+        get_tier_profile(30),
+        VendorRiskContext(),
+    )
+
+    work_plan = build_assessment_work_plan(
+        applicability,
+        [],
+        [
+            EvidenceControlClaim(
+                evidence_id=999,
+                control_id="GOV-01",
+            ),
+        ],
+    )
+
+    unsupported = [
+        item
+        for item in work_plan.items
+        if item.sufficiency_status == "UNSUPPORTED"
+    ]
+
+    assert unsupported
+
+    assert all(
+        item.question_id
+        for item in unsupported
+    )
+
+    assert all(
+        item.question
+        for item in unsupported
+    )

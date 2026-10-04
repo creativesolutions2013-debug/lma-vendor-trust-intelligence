@@ -2,10 +2,14 @@ from dataclasses import dataclass
 from typing import Iterable, Tuple
 
 from src.applicability import ApplicabilityResult
+from src.control_sufficiency import (
+    EvidenceControlClaim,
+    evaluate_control_set,
+)
 from src.targeted_gap import analyze_targeted_evidence_gaps
 
 
-ORCHESTRATOR_POLICY_VERSION = "AO-1.0"
+ORCHESTRATOR_POLICY_VERSION = "AO-1.1"
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,10 @@ class ControlWorkItem:
     question: str | None = None
 
     evidence_requirements: Tuple[str, ...] = ()
+
+    sufficiency_status: str | None = None
+    supporting_evidence_ids: Tuple[int, ...] = ()
+    review_evidence_ids: Tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -56,7 +64,6 @@ QUESTION_LIBRARY = {
             "for information security are assigned."
         ),
     ),
-
     "IAM-01": AssessmentQuestion(
         question_id="Q-IAM-01",
         control_id="IAM-01",
@@ -65,7 +72,6 @@ QUESTION_LIBRARY = {
             "reviewed, and revoked."
         ),
     ),
-
     "PAM-01": AssessmentQuestion(
         question_id="Q-PAM-01",
         control_id="PAM-01",
@@ -74,7 +80,6 @@ QUESTION_LIBRARY = {
             "authenticated, monitored, and periodically reviewed."
         ),
     ),
-
     "ENC-01": AssessmentQuestion(
         question_id="Q-ENC-01",
         control_id="ENC-01",
@@ -83,7 +88,6 @@ QUESTION_LIBRARY = {
             "and at rest and how encryption keys are managed."
         ),
     ),
-
     "VM-01": AssessmentQuestion(
         question_id="Q-VM-01",
         control_id="VM-01",
@@ -92,7 +96,6 @@ QUESTION_LIBRARY = {
             "including scanning frequency and remediation SLAs."
         ),
     ),
-
     "SDLC-01": AssessmentQuestion(
         question_id="Q-SDLC-01",
         control_id="SDLC-01",
@@ -101,7 +104,6 @@ QUESTION_LIBRARY = {
             "software-development lifecycle."
         ),
     ),
-
     "LOG-01": AssessmentQuestion(
         question_id="Q-LOG-01",
         control_id="LOG-01",
@@ -110,7 +112,6 @@ QUESTION_LIBRARY = {
             "and log-retention practices."
         ),
     ),
-
     "IR-01": AssessmentQuestion(
         question_id="Q-IR-01",
         control_id="IR-01",
@@ -119,7 +120,6 @@ QUESTION_LIBRARY = {
             "customer notification and escalation procedures."
         ),
     ),
-
     "BCP-01": AssessmentQuestion(
         question_id="Q-BCP-01",
         control_id="BCP-01",
@@ -128,7 +128,6 @@ QUESTION_LIBRARY = {
             "recovery capabilities and the latest test performed."
         ),
     ),
-
     "TPRM-01": AssessmentQuestion(
         question_id="Q-TPRM-01",
         control_id="TPRM-01",
@@ -137,7 +136,6 @@ QUESTION_LIBRARY = {
             "other critical fourth parties are assessed and monitored."
         ),
     ),
-
     "DATA-01": AssessmentQuestion(
         question_id="Q-DATA-01",
         control_id="DATA-01",
@@ -146,7 +144,6 @@ QUESTION_LIBRARY = {
             "and secure-disposal practices."
         ),
     ),
-
     "AI-01": AssessmentQuestion(
         question_id="Q-AI-01",
         control_id="AI-01",
@@ -155,7 +152,6 @@ QUESTION_LIBRARY = {
             "development, deployment, and acceptable use."
         ),
     ),
-
     "AI-02": AssessmentQuestion(
         question_id="Q-AI-02",
         control_id="AI-02",
@@ -164,7 +160,6 @@ QUESTION_LIBRARY = {
             "outputs, and model access are protected."
         ),
     ),
-
     "AI-03": AssessmentQuestion(
         question_id="Q-AI-03",
         control_id="AI-03",
@@ -173,7 +168,6 @@ QUESTION_LIBRARY = {
             "failures, and AI-related incidents are managed."
         ),
     ),
-
     "REG-01": AssessmentQuestion(
         question_id="Q-REG-01",
         control_id="REG-01",
@@ -190,69 +184,55 @@ CONTROL_EVIDENCE_MAP = {
         "SOC 2 Type II or equivalent assurance report",
         "Security Policy",
     ),
-
     "IAM-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Security Policy",
     ),
-
     "PAM-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Security Policy",
     ),
-
     "ENC-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Architecture Diagram",
     ),
-
     "VM-01": (
         "Penetration Test",
         "SOC 2 Type II or equivalent assurance report",
     ),
-
     "SDLC-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Penetration Test",
     ),
-
     "LOG-01": (
         "SOC 2 Type II or equivalent assurance report",
     ),
-
     "IR-01": (
         "Incident Response Plan",
         "SOC 2 Type II or equivalent assurance report",
     ),
-
     "BCP-01": (
         "BCP / DR Test",
         "SOC 2 Type II or equivalent assurance report",
     ),
-
     "TPRM-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Security Policy",
     ),
-
     "DATA-01": (
         "SOC 2 Type II or equivalent assurance report",
         "Security Policy",
     ),
-
     "AI-01": (
         "AI governance / acceptable use documentation",
     ),
-
     "AI-02": (
         "AI architecture or data-flow documentation",
     ),
-
     "AI-03": (
         "AI governance / acceptable use documentation",
         "AI architecture or data-flow documentation",
     ),
-
     "REG-01": (
         "Applicable regulatory assurance evidence",
     ),
@@ -268,14 +248,51 @@ def _required_evidence_names(
     }
 
 
+def _question_for_control(
+    control_id: str,
+) -> AssessmentQuestion | None:
+    return QUESTION_LIBRARY.get(control_id)
+
+
 def build_assessment_work_plan(
     applicability: ApplicabilityResult,
     evidence_records: Iterable,
+    control_claims: Iterable[EvidenceControlClaim] = (),
 ) -> AssessmentWorkPlan:
+
+    evidence_records = tuple(evidence_records)
+    control_claims = tuple(control_claims)
 
     required_evidence_names = _required_evidence_names(
         applicability
     )
+
+    # -------------------------------------------------
+    # AO-1.1 control-level sufficiency path
+    # -------------------------------------------------
+
+    sufficiency_by_control = {}
+
+    if control_claims:
+        control_ids = [
+            control.control_id
+            for control in applicability.controls
+        ]
+
+        sufficiency_decisions = evaluate_control_set(
+            control_ids,
+            evidence_records,
+            control_claims,
+        )
+
+        sufficiency_by_control = {
+            decision.control_id: decision
+            for decision in sufficiency_decisions
+        }
+
+    # -------------------------------------------------
+    # Document-level fallback
+    # -------------------------------------------------
 
     gap_analysis = analyze_targeted_evidence_gaps(
         sorted(required_evidence_names),
@@ -302,20 +319,126 @@ def build_assessment_work_plan(
             if requirement in required_evidence_names
         )
 
+        sufficiency = sufficiency_by_control.get(
+            control.control_id
+        )
+
+        # =================================================
+        # CONTROL-LEVEL SUFFICIENCY PATH
+        # =================================================
+
+        if sufficiency is not None:
+
+            reason = " ".join(
+                sufficiency.reasons
+            )
+
+            if sufficiency.status == "SUPPORTED":
+                work_items.append(
+                    ControlWorkItem(
+                        control_id=control.control_id,
+                        domain=control.domain,
+                        requirement=control.requirement,
+                        disposition="Evidence Supported",
+                        workflow_action="Reuse Evidence",
+                        reason=reason,
+                        evidence_requirements=relevant_evidence,
+                        sufficiency_status="SUPPORTED",
+                        supporting_evidence_ids=(
+                            sufficiency.supporting_evidence_ids
+                        ),
+                        review_evidence_ids=(
+                            sufficiency.evidence_review_ids
+                        ),
+                    )
+                )
+                continue
+
+            if sufficiency.status == "PARTIAL":
+                work_items.append(
+                    ControlWorkItem(
+                        control_id=control.control_id,
+                        domain=control.domain,
+                        requirement=control.requirement,
+                        disposition="Partial Evidence",
+                        workflow_action="Analyst Validate",
+                        reason=reason,
+                        evidence_requirements=relevant_evidence,
+                        sufficiency_status="PARTIAL",
+                        supporting_evidence_ids=(
+                            sufficiency.supporting_evidence_ids
+                        ),
+                        review_evidence_ids=(
+                            sufficiency.evidence_review_ids
+                        ),
+                    )
+                )
+                continue
+
+            if sufficiency.status == "REVIEW":
+                work_items.append(
+                    ControlWorkItem(
+                        control_id=control.control_id,
+                        domain=control.domain,
+                        requirement=control.requirement,
+                        disposition="Pending Validation",
+                        workflow_action="Analyst Validate",
+                        reason=reason,
+                        evidence_requirements=relevant_evidence,
+                        sufficiency_status="REVIEW",
+                        supporting_evidence_ids=(
+                            sufficiency.supporting_evidence_ids
+                        ),
+                        review_evidence_ids=(
+                            sufficiency.evidence_review_ids
+                        ),
+                    )
+                )
+                continue
+
+            if sufficiency.status == "UNSUPPORTED":
+                question = _question_for_control(
+                    control.control_id
+                )
+
+                work_items.append(
+                    ControlWorkItem(
+                        control_id=control.control_id,
+                        domain=control.domain,
+                        requirement=control.requirement,
+                        disposition="Control Unproven",
+                        workflow_action="Ask Vendor",
+                        reason=reason,
+                        question_id=(
+                            question.question_id
+                            if question
+                            else None
+                        ),
+                        question=(
+                            question.question
+                            if question
+                            else None
+                        ),
+                        evidence_requirements=relevant_evidence,
+                        sufficiency_status="UNSUPPORTED",
+                        supporting_evidence_ids=(),
+                        review_evidence_ids=(),
+                    )
+                )
+                continue
+
+        # =================================================
+        # DOCUMENT-LEVEL FALLBACK
+        # =================================================
+
         evidence_states = [
             gap_by_requirement[requirement]
             for requirement in relevant_evidence
             if requirement in gap_by_requirement
         ]
 
-        # -------------------------------------------------
-        # No required evidence is mapped to this control.
-        # Ask a targeted question rather than assuming
-        # the control is satisfied.
-        # -------------------------------------------------
-
         if not evidence_states:
-            question = QUESTION_LIBRARY.get(
+            question = _question_for_control(
                 control.control_id
             )
 
@@ -344,7 +467,6 @@ def build_assessment_work_plan(
                     evidence_requirements=(),
                 )
             )
-
             continue
 
         actions = {
@@ -352,12 +474,8 @@ def build_assessment_work_plan(
             for item in evidence_states
         }
 
-        # -------------------------------------------------
-        # Any missing/expired evidence creates a vendor gap.
-        # -------------------------------------------------
-
         if "Request Vendor" in actions:
-            question = QUESTION_LIBRARY.get(
+            question = _question_for_control(
                 control.control_id
             )
 
@@ -391,13 +509,7 @@ def build_assessment_work_plan(
                     ),
                 )
             )
-
             continue
-
-        # -------------------------------------------------
-        # Current evidence exists but has a validation flag.
-        # Do not immediately send a questionnaire.
-        # -------------------------------------------------
 
         if "Analyst Validate" in actions:
             work_items.append(
@@ -415,13 +527,7 @@ def build_assessment_work_plan(
                     evidence_requirements=relevant_evidence,
                 )
             )
-
             continue
-
-        # -------------------------------------------------
-        # Existing evidence is current and reusable.
-        # Suppress unnecessary vendor questioning.
-        # -------------------------------------------------
 
         work_items.append(
             ControlWorkItem(
