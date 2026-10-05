@@ -4,32 +4,47 @@ from typing import Iterable, Tuple
 from src.control_sufficiency import EvidenceControlClaim
 
 
-CONTROL_CLAIM_POLICY_VERSION = "CG-1.0"
+CONTROL_CLAIM_POLICY_VERSION = "CG-1.1"
+
+STATUS_ACCEPTED = "ACCEPTED"
+STATUS_REVIEW = "REVIEW"
+STATUS_REJECTED = "REJECTED"
 
 
 @dataclass(frozen=True)
 class ControlClaimCandidate:
     """
-    Candidate control mapping produced from evidence analysis.
+    Machine- or analyst-generated candidate mapping between
+    evidence and a security control.
 
-    A candidate is not yet an assurance conclusion.
-    It must pass provenance and confidence checks before
-    becoming a usable EvidenceControlClaim.
+    Important:
+    Unknown assurance facts remain None.
+
+    The generator must not assume that evidence:
+    - covers the control
+    - was tested
+    - matches scope
+    - matches the assessed service
+    - has no exception
+
+    Those facts must be explicitly established before a
+    machine-generated candidate can become an authoritative
+    EvidenceControlClaim.
     """
 
     control_id: str
     statement: str
     source_reference: str
 
-    covered: bool = True
-    tested: bool = True
+    covered: bool | None = None
+    tested: bool | None = None
 
-    scope_matches: bool = True
-    service_matches: bool = True
+    scope_matches: bool | None = None
+    service_matches: bool | None = None
 
-    exception_present: bool = False
+    exception_present: bool | None = None
 
-    confidence: float = 1.0
+    confidence: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -94,12 +109,110 @@ def _normalize_text(
 def _clamp_confidence(
     confidence: float,
 ) -> float:
+    try:
+        normalized = float(
+            confidence
+        )
+    except (TypeError, ValueError):
+        normalized = 0.0
+
     return max(
         0.0,
         min(
             1.0,
-            float(confidence),
+            normalized,
         ),
+    )
+
+
+def _required_facts_known(
+    candidate: ControlClaimCandidate,
+) -> bool:
+    """
+    Return True only when every assurance fact required by
+    CS-1.0 has been explicitly established.
+    """
+
+    return all(
+        value is not None
+        for value in (
+            candidate.covered,
+            candidate.tested,
+            candidate.scope_matches,
+            candidate.service_matches,
+            candidate.exception_present,
+        )
+    )
+
+
+def _build_claim(
+    evidence_id: int,
+    control_id: str,
+    candidate: ControlClaimCandidate,
+    confidence: float,
+    statement: str,
+) -> EvidenceControlClaim:
+    """
+    Build a CS-1.0 claim only after the caller has established
+    that all required candidate facts are explicit.
+    """
+
+    return EvidenceControlClaim(
+        evidence_id=evidence_id,
+        control_id=control_id,
+        covered=bool(
+            candidate.covered
+        ),
+        tested=bool(
+            candidate.tested
+        ),
+        scope_matches=bool(
+            candidate.scope_matches
+        ),
+        service_matches=bool(
+            candidate.service_matches
+        ),
+        exception_present=bool(
+            candidate.exception_present
+        ),
+        extraction_confidence=confidence,
+        rationale=statement,
+    )
+
+
+def _review_result(
+    *,
+    evidence_id: int,
+    control_id: str,
+    statement: str,
+    source_reference: str,
+    confidence: float,
+    reason: str,
+    human_confirmed: bool,
+    confirmed_by: str | None,
+) -> GeneratedControlClaim:
+    """
+    Preserve a candidate and its provenance without allowing it
+    to enter the control-sufficiency engine as an authoritative
+    claim.
+    """
+
+    provenance = ControlClaimProvenance(
+        evidence_id=evidence_id,
+        control_id=control_id,
+        statement=statement,
+        source_reference=source_reference,
+        confidence=confidence,
+        generation_status=STATUS_REVIEW,
+        review_required=True,
+        reason=reason,
+        human_confirmed=human_confirmed,
+        confirmed_by=confirmed_by,
+    )
+
+    return GeneratedControlClaim(
+        claim=None,
+        provenance=provenance,
     )
 
 
@@ -112,6 +225,24 @@ def generate_control_claim(
     human_confirmed: bool = False,
     confirmed_by: str | None = None,
 ) -> GeneratedControlClaim:
+    """
+    Govern creation of a control-level evidence claim.
+
+    Machine-generated candidates are automatically usable only
+    when:
+
+    - the control is approved for the assessment scope
+    - a statement exists
+    - source provenance exists
+    - all assurance facts are explicitly known
+    - confidence meets the automatic-use threshold
+    - no fact requires analyst interpretation
+
+    Candidates that do not meet those conditions remain
+    provenance records requiring analyst review.
+
+    Human confirmation does not invent missing facts.
+    """
 
     control_id = _normalize_control_id(
         candidate.control_id
@@ -136,10 +267,16 @@ def generate_control_claim(
         candidate.confidence
     )
 
-    # -------------------------------------------------
-    # Hard validation:
-    # Unknown controls cannot silently enter the engine.
-    # -------------------------------------------------
+    confirmed_by = (
+        _normalize_text(
+            confirmed_by
+        )
+        or None
+    )
+
+    # =====================================================
+    # Hard validation
+    # =====================================================
 
     if not control_id:
         provenance = ControlClaimProvenance(
@@ -148,7 +285,7 @@ def generate_control_claim(
             statement=statement,
             source_reference=source_reference,
             confidence=confidence,
-            generation_status="REJECTED",
+            generation_status=STATUS_REJECTED,
             review_required=False,
             reason=(
                 "Candidate does not identify a control."
@@ -169,7 +306,7 @@ def generate_control_claim(
             statement=statement,
             source_reference=source_reference,
             confidence=confidence,
-            generation_status="REJECTED",
+            generation_status=STATUS_REJECTED,
             review_required=False,
             reason=(
                 "Candidate references a control that is not "
@@ -184,129 +321,153 @@ def generate_control_claim(
             provenance=provenance,
         )
 
-    # -------------------------------------------------
-    # Provenance guardrail:
-    # A claim without a source reference must never be
-    # treated as automatically trustworthy.
-    # -------------------------------------------------
+    # =====================================================
+    # Provenance requirements
+    # =====================================================
 
-    if not source_reference:
-        claim = EvidenceControlClaim(
+    if not statement:
+        return _review_result(
             evidence_id=evidence_id,
             control_id=control_id,
-            covered=candidate.covered,
-            tested=candidate.tested,
-            scope_matches=candidate.scope_matches,
-            service_matches=candidate.service_matches,
-            exception_present=candidate.exception_present,
-            extraction_confidence=0.0,
-            rationale=statement,
-        )
-
-        provenance = ControlClaimProvenance(
-            evidence_id=evidence_id,
-            control_id=control_id,
-            statement=statement,
-            source_reference="",
-            confidence=0.0,
-            generation_status="REVIEW",
-            review_required=True,
+            statement="",
+            source_reference=source_reference,
+            confidence=confidence,
             reason=(
-                "A potential control mapping was identified, "
-                "but no evidence source reference was provided. "
+                "A control mapping was identified, but no "
+                "supporting claim statement was provided. "
                 "Analyst validation is required."
             ),
             human_confirmed=human_confirmed,
             confirmed_by=confirmed_by,
         )
 
-        return GeneratedControlClaim(
-            claim=claim,
-            provenance=provenance,
-        )
-
-    # -------------------------------------------------
-    # Low-confidence mappings remain usable as potential
-    # claims but must route through analyst review.
-    # CS-1.0 will independently enforce its confidence
-    # threshold as well.
-    # -------------------------------------------------
-
-    if confidence < minimum_confidence:
-        claim = EvidenceControlClaim(
-            evidence_id=evidence_id,
-            control_id=control_id,
-            covered=candidate.covered,
-            tested=candidate.tested,
-            scope_matches=candidate.scope_matches,
-            service_matches=candidate.service_matches,
-            exception_present=candidate.exception_present,
-            extraction_confidence=confidence,
-            rationale=statement,
-        )
-
-        provenance = ControlClaimProvenance(
+    if not source_reference:
+        return _review_result(
             evidence_id=evidence_id,
             control_id=control_id,
             statement=statement,
-            source_reference=source_reference,
+            source_reference="",
             confidence=confidence,
-            generation_status="REVIEW",
-            review_required=True,
             reason=(
-                "Control mapping has source provenance but "
-                "its confidence is below the automatic-use "
-                "threshold."
+                "A potential control mapping was identified, "
+                "but no source reference was provided. "
+                "Analyst validation is required."
             ),
             human_confirmed=human_confirmed,
             confirmed_by=confirmed_by,
         )
 
-        return GeneratedControlClaim(
-            claim=claim,
-            provenance=provenance,
+    # =====================================================
+    # Unknown facts must never become True by default
+    # =====================================================
+
+    if not _required_facts_known(
+        candidate
+    ):
+        return _review_result(
+            evidence_id=evidence_id,
+            control_id=control_id,
+            statement=statement,
+            source_reference=source_reference,
+            confidence=confidence,
+            reason=(
+                "The control mapping does not explicitly establish "
+                "coverage, testing, scope alignment, service "
+                "alignment, and exception status. Analyst "
+                "validation is required."
+            ),
+            human_confirmed=human_confirmed,
+            confirmed_by=confirmed_by,
         )
 
-    # -------------------------------------------------
-    # Human confirmation may allow a low-ambiguity
-    # generated mapping to carry explicit review history,
-    # but it does not change the underlying facts.
-    # -------------------------------------------------
+    # =====================================================
+    # Low-confidence machine mappings require review.
+    #
+    # Human confirmation may promote the mapping into an
+    # authoritative claim, but the original confidence is
+    # preserved. CS-1.0 can still require review based on it.
+    # =====================================================
+
+    if (
+        confidence < minimum_confidence
+        and not human_confirmed
+    ):
+        return _review_result(
+            evidence_id=evidence_id,
+            control_id=control_id,
+            statement=statement,
+            source_reference=source_reference,
+            confidence=confidence,
+            reason=(
+                "Control mapping has source provenance but its "
+                "confidence is below the automatic-use threshold."
+            ),
+            human_confirmed=False,
+            confirmed_by=None,
+        )
+
+    # =====================================================
+    # Facts requiring interpretation remain review-only
+    # unless a human explicitly confirms the mapping.
+    # =====================================================
+
+    material_review_condition = (
+        candidate.covered is False
+        or candidate.tested is False
+        or candidate.scope_matches is False
+        or candidate.service_matches is False
+        or candidate.exception_present is True
+    )
+
+    if (
+        material_review_condition
+        and not human_confirmed
+    ):
+        return _review_result(
+            evidence_id=evidence_id,
+            control_id=control_id,
+            statement=statement,
+            source_reference=source_reference,
+            confidence=confidence,
+            reason=(
+                "The evidence mapping contains a coverage, "
+                "testing, scope, service-alignment, or exception "
+                "condition that requires analyst confirmation."
+            ),
+            human_confirmed=False,
+            confirmed_by=None,
+        )
+
+    # =====================================================
+    # Accepted authoritative claim
+    # =====================================================
+
+    claim = _build_claim(
+        evidence_id,
+        control_id,
+        candidate,
+        confidence,
+        statement,
+    )
 
     review_required = (
-        not candidate.scope_matches
-        or not candidate.service_matches
-        or not candidate.tested
+        confidence < minimum_confidence
+        or material_review_condition
     )
 
-    if review_required:
-        status = "REVIEW"
-
+    if human_confirmed:
         reason = (
-            "Control mapping has valid provenance, but "
-            "scope, service alignment, or testing status "
-            "requires analyst validation."
+            "An analyst confirmed this evidence-to-control "
+            "mapping with explicit assurance facts. Underlying "
+            "limitations are preserved for CS-1.0 evaluation."
         )
-    else:
-        status = "ACCEPTED"
 
+    else:
         reason = (
             "Control mapping has an approved control ID, "
-            "source provenance, and sufficient mapping "
-            "confidence."
+            "source provenance, explicit assurance facts, and "
+            "sufficient confidence for automatic use."
         )
-
-    claim = EvidenceControlClaim(
-        evidence_id=evidence_id,
-        control_id=control_id,
-        covered=candidate.covered,
-        tested=candidate.tested,
-        scope_matches=candidate.scope_matches,
-        service_matches=candidate.service_matches,
-        exception_present=candidate.exception_present,
-        extraction_confidence=confidence,
-        rationale=statement,
-    )
 
     provenance = ControlClaimProvenance(
         evidence_id=evidence_id,
@@ -314,7 +475,7 @@ def generate_control_claim(
         statement=statement,
         source_reference=source_reference,
         confidence=confidence,
-        generation_status=status,
+        generation_status=STATUS_ACCEPTED,
         review_required=review_required,
         reason=reason,
         human_confirmed=human_confirmed,
@@ -334,6 +495,14 @@ def generate_control_claims(
     allowed_control_ids: Iterable[str],
     minimum_confidence: float = 0.65,
 ) -> ControlClaimGenerationResult:
+    """
+    Batch machine-generated candidates.
+
+    Only ACCEPTED claims are returned in generated_claims.
+    REVIEW and REJECTED candidates remain visible through
+    provenance so they can be routed to human review without
+    silently affecting control-sufficiency conclusions.
+    """
 
     allowed_control_ids = tuple(
         allowed_control_ids
@@ -352,7 +521,11 @@ def generate_control_claims(
     claims = tuple(
         result.claim
         for result in results
-        if result.claim is not None
+        if (
+            result.claim is not None
+            and result.provenance.generation_status
+            == STATUS_ACCEPTED
+        )
     )
 
     provenance = tuple(
@@ -364,21 +537,21 @@ def generate_control_claims(
         1
         for item in provenance
         if item.generation_status
-        == "ACCEPTED"
+        == STATUS_ACCEPTED
     )
 
     review_required = sum(
         1
         for item in provenance
         if item.generation_status
-        == "REVIEW"
+        == STATUS_REVIEW
     )
 
     rejected = sum(
         1
         for item in provenance
         if item.generation_status
-        == "REJECTED"
+        == STATUS_REJECTED
     )
 
     return ControlClaimGenerationResult(
