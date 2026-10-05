@@ -21,6 +21,13 @@ from src.db import (
     init_db,
 )
 from src.assurance import evaluate_evidence_coverage
+from src.applicability import (
+    VendorRiskContext,
+    evaluate_applicability,
+)
+from src.assessment_orchestrator import (
+    build_assessment_work_plan,
+)
 from src.attention import calculate_vendor_attention
 from src.audit import record_audit_event
 from src.auth_context import get_current_principal
@@ -194,7 +201,54 @@ def vendor_tier_profile(vendor):
         regulated_data=regulated_data,
     )
 
+def vendor_applicability_context(vendor):
+    engagements = (
+        session.query(Engagement)
+        .filter_by(vendor_id=vendor.id)
+        .all()
+    )
 
+    sensitive_labels = {
+        "Confidential",
+        "PII",
+        "PII / Confidential",
+        "Sensitive PII",
+        "PHI / PCI / Credentials",
+    }
+
+    return VendorRiskContext(
+        sensitive_data=any(
+            (item.data_classification or "")
+            in sensitive_labels
+            for item in engagements
+        ),
+        regulated_data=any(
+            (item.data_classification or "")
+            == "PHI / PCI / Credentials"
+            for item in engagements
+        ),
+        privileged_access=any(
+            bool(item.privileged_access)
+            for item in engagements
+        ),
+        system_access=any(
+            bool(item.production_access)
+            or bool(item.network_access)
+            or bool(item.privileged_access)
+            for item in engagements
+        ),
+        business_critical=any(
+            (item.business_criticality or "")
+            == "Critical"
+            for item in engagements
+        ),
+        ai_enabled=any(
+            bool(item.ai_enabled)
+            for item in engagements
+        ),
+        internet_facing=False,
+        fourth_party_dependency=False,
+    )
 def recommended_assessment(vendor):
     return vendor_tier_profile(vendor).assessment_type
 
@@ -724,6 +778,10 @@ def render_vendors():
 
     vendors = session.query(Vendor).all()
 
+    # =====================================================
+    # Vendor inventory
+    # =====================================================
+
     df = pd.DataFrame(
         [
             {
@@ -741,11 +799,18 @@ def render_vendors():
         ]
     )
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    if not df.empty:
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No vendors available.")
+
     st.subheader("Vendor 360")
 
     if not vendors:
-        st.info("No vendors available.")
         return
 
     selected = st.selectbox(
@@ -754,64 +819,309 @@ def render_vendors():
         format_func=lambda vendor: vendor.display_name,
     )
 
+    # =====================================================
+    # Primary risk metrics
+    # =====================================================
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Inherent Risk", selected.inherent_risk_score)
-    c2.metric("Residual Risk", selected.residual_risk_score)
-    c3.metric("External Risk", selected.external_risk_score)
-    c4.metric("Security Rating", selected.security_rating)
+
+    c1.metric(
+        "Inherent Risk",
+        selected.inherent_risk_score,
+    )
+
+    c2.metric(
+        "Residual Risk",
+        selected.residual_risk_score,
+    )
+
+    c3.metric(
+        "External Risk",
+        selected.external_risk_score,
+    )
+
+    c4.metric(
+        "Security Rating",
+        selected.security_rating,
+    )
 
     tabs = st.tabs(
         [
             "Overview",
             "Engagements",
             "Assessments",
+            "Assurance",
             "Evidence",
             "Findings",
             "Monitoring",
         ]
     )
 
+    # =====================================================
+    # Overview
+    # =====================================================
+
     with tabs[0]:
-        st.write(
-            {
-                "Legal name": selected.legal_name,
-                "Primary domain": selected.primary_domain,
-                "Industry": selected.industry,
-                "Country": selected.headquarters_country,
-                "Criticality": selected.criticality,
-                "Overall risk": selected.overall_risk_rating,
-                "Tier": tier_label(vendor_tier_profile(selected)),
-                "Recommended assessment": recommended_assessment(selected),
-            }
+        profile = vendor_tier_profile(
+            selected
         )
 
-        profile = vendor_tier_profile(selected)
+        # -------------------------------------------------
+        # Vendor profile
+        # -------------------------------------------------
 
-        st.markdown("#### Tier-driven assurance profile")
-        c1, c2 = st.columns(2)
+        st.markdown("### Vendor Profile")
 
-        with c1:
-            st.markdown("**Required controls**")
-            for item in profile.required_controls:
-                st.write(f"• {item}")
+        p1, p2, p3, p4 = st.columns(4)
 
-            st.markdown("**Required evidence**")
-            for item in profile.required_evidence:
-                st.write(f"• {item}")
+        p1.metric(
+            "Tier",
+            tier_label(profile),
+        )
 
-        with c2:
-            st.markdown("**Monitoring rules**")
-            for item in profile.monitoring_rules:
-                st.write(f"• {item}")
+        p2.metric(
+            "Criticality",
+            selected.criticality or "—",
+        )
 
-            st.markdown("**Reassessment triggers**")
-            for item in profile.reassessment_rules:
-                st.write(f"• {item}")
+        p3.metric(
+            "Overall Risk",
+            selected.overall_risk_rating or "—",
+        )
+
+        p4.metric(
+            "Relationship",
+            selected.relationship_status or "—",
+        )
+
+        vendor_details = pd.DataFrame(
+            [
+                {
+                    "Legal Name": (
+                        selected.legal_name
+                        or "—"
+                    ),
+                    "Primary Domain": (
+                        selected.primary_domain
+                        or "—"
+                    ),
+                    "Industry": (
+                        selected.industry
+                        or "—"
+                    ),
+                    "Country": (
+                        selected.headquarters_country
+                        or "—"
+                    ),
+                }
+            ]
+        )
+
+        st.dataframe(
+            vendor_details,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # -------------------------------------------------
+        # Tier-driven assurance profile
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Tier-Driven Assurance Profile"
+        )
+
+        st.caption(
+            "The vendor tier establishes the baseline "
+            "control, evidence, monitoring, and reassessment "
+            "requirements. Contextual applicability rules "
+            "may add additional requirements."
+        )
+
+        a1, a2, a3, a4 = st.columns(4)
+
+        a1.metric(
+            "Required Controls",
+            len(
+                profile.required_controls
+            ),
+        )
+
+        a2.metric(
+            "Required Evidence",
+            len(
+                profile.required_evidence
+            ),
+        )
+
+        a3.metric(
+            "Monitoring Rules",
+            len(
+                profile.monitoring_rules
+            ),
+        )
+
+        a4.metric(
+            "Reassessment Triggers",
+            len(
+                profile.reassessment_rules
+            ),
+        )
+
+        st.write(
+            "**Recommended assessment:** "
+            f"{profile.assessment_type}"
+        )
+
+        st.caption(
+            f"Tier policy: {profile.policy_version}"
+        )
+
+        # -------------------------------------------------
+        # Required controls
+        # -------------------------------------------------
+
+        with st.expander(
+            "Required Controls",
+            expanded=True,
+        ):
+            control_rows = [
+                {
+                    "Control": item.control_id,
+                    "Domain": item.domain,
+                    "Requirement": item.requirement,
+                    "Mandatory": (
+                        "Yes"
+                        if item.mandatory
+                        else "No"
+                    ),
+                    "Rationale": (
+                        item.rationale
+                        or "Baseline tier requirement"
+                    ),
+                }
+                for item
+                in profile.required_controls
+            ]
+
+            if control_rows:
+                st.dataframe(
+                    pd.DataFrame(
+                        control_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info(
+                    "No control requirements are "
+                    "configured for this tier."
+                )
+
+        # -------------------------------------------------
+        # Required evidence
+        # -------------------------------------------------
+
+        with st.expander(
+            "Required Evidence",
+            expanded=True,
+        ):
+            evidence_requirement_rows = [
+                {
+                    "Evidence ID": (
+                        item.evidence_id
+                    ),
+                    "Evidence Requirement": (
+                        item.evidence_type
+                    ),
+                    "Mandatory": (
+                        "Yes"
+                        if item.mandatory
+                        else "No"
+                    ),
+                    "Freshness": (
+                        f"{item.freshness_months} months"
+                        if item.freshness_months
+                        is not None
+                        else "Not specified"
+                    ),
+                    "Rationale": (
+                        item.rationale
+                        or "Baseline tier requirement"
+                    ),
+                }
+                for item
+                in profile.required_evidence
+            ]
+
+            if evidence_requirement_rows:
+                st.dataframe(
+                    pd.DataFrame(
+                        evidence_requirement_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info(
+                    "No evidence requirements are "
+                    "configured for this tier."
+                )
+
+        # -------------------------------------------------
+        # Monitoring + reassessment
+        # -------------------------------------------------
+
+        m1, m2 = st.columns(2)
+
+        with m1:
+            with st.expander(
+                "Monitoring Rules",
+                expanded=True,
+            ):
+                if profile.monitoring_rules:
+                    for rule in (
+                        profile.monitoring_rules
+                    ):
+                        st.markdown(
+                            f"- {rule}"
+                        )
+                else:
+                    st.info(
+                        "No monitoring rules configured."
+                    )
+
+        with m2:
+            with st.expander(
+                "Reassessment Triggers",
+                expanded=True,
+            ):
+                if profile.reassessment_rules:
+                    for rule in (
+                        profile.reassessment_rules
+                    ):
+                        st.markdown(
+                            f"- {rule}"
+                        )
+                else:
+                    st.info(
+                        "No reassessment triggers configured."
+                    )
+
+        st.divider()
+
+        # -------------------------------------------------
+        # Evidence state
+        # -------------------------------------------------
 
         evidence_records = (
             session.query(Evidence)
-            .filter_by(vendor_id=selected.id)
-            .order_by(Evidence.created_at.desc())
+            .filter_by(
+                vendor_id=selected.id
+            )
+            .order_by(
+                Evidence.created_at.desc()
+            )
             .all()
         )
 
@@ -822,15 +1132,23 @@ def render_vendors():
 
         vendor_findings = (
             session.query(Finding)
-            .filter_by(vendor_id=selected.id)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
         vendor_assessments = (
             session.query(Assessment)
-            .filter_by(vendor_id=selected.id)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
+
+        # -------------------------------------------------
+        # Risk decision gate
+        # -------------------------------------------------
 
         decision = evaluate_vendor_decision(
             evidence_completion_percent=(
@@ -839,17 +1157,23 @@ def render_vendors():
             findings=vendor_findings,
             assessments=vendor_assessments,
             residual_risk=(
-                selected.residual_risk_score or 0
+                selected.residual_risk_score
+                or 0
             ),
         )
 
-        st.markdown("#### Risk decision gate")
+        st.markdown(
+            "### Risk Decision Gate"
+        )
 
         if decision.outcome == "Approve":
-            st.success("Approve")
+            st.success(
+                "Approve"
+            )
 
-        elif decision.outcome == (
-            "Approve with Conditions"
+        elif (
+            decision.outcome
+            == "Approve with Conditions"
         ):
             st.warning(
                 "Approve with Conditions"
@@ -864,7 +1188,8 @@ def render_vendors():
             st.caption(
                 "The recommendation is based on "
                 "current evidence, findings, "
-                "reassessment status, and residual risk."
+                "reassessment status, and "
+                "residual risk."
             )
 
             for reason in decision.reasons:
@@ -875,47 +1200,65 @@ def render_vendors():
                 )
 
                 st.write(
-                    f"{prefix} {reason.message}"
+                    f"{prefix} "
+                    f"{reason.message}"
                 )
 
         else:
             st.caption(
-                "No current approval blockers or "
-                "conditions were identified."
+                "No current approval blockers "
+                "or conditions were identified."
             )
 
-        st.markdown("#### Approval decision")
+        # -------------------------------------------------
+        # Human approval decision
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Approval Decision"
+        )
 
         approval_history = (
-            session.query(ApprovalDecision)
-            .filter_by(vendor_id=selected.id)
+            session.query(
+                ApprovalDecision
+            )
+            .filter_by(
+                vendor_id=selected.id
+            )
             .order_by(
-                ApprovalDecision.decided_at.desc()
+                ApprovalDecision
+                .decided_at
+                .desc()
             )
             .all()
         )
 
         if approval_history:
-            latest_approval = approval_history[0]
+            latest_approval = (
+                approval_history[0]
+            )
 
-            a1, a2, a3 = st.columns(3)
+            h1, h2, h3 = st.columns(3)
 
-            a1.metric(
-                "Latest decision",
+            h1.metric(
+                "Latest Decision",
                 latest_approval.decision,
             )
 
-            a2.metric(
+            h2.metric(
                 "Approver",
                 (
-                    latest_approval.approver_name
-                    or latest_approval.approver_subject
+                    latest_approval
+                    .approver_name
+                    or latest_approval
+                    .approver_subject
                 ),
             )
 
-            a3.metric(
-                "System recommendation",
-                latest_approval.system_recommendation,
+            h3.metric(
+                "System Recommendation",
+                latest_approval
+                .system_recommendation,
             )
 
             if latest_approval.rationale:
@@ -932,15 +1275,20 @@ def render_vendors():
 
         else:
             st.info(
-                "No human approval decision has been "
-                "recorded for this vendor."
+                "No human approval decision "
+                "has been recorded for this vendor."
             )
 
         recommendation_to_decision = {
-            "Approve": "Approved",
-            "Approve with Conditions":
-                "Approved with Conditions",
-            "Further Review Required": "Deferred",
+            "Approve": (
+                "Approved"
+            ),
+            "Approve with Conditions": (
+                "Approved with Conditions"
+            ),
+            "Further Review Required": (
+                "Deferred"
+            ),
         }
 
         decision_options = [
@@ -957,12 +1305,15 @@ def render_vendors():
             )
         )
 
-        default_index = decision_options.index(
-            recommended_decision
+        default_index = (
+            decision_options.index(
+                recommended_decision
+            )
         )
 
         with st.form(
-            f"approval_decision_{selected.id}"
+            f"approval_decision_"
+            f"{selected.id}"
         ):
             st.caption(
                 "System recommendation: "
@@ -976,7 +1327,7 @@ def render_vendors():
             )
 
             st.write(
-                f"**Approver:** "
+                "**Approver:** "
                 f"{CURRENT_USER.display_name} "
                 f"({CURRENT_USER.role})"
             )
@@ -984,17 +1335,19 @@ def render_vendors():
             rationale = st.text_area(
                 "Decision rationale *",
                 placeholder=(
-                    "Explain the basis for the decision, "
-                    "including any accepted risk."
+                    "Explain the basis for the "
+                    "decision, including any "
+                    "accepted risk."
                 ),
             )
 
             conditions = st.text_area(
                 "Conditions / required follow-up",
                 placeholder=(
-                    "Example: remediation required within "
-                    "30 days; updated penetration test "
-                    "required before production access."
+                    "Example: remediation required "
+                    "within 30 days; updated "
+                    "penetration test required "
+                    "before production access."
                 ),
             )
 
@@ -1012,18 +1365,24 @@ def render_vendors():
 
             if is_override:
                 st.warning(
-                    "This decision overrides a system "
-                    "recommendation of Further Review Required."
+                    "This decision overrides a "
+                    "system recommendation of "
+                    "Further Review Required."
                 )
 
-                override_ack = st.checkbox(
-                    "I acknowledge this approval overrides "
-                    "current system-identified blockers."
+                override_ack = (
+                    st.checkbox(
+                        "I acknowledge this approval "
+                        "overrides current "
+                        "system-identified blockers."
+                    )
                 )
 
-            submitted = st.form_submit_button(
-                "Record approval decision",
-                type="primary",
+            submitted = (
+                st.form_submit_button(
+                    "Record approval decision",
+                    type="primary",
+                )
             )
 
         if submitted:
@@ -1044,80 +1403,127 @@ def render_vendors():
                     "Approved with Conditions."
                 )
 
-            if is_override and not override_ack:
+            if (
+                is_override
+                and not override_ack
+            ):
                 validation_errors.append(
-                    "Override acknowledgement is required."
+                    "Override acknowledgement "
+                    "is required."
                 )
 
             if validation_errors:
-                for error in validation_errors:
-                    st.error(error)
+                for error in (
+                    validation_errors
+                ):
+                    st.error(
+                        error
+                    )
 
             else:
                 snapshot_reasons = [
                     {
-                        "code": reason.code,
-                        "message": reason.message,
-                        "blocking": reason.blocking,
+                        "code": (
+                            reason.code
+                        ),
+                        "message": (
+                            reason.message
+                        ),
+                        "blocking": (
+                            reason.blocking
+                        ),
                     }
-                    for reason in decision.reasons
+                    for reason
+                    in decision.reasons
                 ]
 
-                approval = ApprovalDecision(
-                    vendor_id=selected.id,
-                    system_recommendation=(
-                        decision.outcome
-                    ),
-                    system_reasons_json=json.dumps(
-                        snapshot_reasons
-                    ),
-                    evidence_completion_percent=(
-                        coverage.completion_percent
-                    ),
-                    residual_risk_score=(
-                        selected.residual_risk_score
-                        or 0
-                    ),
-                    decision=human_decision,
-                    approver_subject=(
-                        CURRENT_USER.subject
-                    ),
-                    approver_name=(
-                        CURRENT_USER.display_name
-                    ),
-                    approver_email=(
-                        CURRENT_USER.email
-                    ),
-                    approver_role=(
-                        CURRENT_USER.role
-                    ),
-                    rationale=rationale.strip(),
-                    conditions=conditions.strip(),
+                approval = (
+                    ApprovalDecision(
+                        vendor_id=selected.id,
+                        system_recommendation=(
+                            decision.outcome
+                        ),
+                        system_reasons_json=(
+                            json.dumps(
+                                snapshot_reasons
+                            )
+                        ),
+                        evidence_completion_percent=(
+                            coverage
+                            .completion_percent
+                        ),
+                        residual_risk_score=(
+                            selected
+                            .residual_risk_score
+                            or 0
+                        ),
+                        decision=(
+                            human_decision
+                        ),
+                        approver_subject=(
+                            CURRENT_USER.subject
+                        ),
+                        approver_name=(
+                            CURRENT_USER
+                            .display_name
+                        ),
+                        approver_email=(
+                            CURRENT_USER.email
+                        ),
+                        approver_role=(
+                            CURRENT_USER.role
+                        ),
+                        rationale=(
+                            rationale.strip()
+                        ),
+                        conditions=(
+                            conditions.strip()
+                        ),
+                    )
                 )
 
-                session.add(approval)
+                session.add(
+                    approval
+                )
+
                 session.flush()
 
                 record_audit_event(
                     session,
                     principal=CURRENT_USER,
-                    action="approval_decision.create",
-                    object_type="approval_decision",
-                    object_id=approval.id,
-                    vendor_id=selected.id,
+                    action=(
+                        "approval_decision.create"
+                    ),
+                    object_type=(
+                        "approval_decision"
+                    ),
+                    object_id=(
+                        approval.id
+                    ),
+                    vendor_id=(
+                        selected.id
+                    ),
                     details={
-                        "decision":
-                            human_decision,
-                        "system_recommendation":
-                            decision.outcome,
-                        "evidence_completion_percent":
-                            coverage.completion_percent,
-                        "residual_risk_score":
-                            selected.residual_risk_score,
-                        "override":
-                            is_override,
-                        "conditions":
-                            conditions.strip(),
+                        "decision": (
+                            human_decision
+                        ),
+                        "system_recommendation": (
+                            decision.outcome
+                        ),
+                        "evidence_completion_percent": (
+                            coverage
+                            .completion_percent
+                        ),
+                        "residual_risk_score": (
+                            selected
+                            .residual_risk_score
+                        ),
+                        "override": (
+                            is_override
+                        ),
+                        "conditions": (
+                            conditions.strip()
+                        ),
                     },
                 )
 
@@ -1130,40 +1536,56 @@ def render_vendors():
 
                 st.rerun()
 
+        # -------------------------------------------------
+        # Approval history
+        # -------------------------------------------------
+
         if approval_history:
             with st.expander(
-                "Approval decision history"
+                "Approval Decision History"
             ):
                 st.dataframe(
                     pd.DataFrame(
                         [
                             {
-                                "Decision":
-                                    item.decision,
-                                "System Recommendation":
-                                    item.system_recommendation,
-                                "Approver":
-                                    (
-                                        item.approver_name
-                                        or item.approver_subject
-                                    ),
-                                "Role":
-                                    item.approver_role,
-                                "Residual Risk":
-                                    item.residual_risk_score,
-                                "Evidence Coverage":
+                                "Decision": (
+                                    item.decision
+                                ),
+                                "System Recommendation": (
+                                    item
+                                    .system_recommendation
+                                ),
+                                "Approver": (
+                                    item.approver_name
+                                    or item
+                                    .approver_subject
+                                ),
+                                "Role": (
+                                    item.approver_role
+                                ),
+                                "Residual Risk": (
+                                    item
+                                    .residual_risk_score
+                                ),
+                                "Evidence Coverage": (
                                     (
                                         f"{item.evidence_completion_percent:.0f}%"
-                                        if item.evidence_completion_percent
+                                    )
+                                    if (
+                                        item.evidence_completion_percent
                                         is not None
-                                        else "—"
-                                    ),
-                                "Rationale":
-                                    item.rationale,
-                                "Conditions":
-                                    item.conditions,
-                                "Decided At":
-                                    item.decided_at,
+                                    )
+                                    else "—"
+                                ),
+                                "Rationale": (
+                                    item.rationale
+                                ),
+                                "Conditions": (
+                                    item.conditions
+                                ),
+                                "Decided At": (
+                                    item.decided_at
+                                ),
                             }
                             for item
                             in approval_history
@@ -1173,52 +1595,113 @@ def render_vendors():
                     hide_index=True,
                 )
 
-        st.markdown("#### Evidence coverage")
+        # -------------------------------------------------
+        # Evidence coverage
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Evidence Coverage"
+        )
 
         e1, e2, e3 = st.columns(3)
-        e1.metric("Coverage", f"{coverage.completion_percent}%")
-        e2.metric(
-            "Required evidence satisfied",
-            f"{coverage.satisfied_required} / {coverage.total_required}",
+
+        e1.metric(
+            "Coverage",
+            (
+                f"{coverage.completion_percent}%"
+            ),
         )
-        e3.metric("Evidence records on file", len(evidence_records))
+
+        e2.metric(
+            "Required Evidence Satisfied",
+            (
+                f"{coverage.satisfied_required} "
+                f"/ {coverage.total_required}"
+            ),
+        )
+
+        e3.metric(
+            "Evidence Records on File",
+            len(
+                evidence_records
+            ),
+        )
 
         coverage_rows = []
 
         for item in coverage.items:
             if item.status == "Satisfied":
                 indicator = "✅"
-            elif item.status == "Expiring Soon":
+
+            elif (
+                item.status
+                == "Expiring Soon"
+            ):
                 indicator = "⚠️"
-            elif item.status == "Expired":
+
+            elif (
+                item.status
+                == "Expired"
+            ):
                 indicator = "⛔"
+
             else:
                 indicator = "❌"
 
             coverage_rows.append(
                 {
-                    "Status": f"{indicator} {item.status}",
-                    "Requirement": item.requirement,
-                    "Required": "Yes" if item.required else "Optional",
-                    "Matched evidence": item.document_name or "—",
-                    "Document type": item.document_type or "—",
-                    "Expiration": item.expiration_date or "—",
+                    "Status": (
+                        f"{indicator} "
+                        f"{item.status}"
+                    ),
+                    "Requirement": (
+                        item.requirement
+                    ),
+                    "Required": (
+                        "Yes"
+                        if item.required
+                        else "Optional"
+                    ),
+                    "Matched Evidence": (
+                        item.document_name
+                        or "—"
+                    ),
+                    "Document Type": (
+                        item.document_type
+                        or "—"
+                    ),
+                    "Expiration": (
+                        item.expiration_date
+                        or "—"
+                    ),
                 }
             )
 
         if coverage_rows:
             st.dataframe(
-                pd.DataFrame(coverage_rows),
+                pd.DataFrame(
+                    coverage_rows
+                ),
                 use_container_width=True,
                 hide_index=True,
             )
+
         else:
-            st.info("No evidence requirements are configured for this tier.")
+            st.info(
+                "No evidence requirements "
+                "are configured for this tier."
+            )
+
+    # =====================================================
+    # Engagements
+    # =====================================================
 
     with tabs[1]:
         engagements = (
             session.query(Engagement)
-            .filter_by(vendor_id=selected.id)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
@@ -1227,26 +1710,54 @@ def render_vendors():
                 pd.DataFrame(
                     [
                         {
-                            "Service": engagement.service_name,
-                            "Owner": engagement.business_owner,
-                            "Criticality": engagement.business_criticality,
-                            "Data": engagement.data_classification,
-                            "Production Access": engagement.production_access,
-                            "AI Enabled": engagement.ai_enabled,
+                            "Service": (
+                                engagement
+                                .service_name
+                            ),
+                            "Owner": (
+                                engagement
+                                .business_owner
+                            ),
+                            "Criticality": (
+                                engagement
+                                .business_criticality
+                            ),
+                            "Data": (
+                                engagement
+                                .data_classification
+                            ),
+                            "Production Access": (
+                                engagement
+                                .production_access
+                            ),
+                            "AI Enabled": (
+                                engagement
+                                .ai_enabled
+                            ),
                         }
-                        for engagement in engagements
+                        for engagement
+                        in engagements
                     ]
                 ),
                 use_container_width=True,
                 hide_index=True,
             )
+
         else:
-            st.info("No engagements yet.")
+            st.info(
+                "No engagements yet."
+            )
+
+    # =====================================================
+    # Assessments
+    # =====================================================
 
     with tabs[2]:
         assessments = (
             session.query(Assessment)
-            .filter_by(vendor_id=selected.id)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
@@ -1255,26 +1766,207 @@ def render_vendors():
                 pd.DataFrame(
                     [
                         {
-                            "Assessment": assessment.assessment_type,
-                            "Reason": assessment.assessment_reason,
-                            "Status": assessment.status,
-                            "Assigned To": assessment.assigned_to,
-                            "Due": assessment.due_date,
-                            "Approval": assessment.approval_status,
+                            "Assessment": (
+                                assessment
+                                .assessment_type
+                            ),
+                            "Reason": (
+                                assessment
+                                .assessment_reason
+                            ),
+                            "Status": (
+                                assessment.status
+                            ),
+                            "Assigned To": (
+                                assessment
+                                .assigned_to
+                            ),
+                            "Due": (
+                                assessment.due_date
+                            ),
+                            "Approval": (
+                                assessment
+                                .approval_status
+                            ),
                         }
-                        for assessment in assessments
+                        for assessment
+                        in assessments
                     ]
                 ),
                 use_container_width=True,
                 hide_index=True,
             )
+
         else:
-            st.info("No assessments yet.")
+            st.info(
+                "No assessments yet."
+            )
+    # =====================================================
+    # Assurance
+    # =====================================================
 
     with tabs[3]:
-        evidence_rows = (
+        st.markdown("### Assurance Decision Intelligence")
+
+        st.caption(
+            "See which controls apply, what existing evidence "
+            "already supports, and what still requires action."
+        )
+
+        profile = vendor_tier_profile(selected)
+
+        applicability = evaluate_applicability(
+            profile,
+            vendor_applicability_context(selected),
+        )
+
+        vendor_evidence = (
             session.query(Evidence)
             .filter_by(vendor_id=selected.id)
+            .all()
+        )
+
+        work_plan = build_assessment_work_plan(
+            applicability,
+            vendor_evidence,
+        )
+
+        supported = sum(
+            1
+            for item in work_plan.items
+            if item.workflow_action == "Reuse Evidence"
+        )
+
+        review = sum(
+            1
+            for item in work_plan.items
+            if item.workflow_action == "Analyst Validate"
+        )
+
+        unsupported = sum(
+            1
+            for item in work_plan.items
+            if item.workflow_action == "Ask Vendor"
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Applicable Controls",
+            work_plan.total_controls,
+        )
+
+        c2.metric(
+            "Supported",
+            supported,
+        )
+
+        c3.metric(
+            "Review",
+            review,
+        )
+
+        c4.metric(
+            "Unsupported",
+            unsupported,
+        )
+
+        q1, q2, q3 = st.columns(3)
+
+        q1.metric(
+            "Questionnaire Reduction",
+            f"{work_plan.questionnaire_reduction_percent}%",
+        )
+
+        q2.metric(
+            "Questions Avoided",
+            work_plan.questions_suppressed,
+        )
+
+        q3.metric(
+            "Vendor Questions",
+            work_plan.questions_generated,
+        )
+
+        st.markdown("### Assurance Delta")
+
+        assurance_rows = []
+
+        for item in work_plan.items:
+            if item.workflow_action == "Reuse Evidence":
+                status = "✅ Supported"
+
+            elif item.workflow_action == "Analyst Validate":
+                status = "🔎 Review"
+
+            else:
+                status = "❌ Unsupported"
+
+            assurance_rows.append(
+                {
+                    "Control": item.control_id,
+                    "Domain": item.domain,
+                    "Status": status,
+                    "Requirement": item.requirement,
+                    "Action": item.workflow_action,
+                    "Evidence": (
+                        ", ".join(
+                            item.evidence_requirements
+                        )
+                        if item.evidence_requirements
+                        else "—"
+                    ),
+                }
+            )
+
+        if assurance_rows:
+            st.dataframe(
+                pd.DataFrame(assurance_rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        vendor_questions = [
+            item
+            for item in work_plan.items
+            if (
+                item.workflow_action == "Ask Vendor"
+                and item.question
+            )
+        ]
+
+        if vendor_questions:
+            with st.expander(
+                "Targeted Vendor Questions"
+            ):
+                for item in vendor_questions:
+                    st.markdown(
+                        f"**{item.control_id} — "
+                        f"{item.domain}**"
+                    )
+
+                    st.write(
+                        item.question
+                    )
+
+                    st.divider()
+
+        st.caption(
+            f"Policies: "
+            f"{profile.policy_version} → "
+            f"{applicability.policy_version} → "
+            f"{work_plan.policy_version}"
+        )
+    # =====================================================
+    # Evidence
+    # =====================================================
+
+    with tabs[4]:
+        evidence_rows = (
+            session.query(Evidence)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
@@ -1283,27 +1975,56 @@ def render_vendors():
                 pd.DataFrame(
                     [
                         {
-                            "Type": item.document_type,
-                            "Document": item.document_name,
-                            "Issuer": item.issuer,
-                            "Expiration": item.expiration_date,
-                            "Status": evidence_status(item.expiration_date),
-                            "Exceptions": item.exceptions_count,
-                            "Extraction": item.extraction_method or "Manual",
+                            "Type": (
+                                item.document_type
+                            ),
+                            "Document": (
+                                item.document_name
+                            ),
+                            "Issuer": (
+                                item.issuer
+                            ),
+                            "Expiration": (
+                                item.expiration_date
+                            ),
+                            "Status": (
+                                evidence_status(
+                                    item
+                                    .expiration_date
+                                )
+                            ),
+                            "Exceptions": (
+                                item.exceptions_count
+                            ),
+                            "Extraction": (
+                                item
+                                .extraction_method
+                                or "Manual"
+                            ),
                         }
-                        for item in evidence_rows
+                        for item
+                        in evidence_rows
                     ]
                 ),
                 use_container_width=True,
                 hide_index=True,
             )
-        else:
-            st.info("No evidence yet.")
 
-    with tabs[4]:
+        else:
+            st.info(
+                "No evidence yet."
+            )
+
+    # =====================================================
+    # Findings
+    # =====================================================
+
+    with tabs[5]:
         findings = (
             session.query(Finding)
-            .filter_by(vendor_id=selected.id)
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
@@ -1312,26 +2033,50 @@ def render_vendors():
                 pd.DataFrame(
                     [
                         {
-                            "Finding": finding.title,
-                            "Severity": finding.severity,
-                            "Status": finding.status,
-                            "Source": finding.source,
-                            "Owner": finding.owner,
-                            "Target": finding.target_date,
+                            "Finding": (
+                                finding.title
+                            ),
+                            "Severity": (
+                                finding.severity
+                            ),
+                            "Status": (
+                                finding.status
+                            ),
+                            "Source": (
+                                finding.source
+                            ),
+                            "Owner": (
+                                finding.owner
+                            ),
+                            "Target": (
+                                finding.target_date
+                            ),
                         }
-                        for finding in findings
+                        for finding
+                        in findings
                     ]
                 ),
                 use_container_width=True,
                 hide_index=True,
             )
-        else:
-            st.success("No findings.")
 
-    with tabs[5]:
+        else:
+            st.success(
+                "No findings."
+            )
+
+    # =====================================================
+    # Monitoring
+    # =====================================================
+
+    with tabs[6]:
         events = (
-            session.query(MonitoringEvent)
-            .filter_by(vendor_id=selected.id)
+            session.query(
+                MonitoringEvent
+            )
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
@@ -1340,21 +2085,35 @@ def render_vendors():
                 pd.DataFrame(
                     [
                         {
-                            "Event": event.event_type,
-                            "Severity": event.severity,
-                            "Status": event.status,
-                            "Previous": event.previous_value,
-                            "New": event.new_value,
+                            "Event": (
+                                event.event_type
+                            ),
+                            "Severity": (
+                                event.severity
+                            ),
+                            "Status": (
+                                event.status
+                            ),
+                            "Previous": (
+                                event
+                                .previous_value
+                            ),
+                            "New": (
+                                event.new_value
+                            ),
                         }
-                        for event in events
+                        for event
+                        in events
                     ]
                 ),
                 use_container_width=True,
                 hide_index=True,
             )
-        else:
-            st.info("No monitoring events.")
 
+        else:
+            st.info(
+                "No monitoring events."
+            )
 
 # =========================================================
 # Vendor Intake
