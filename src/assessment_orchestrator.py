@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from typing import Iterable, Tuple
 
 from src.applicability import ApplicabilityResult
+from src.control_disposition import (
+    evaluate_control_disposition,
+)
 from src.control_sufficiency import (
     EvidenceControlClaim,
     evaluate_control_set,
@@ -9,7 +12,7 @@ from src.control_sufficiency import (
 from src.targeted_gap import analyze_targeted_evidence_gaps
 
 
-ORCHESTRATOR_POLICY_VERSION = "AO-1.1"
+ORCHESTRATOR_POLICY_VERSION = "AO-1.2"
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,10 @@ class ControlWorkItem:
     sufficiency_status: str | None = None
     supporting_evidence_ids: Tuple[int, ...] = ()
     review_evidence_ids: Tuple[int, ...] = ()
+
+    recommended_control_disposition: str | None = None
+    disposition_review_required: bool = False
+    disposition_policy_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -260,15 +267,22 @@ def build_assessment_work_plan(
     control_claims: Iterable[EvidenceControlClaim] = (),
 ) -> AssessmentWorkPlan:
 
-    evidence_records = tuple(evidence_records)
-    control_claims = tuple(control_claims)
+    evidence_records = tuple(
+        evidence_records
+    )
 
-    required_evidence_names = _required_evidence_names(
-        applicability
+    control_claims = tuple(
+        control_claims
+    )
+
+    required_evidence_names = (
+        _required_evidence_names(
+            applicability
+        )
     )
 
     # -------------------------------------------------
-    # AO-1.1 control-level sufficiency path
+    # AO-1.2 control-level sufficiency + disposition
     # -------------------------------------------------
 
     sufficiency_by_control = {}
@@ -279,24 +293,31 @@ def build_assessment_work_plan(
             for control in applicability.controls
         ]
 
-        sufficiency_decisions = evaluate_control_set(
-            control_ids,
-            evidence_records,
-            control_claims,
+        sufficiency_decisions = (
+            evaluate_control_set(
+                control_ids,
+                evidence_records,
+                control_claims,
+            )
         )
 
         sufficiency_by_control = {
             decision.control_id: decision
-            for decision in sufficiency_decisions
+            for decision
+            in sufficiency_decisions
         }
 
     # -------------------------------------------------
     # Document-level fallback
     # -------------------------------------------------
 
-    gap_analysis = analyze_targeted_evidence_gaps(
-        sorted(required_evidence_names),
-        evidence_records,
+    gap_analysis = (
+        analyze_targeted_evidence_gaps(
+            sorted(
+                required_evidence_names
+            ),
+            evidence_records,
+        )
     )
 
     gap_by_requirement = {
@@ -316,98 +337,207 @@ def build_assessment_work_plan(
         relevant_evidence = tuple(
             requirement
             for requirement in mapped
-            if requirement in required_evidence_names
+            if requirement
+            in required_evidence_names
         )
 
-        sufficiency = sufficiency_by_control.get(
-            control.control_id
+        sufficiency = (
+            sufficiency_by_control.get(
+                control.control_id
+            )
         )
 
         # =================================================
-        # CONTROL-LEVEL SUFFICIENCY PATH
+        # CONTROL-LEVEL SUFFICIENCY + DISPOSITION PATH
         # =================================================
 
         if sufficiency is not None:
 
-            reason = " ".join(
-                sufficiency.reasons
+            control_disposition = (
+                evaluate_control_disposition(
+                    sufficiency
+                )
             )
 
-            if sufficiency.status == "SUPPORTED":
+            reason = " ".join(
+                control_disposition.reasons
+            )
+
+            if (
+                sufficiency.status
+                == "SUPPORTED"
+            ):
                 work_items.append(
                     ControlWorkItem(
-                        control_id=control.control_id,
+                        control_id=(
+                            control.control_id
+                        ),
                         domain=control.domain,
-                        requirement=control.requirement,
-                        disposition="Evidence Supported",
-                        workflow_action="Reuse Evidence",
+                        requirement=(
+                            control.requirement
+                        ),
+                        disposition=(
+                            "Evidence Supported"
+                        ),
+                        workflow_action=(
+                            "Reuse Evidence"
+                        ),
                         reason=reason,
-                        evidence_requirements=relevant_evidence,
-                        sufficiency_status="SUPPORTED",
+                        evidence_requirements=(
+                            relevant_evidence
+                        ),
+                        sufficiency_status=(
+                            "SUPPORTED"
+                        ),
                         supporting_evidence_ids=(
-                            sufficiency.supporting_evidence_ids
+                            sufficiency
+                            .supporting_evidence_ids
                         ),
                         review_evidence_ids=(
-                            sufficiency.evidence_review_ids
+                            sufficiency
+                            .evidence_review_ids
+                        ),
+                        recommended_control_disposition=(
+                            control_disposition
+                            .recommended_disposition
+                        ),
+                        disposition_review_required=(
+                            control_disposition
+                            .analyst_review_required
+                        ),
+                        disposition_policy_version=(
+                            control_disposition
+                            .policy_version
                         ),
                     )
                 )
                 continue
 
-            if sufficiency.status == "PARTIAL":
+            if (
+                sufficiency.status
+                == "PARTIAL"
+            ):
                 work_items.append(
                     ControlWorkItem(
-                        control_id=control.control_id,
+                        control_id=(
+                            control.control_id
+                        ),
                         domain=control.domain,
-                        requirement=control.requirement,
-                        disposition="Partial Evidence",
-                        workflow_action="Analyst Validate",
+                        requirement=(
+                            control.requirement
+                        ),
+                        disposition=(
+                            "Partial Evidence"
+                        ),
+                        workflow_action=(
+                            "Analyst Validate"
+                        ),
                         reason=reason,
-                        evidence_requirements=relevant_evidence,
-                        sufficiency_status="PARTIAL",
+                        evidence_requirements=(
+                            relevant_evidence
+                        ),
+                        sufficiency_status=(
+                            "PARTIAL"
+                        ),
                         supporting_evidence_ids=(
-                            sufficiency.supporting_evidence_ids
+                            sufficiency
+                            .supporting_evidence_ids
                         ),
                         review_evidence_ids=(
-                            sufficiency.evidence_review_ids
+                            sufficiency
+                            .evidence_review_ids
+                        ),
+                        recommended_control_disposition=(
+                            control_disposition
+                            .recommended_disposition
+                        ),
+                        disposition_review_required=(
+                            control_disposition
+                            .analyst_review_required
+                        ),
+                        disposition_policy_version=(
+                            control_disposition
+                            .policy_version
                         ),
                     )
                 )
                 continue
 
-            if sufficiency.status == "REVIEW":
+            if (
+                sufficiency.status
+                == "REVIEW"
+            ):
                 work_items.append(
                     ControlWorkItem(
-                        control_id=control.control_id,
+                        control_id=(
+                            control.control_id
+                        ),
                         domain=control.domain,
-                        requirement=control.requirement,
-                        disposition="Pending Validation",
-                        workflow_action="Analyst Validate",
+                        requirement=(
+                            control.requirement
+                        ),
+                        disposition=(
+                            "Pending Validation"
+                        ),
+                        workflow_action=(
+                            "Analyst Validate"
+                        ),
                         reason=reason,
-                        evidence_requirements=relevant_evidence,
-                        sufficiency_status="REVIEW",
+                        evidence_requirements=(
+                            relevant_evidence
+                        ),
+                        sufficiency_status=(
+                            "REVIEW"
+                        ),
                         supporting_evidence_ids=(
-                            sufficiency.supporting_evidence_ids
+                            sufficiency
+                            .supporting_evidence_ids
                         ),
                         review_evidence_ids=(
-                            sufficiency.evidence_review_ids
+                            sufficiency
+                            .evidence_review_ids
+                        ),
+                        recommended_control_disposition=(
+                            control_disposition
+                            .recommended_disposition
+                        ),
+                        disposition_review_required=(
+                            control_disposition
+                            .analyst_review_required
+                        ),
+                        disposition_policy_version=(
+                            control_disposition
+                            .policy_version
                         ),
                     )
                 )
                 continue
 
-            if sufficiency.status == "UNSUPPORTED":
-                question = _question_for_control(
-                    control.control_id
+            if (
+                sufficiency.status
+                == "UNSUPPORTED"
+            ):
+                question = (
+                    _question_for_control(
+                        control.control_id
+                    )
                 )
 
                 work_items.append(
                     ControlWorkItem(
-                        control_id=control.control_id,
+                        control_id=(
+                            control.control_id
+                        ),
                         domain=control.domain,
-                        requirement=control.requirement,
-                        disposition="Control Unproven",
-                        workflow_action="Ask Vendor",
+                        requirement=(
+                            control.requirement
+                        ),
+                        disposition=(
+                            "Control Unproven"
+                        ),
+                        workflow_action=(
+                            "Ask Vendor"
+                        ),
                         reason=reason,
                         question_id=(
                             question.question_id
@@ -419,10 +549,26 @@ def build_assessment_work_plan(
                             if question
                             else None
                         ),
-                        evidence_requirements=relevant_evidence,
-                        sufficiency_status="UNSUPPORTED",
+                        evidence_requirements=(
+                            relevant_evidence
+                        ),
+                        sufficiency_status=(
+                            "UNSUPPORTED"
+                        ),
                         supporting_evidence_ids=(),
                         review_evidence_ids=(),
+                        recommended_control_disposition=(
+                            control_disposition
+                            .recommended_disposition
+                        ),
+                        disposition_review_required=(
+                            control_disposition
+                            .analyst_review_required
+                        ),
+                        disposition_policy_version=(
+                            control_disposition
+                            .policy_version
+                        ),
                     )
                 )
                 continue
@@ -432,27 +578,39 @@ def build_assessment_work_plan(
         # =================================================
 
         evidence_states = [
-            gap_by_requirement[requirement]
-            for requirement in relevant_evidence
-            if requirement in gap_by_requirement
+            gap_by_requirement[
+                requirement
+            ]
+            for requirement
+            in relevant_evidence
+            if requirement
+            in gap_by_requirement
         ]
 
         if not evidence_states:
-            question = _question_for_control(
-                control.control_id
+            question = (
+                _question_for_control(
+                    control.control_id
+                )
             )
 
             work_items.append(
                 ControlWorkItem(
-                    control_id=control.control_id,
+                    control_id=(
+                        control.control_id
+                    ),
                     domain=control.domain,
-                    requirement=control.requirement,
+                    requirement=(
+                        control.requirement
+                    ),
                     disposition="Unresolved",
-                    workflow_action="Ask Vendor",
+                    workflow_action=(
+                        "Ask Vendor"
+                    ),
                     reason=(
-                        "No reusable required evidence currently "
-                        "supports this control; targeted vendor "
-                        "input is required."
+                        "No reusable required evidence "
+                        "currently supports this control; "
+                        "targeted vendor input is required."
                     ),
                     question_id=(
                         question.question_id
@@ -475,21 +633,30 @@ def build_assessment_work_plan(
         }
 
         if "Request Vendor" in actions:
-            question = _question_for_control(
-                control.control_id
+            question = (
+                _question_for_control(
+                    control.control_id
+                )
             )
 
             work_items.append(
                 ControlWorkItem(
-                    control_id=control.control_id,
+                    control_id=(
+                        control.control_id
+                    ),
                     domain=control.domain,
-                    requirement=control.requirement,
+                    requirement=(
+                        control.requirement
+                    ),
                     disposition="Evidence Gap",
-                    workflow_action="Ask Vendor",
+                    workflow_action=(
+                        "Ask Vendor"
+                    ),
                     reason=(
-                        "One or more required evidence items are "
-                        "missing or expired. Request only the "
-                        "unresolved information."
+                        "One or more required evidence "
+                        "items are missing or expired. "
+                        "Request only the unresolved "
+                        "information."
                     ),
                     question_id=(
                         question.question_id
@@ -503,66 +670,104 @@ def build_assessment_work_plan(
                     ),
                     evidence_requirements=tuple(
                         item.requirement
-                        for item in evidence_states
-                        if item.workflow_action
-                        == "Request Vendor"
+                        for item
+                        in evidence_states
+                        if (
+                            item.workflow_action
+                            == "Request Vendor"
+                        )
                     ),
                 )
             )
             continue
 
-        if "Analyst Validate" in actions:
+        if (
+            "Analyst Validate"
+            in actions
+        ):
             work_items.append(
                 ControlWorkItem(
-                    control_id=control.control_id,
-                    domain=control.domain,
-                    requirement=control.requirement,
-                    disposition="Pending Validation",
-                    workflow_action="Analyst Validate",
-                    reason=(
-                        "Relevant evidence exists but requires "
-                        "analyst validation before it can be "
-                        "relied upon."
+                    control_id=(
+                        control.control_id
                     ),
-                    evidence_requirements=relevant_evidence,
+                    domain=control.domain,
+                    requirement=(
+                        control.requirement
+                    ),
+                    disposition=(
+                        "Pending Validation"
+                    ),
+                    workflow_action=(
+                        "Analyst Validate"
+                    ),
+                    reason=(
+                        "Relevant evidence exists but "
+                        "requires analyst validation "
+                        "before it can be relied upon."
+                    ),
+                    evidence_requirements=(
+                        relevant_evidence
+                    ),
                 )
             )
             continue
 
         work_items.append(
             ControlWorkItem(
-                control_id=control.control_id,
-                domain=control.domain,
-                requirement=control.requirement,
-                disposition="Evidence Supported",
-                workflow_action="Reuse Evidence",
-                reason=(
-                    "Current evidence supports the control and "
-                    "has no identified reuse blocker. Vendor "
-                    "questioning is suppressed."
+                control_id=(
+                    control.control_id
                 ),
-                evidence_requirements=relevant_evidence,
+                domain=control.domain,
+                requirement=(
+                    control.requirement
+                ),
+                disposition=(
+                    "Evidence Supported"
+                ),
+                workflow_action=(
+                    "Reuse Evidence"
+                ),
+                reason=(
+                    "Current evidence supports the "
+                    "control and has no identified "
+                    "reuse blocker. Vendor questioning "
+                    "is suppressed."
+                ),
+                evidence_requirements=(
+                    relevant_evidence
+                ),
             )
         )
 
-    total_controls = len(work_items)
+    total_controls = len(
+        work_items
+    )
 
     evidence_satisfied = sum(
         1
         for item in work_items
-        if item.workflow_action == "Reuse Evidence"
+        if (
+            item.workflow_action
+            == "Reuse Evidence"
+        )
     )
 
     analyst_validation = sum(
         1
         for item in work_items
-        if item.workflow_action == "Analyst Validate"
+        if (
+            item.workflow_action
+            == "Analyst Validate"
+        )
     )
 
     vendor_input = sum(
         1
         for item in work_items
-        if item.workflow_action == "Ask Vendor"
+        if (
+            item.workflow_action
+            == "Ask Vendor"
+        )
     )
 
     generated = sum(
@@ -578,19 +783,39 @@ def build_assessment_work_plan(
 
     reduction_percent = (
         round(
-            (suppressed / total_controls) * 100
+            (
+                suppressed
+                / total_controls
+            )
+            * 100
         )
         if total_controls
         else 100
     )
 
     return AssessmentWorkPlan(
-        total_controls=total_controls,
-        evidence_satisfied_controls=evidence_satisfied,
-        analyst_validation_controls=analyst_validation,
-        vendor_input_controls=vendor_input,
-        questions_generated=generated,
-        questions_suppressed=suppressed,
-        questionnaire_reduction_percent=reduction_percent,
-        items=tuple(work_items),
+        total_controls=(
+            total_controls
+        ),
+        evidence_satisfied_controls=(
+            evidence_satisfied
+        ),
+        analyst_validation_controls=(
+            analyst_validation
+        ),
+        vendor_input_controls=(
+            vendor_input
+        ),
+        questions_generated=(
+            generated
+        ),
+        questions_suppressed=(
+            suppressed
+        ),
+        questionnaire_reduction_percent=(
+            reduction_percent
+        ),
+        items=tuple(
+            work_items
+        ),
     )

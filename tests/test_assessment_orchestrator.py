@@ -226,7 +226,7 @@ def test_policy_version_is_exposed():
         == ORCHESTRATOR_POLICY_VERSION
     )
 
-    assert work_plan.policy_version == "AO-1.1"
+    assert work_plan.policy_version == "AO-1.2"
 
 
 def test_supported_control_claim_suppresses_vendor_question():
