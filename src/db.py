@@ -13,7 +13,11 @@ from sqlalchemy import (
     Text,
     create_engine,
 )
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import (
+    declarative_base,
+    relationship,
+    sessionmaker,
+)
 
 
 DATA_DIR = (
@@ -44,11 +48,17 @@ DATABASE_URL = os.getenv(
 )
 
 
-def build_engine(database_url: str):
+def build_engine(
+    database_url: str,
+):
     engine_kwargs = {}
 
-    if database_url.startswith("sqlite"):
-        engine_kwargs["connect_args"] = {
+    if database_url.startswith(
+        "sqlite"
+    ):
+        engine_kwargs[
+            "connect_args"
+        ] = {
             "check_same_thread": False,
         }
 
@@ -58,7 +68,9 @@ def build_engine(database_url: str):
     )
 
 
-engine = build_engine(DATABASE_URL)
+engine = build_engine(
+    DATABASE_URL
+)
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -70,7 +82,11 @@ Base = declarative_base()
 
 
 def utc_now():
-    """Return current UTC as a naive datetime for current DB compatibility."""
+    """
+    Return current UTC as a naive datetime for
+    current database compatibility.
+    """
+
     return datetime.now(
         timezone.utc
     ).replace(
@@ -81,50 +97,120 @@ def utc_now():
 class Vendor(Base):
     __tablename__ = "vendors"
 
-    id = Column(Integer, primary_key=True)
-    legal_name = Column(String(255), nullable=False)
-    display_name = Column(String(255), nullable=False)
-    website = Column(String(255))
-    primary_domain = Column(String(255))
-    industry = Column(String(120))
-    headquarters_country = Column(String(120))
-    relationship_status = Column(String(50), default="Prospective")
-    criticality = Column(String(50), default="Moderate")
-    inherent_risk_score = Column(Float, default=0)
-    residual_risk_score = Column(Float, default=0)
-    external_risk_score = Column(Float, default=0)
-    control_effectiveness = Column(Float, default=50)
-    overall_risk_rating = Column(String(50), default="Moderate")
-    security_rating = Column(Float, default=0)
-    created_at = Column(DateTime, default=utc_now)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    legal_name = Column(
+        String(255),
+        nullable=False,
+    )
+
+    display_name = Column(
+        String(255),
+        nullable=False,
+    )
+
+    website = Column(
+        String(255)
+    )
+
+    primary_domain = Column(
+        String(255)
+    )
+
+    industry = Column(
+        String(120)
+    )
+
+    headquarters_country = Column(
+        String(120)
+    )
+
+    relationship_status = Column(
+        String(50),
+        default="Prospective",
+    )
+
+    criticality = Column(
+        String(50),
+        default="Moderate",
+    )
+
+    inherent_risk_score = Column(
+        Float,
+        default=0,
+    )
+
+    residual_risk_score = Column(
+        Float,
+        default=0,
+    )
+
+    external_risk_score = Column(
+        Float,
+        default=0,
+    )
+
+    control_effectiveness = Column(
+        Float,
+        default=50,
+    )
+
+    overall_risk_rating = Column(
+        String(50),
+        default="Moderate",
+    )
+
+    security_rating = Column(
+        Float,
+        default=0,
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+    )
 
     engagements = relationship(
         "Engagement",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+
     findings = relationship(
         "Finding",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+
     events = relationship(
         "MonitoringEvent",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+
     assessments = relationship(
         "Assessment",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+
     evidence = relationship(
         "Evidence",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
+
     approval_decisions = relationship(
         "ApprovalDecision",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+
+    control_dispositions = relationship(
+        "ControlDispositionRecord",
         back_populates="vendor",
         cascade="all, delete-orphan",
     )
@@ -133,23 +219,68 @@ class Vendor(Base):
 class Engagement(Base):
     __tablename__ = "engagements"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
-    service_name = Column(String(255), nullable=False)
-    service_description = Column(Text)
-    business_owner = Column(String(255))
-    department = Column(String(120))
-    business_criticality = Column(String(50))
-    data_classification = Column(String(80))
-    production_access = Column(Boolean, default=False)
-    network_access = Column(Boolean, default=False)
-    privileged_access = Column(Boolean, default=False)
-    ai_enabled = Column(Boolean, default=False)
-    status = Column(String(50), default="Active")
+
+    service_name = Column(
+        String(255),
+        nullable=False,
+    )
+
+    service_description = Column(
+        Text
+    )
+
+    business_owner = Column(
+        String(255)
+    )
+
+    department = Column(
+        String(120)
+    )
+
+    business_criticality = Column(
+        String(50)
+    )
+
+    data_classification = Column(
+        String(80)
+    )
+
+    production_access = Column(
+        Boolean,
+        default=False,
+    )
+
+    network_access = Column(
+        Boolean,
+        default=False,
+    )
+
+    privileged_access = Column(
+        Boolean,
+        default=False,
+    )
+
+    ai_enabled = Column(
+        Boolean,
+        default=False,
+    )
+
+    status = Column(
+        String(50),
+        default="Active",
+    )
 
     vendor = relationship(
         "Vendor",
@@ -160,35 +291,94 @@ class Engagement(Base):
 class Assessment(Base):
     __tablename__ = "assessments"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
-    assessment_type = Column(String(120), nullable=False)
-    assessment_reason = Column(String(120), default="New vendor")
-    status = Column(String(50), default="Not Started")
-    assigned_to = Column(String(255))
-    due_date = Column(String(40))
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
-    risk_score = Column(Float, default=0)
-    approval_status = Column(String(80), default="Pending")
-    notes = Column(Text)
 
-    proposed_scope_json = Column(Text)
-    approved_scope_json = Column(Text)
-    scope_override_rationale = Column(Text)
-    scope_confirmed_by = Column(String(255))
-    scope_confirmed_at = Column(DateTime)
+    assessment_type = Column(
+        String(120),
+        nullable=False,
+    )
 
-    created_at = Column(DateTime, default=utc_now)
+    assessment_reason = Column(
+        String(120),
+        default="New vendor",
+    )
+
+    status = Column(
+        String(50),
+        default="Not Started",
+    )
+
+    assigned_to = Column(
+        String(255)
+    )
+
+    due_date = Column(
+        String(40)
+    )
+
+    started_at = Column(
+        DateTime
+    )
+
+    completed_at = Column(
+        DateTime
+    )
+
+    risk_score = Column(
+        Float,
+        default=0,
+    )
+
+    approval_status = Column(
+        String(80),
+        default="Pending",
+    )
+
+    notes = Column(
+        Text
+    )
+
+    proposed_scope_json = Column(
+        Text
+    )
+
+    approved_scope_json = Column(
+        Text
+    )
+
+    scope_override_rationale = Column(
+        Text
+    )
+
+    scope_confirmed_by = Column(
+        String(255)
+    )
+
+    scope_confirmed_at = Column(
+        DateTime
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+    )
 
     vendor = relationship(
         "Vendor",
         back_populates="assessments",
     )
+
     evidence = relationship(
         "Evidence",
         back_populates="assessment",
@@ -198,46 +388,125 @@ class Assessment(Base):
 class Evidence(Base):
     __tablename__ = "evidence"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
+
     assessment_id = Column(
         Integer,
-        ForeignKey("assessments.id"),
+        ForeignKey(
+            "assessments.id"
+        ),
     )
-    document_type = Column(String(120), nullable=False)
-    document_name = Column(String(255), nullable=False)
-    document_date = Column(String(40))
-    coverage_start = Column(String(40))
-    coverage_end = Column(String(40))
-    expiration_date = Column(String(40))
-    issuer = Column(String(255))
-    opinion = Column(String(120))
-    exceptions_count = Column(Integer, default=0)
-    status = Column(String(80), default="Received")
-    storage_path = Column(String(500))
-    analyst_notes = Column(Text)
-    analyst_actions = Column(Text)
-    file_hash = Column(String(64))
-    extraction_method = Column(String(120))
-    extraction_confidence = Column(Float)
-    analyzed_at = Column(DateTime)
-    confidence_reasons = Column(Text)
-    confidence_gaps = Column(Text)
-    detected_exceptions = Column(Text)
-    created_at = Column(DateTime, default=utc_now)
+
+    document_type = Column(
+        String(120),
+        nullable=False,
+    )
+
+    document_name = Column(
+        String(255),
+        nullable=False,
+    )
+
+    document_date = Column(
+        String(40)
+    )
+
+    coverage_start = Column(
+        String(40)
+    )
+
+    coverage_end = Column(
+        String(40)
+    )
+
+    expiration_date = Column(
+        String(40)
+    )
+
+    issuer = Column(
+        String(255)
+    )
+
+    opinion = Column(
+        String(120)
+    )
+
+    exceptions_count = Column(
+        Integer,
+        default=0,
+    )
+
+    status = Column(
+        String(80),
+        default="Received",
+    )
+
+    storage_path = Column(
+        String(500)
+    )
+
+    analyst_notes = Column(
+        Text
+    )
+
+    analyst_actions = Column(
+        Text
+    )
+
+    file_hash = Column(
+        String(64)
+    )
+
+    extraction_method = Column(
+        String(120)
+    )
+
+    extraction_confidence = Column(
+        Float
+    )
+
+    analyzed_at = Column(
+        DateTime
+    )
+
+    confidence_reasons = Column(
+        Text
+    )
+
+    confidence_gaps = Column(
+        Text
+    )
+
+    detected_exceptions = Column(
+        Text
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+    )
 
     vendor = relationship(
         "Vendor",
         back_populates="evidence",
     )
+
     assessment = relationship(
         "Assessment",
         back_populates="evidence",
     )
+
     findings = relationship(
         "Finding",
         back_populates="evidence",
@@ -245,19 +514,28 @@ class Evidence(Base):
 
 
 class EvidenceRequestPackage(Base):
-    __tablename__ = "evidence_request_packages"
+    __tablename__ = (
+        "evidence_request_packages"
+    )
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
 
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
 
     assessment_id = Column(
         Integer,
-        ForeignKey("assessments.id"),
+        ForeignKey(
+            "assessments.id"
+        ),
         nullable=False,
     )
 
@@ -272,65 +550,136 @@ class EvidenceRequestPackage(Base):
         nullable=False,
     )
 
-    validation_items_json = Column(Text)
-    avoided_requests_json = Column(Text)
+    validation_items_json = Column(
+        Text
+    )
 
-    analyst_notes = Column(Text)
+    avoided_requests_json = Column(
+        Text
+    )
+
+    analyst_notes = Column(
+        Text
+    )
 
     created_by = Column(
         String(255),
         nullable=False,
     )
+
     created_at = Column(
         DateTime,
         default=utc_now,
         nullable=False,
     )
 
-    sent_by = Column(String(255))
-    sent_at = Column(DateTime)
+    sent_by = Column(
+        String(255)
+    )
 
-    received_at = Column(DateTime)
-    closed_at = Column(DateTime)
+    sent_at = Column(
+        DateTime
+    )
+
+    received_at = Column(
+        DateTime
+    )
+
+    closed_at = Column(
+        DateTime
+    )
 
 
 class Finding(Base):
     __tablename__ = "findings"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
+
     evidence_id = Column(
         Integer,
-        ForeignKey("evidence.id"),
+        ForeignKey(
+            "evidence.id"
+        ),
     )
-    source_exception_index = Column(Integer)
-    source_control_id = Column(String(80))
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    source = Column(String(80), default="Assessment")
-    severity = Column(String(40), default="Moderate")
-    status = Column(String(50), default="Open")
-    owner = Column(String(255))
-    target_date = Column(String(40))
+
+    source_exception_index = Column(
+        Integer
+    )
+
+    source_control_id = Column(
+        String(80)
+    )
+
+    title = Column(
+        String(255),
+        nullable=False,
+    )
+
+    description = Column(
+        Text
+    )
+
+    source = Column(
+        String(80),
+        default="Assessment",
+    )
+
+    severity = Column(
+        String(40),
+        default="Moderate",
+    )
+
+    status = Column(
+        String(50),
+        default="Open",
+    )
+
+    owner = Column(
+        String(255)
+    )
+
+    target_date = Column(
+        String(40)
+    )
 
     escalation_status = Column(
         String(50),
         default="Not Escalated",
     )
-    escalation_note = Column(Text)
-    escalated_by = Column(String(255))
-    escalated_at = Column(DateTime)
 
-    created_at = Column(DateTime, default=utc_now)
+    escalation_note = Column(
+        Text
+    )
+
+    escalated_by = Column(
+        String(255)
+    )
+
+    escalated_at = Column(
+        DateTime
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+    )
 
     vendor = relationship(
         "Vendor",
         back_populates="findings",
     )
+
     evidence = relationship(
         "Evidence",
         back_populates="findings",
@@ -338,12 +687,20 @@ class Finding(Base):
 
 
 class ApprovalDecision(Base):
-    __tablename__ = "approval_decisions"
+    __tablename__ = (
+        "approval_decisions"
+    )
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
 
@@ -351,10 +708,18 @@ class ApprovalDecision(Base):
         String(80),
         nullable=False,
     )
-    system_reasons_json = Column(Text)
 
-    evidence_completion_percent = Column(Float)
-    residual_risk_score = Column(Float)
+    system_reasons_json = Column(
+        Text
+    )
+
+    evidence_completion_percent = Column(
+        Float
+    )
+
+    residual_risk_score = Column(
+        Float
+    )
 
     decision = Column(
         String(80),
@@ -365,12 +730,26 @@ class ApprovalDecision(Base):
         String(255),
         nullable=False,
     )
-    approver_name = Column(String(255))
-    approver_email = Column(String(255))
-    approver_role = Column(String(80))
 
-    rationale = Column(Text)
-    conditions = Column(Text)
+    approver_name = Column(
+        String(255)
+    )
+
+    approver_email = Column(
+        String(255)
+    )
+
+    approver_role = Column(
+        String(80)
+    )
+
+    rationale = Column(
+        Text
+    )
+
+    conditions = Column(
+        Text
+    )
 
     decided_at = Column(
         DateTime,
@@ -384,54 +763,273 @@ class ApprovalDecision(Base):
     )
 
 
+class ControlDispositionRecord(Base):
+    __tablename__ = (
+        "control_disposition_records"
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey(
+            "vendors.id"
+        ),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey(
+            "assessments.id"
+        ),
+        nullable=False,
+    )
+
+    control_id = Column(
+        String(80),
+        nullable=False,
+    )
+
+    sufficiency_status = Column(
+        String(40),
+        nullable=False,
+    )
+
+    system_recommendation = Column(
+        String(80),
+        nullable=False,
+    )
+
+    final_disposition = Column(
+        String(80),
+        nullable=False,
+    )
+
+    supporting_evidence_ids_json = Column(
+        Text
+    )
+
+    review_evidence_ids_json = Column(
+        Text
+    )
+
+    system_reasons_json = Column(
+        Text
+    )
+
+    analyst_subject = Column(
+        String(255),
+        nullable=False,
+    )
+
+    analyst_name = Column(
+        String(255)
+    )
+
+    analyst_email = Column(
+        String(255)
+    )
+
+    analyst_role = Column(
+        String(80)
+    )
+
+    rationale = Column(
+        Text,
+        nullable=False,
+    )
+
+    compensating_control = Column(
+        Text
+    )
+
+    disposition_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    orchestrator_policy_version = Column(
+        String(40)
+    )
+
+    decided_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="control_dispositions",
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id = Column(Integer, primary_key=True)
-    actor_subject = Column(String(255), nullable=False)
-    actor_name = Column(String(255))
-    actor_email = Column(String(255))
-    actor_role = Column(String(80))
-    action = Column(String(120), nullable=False)
-    object_type = Column(String(120), nullable=False)
-    object_id = Column(String(120))
-    vendor_id = Column(Integer, ForeignKey("vendors.id"))
-    outcome = Column(String(40), nullable=False, default="success")
-    details_json = Column(Text)
-    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    actor_subject = Column(
+        String(255),
+        nullable=False,
+    )
+
+    actor_name = Column(
+        String(255)
+    )
+
+    actor_email = Column(
+        String(255)
+    )
+
+    actor_role = Column(
+        String(80)
+    )
+
+    action = Column(
+        String(120),
+        nullable=False,
+    )
+
+    object_type = Column(
+        String(120),
+        nullable=False,
+    )
+
+    object_id = Column(
+        String(120)
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey(
+            "vendors.id"
+        ),
+    )
+
+    outcome = Column(
+        String(40),
+        nullable=False,
+        default="success",
+    )
+
+    details_json = Column(
+        Text
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
 
 
 class MonitoringEvent(Base):
-    __tablename__ = "monitoring_events"
+    __tablename__ = (
+        "monitoring_events"
+    )
 
-    id = Column(Integer, primary_key=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
     vendor_id = Column(
         Integer,
-        ForeignKey("vendors.id"),
+        ForeignKey(
+            "vendors.id"
+        ),
         nullable=False,
     )
-    event_type = Column(String(120), nullable=False)
-    severity = Column(String(40), default="Moderate")
-    description = Column(Text)
-    previous_value = Column(String(120))
-    new_value = Column(String(120))
-    requires_review = Column(Boolean, default=True)
-    status = Column(String(50), default="Open")
 
-    materiality = Column(String(40))
-    decision_impact = Column(String(80))
-    recommended_action = Column(String(80))
-    affected_domain = Column(String(120))
-    recommendation_rationale = Column(Text)
-    recommendation_confidence = Column(String(40))
+    event_type = Column(
+        String(120),
+        nullable=False,
+    )
 
-    analyst_action = Column(String(80))
-    analyst_rationale = Column(Text)
-    analyst_followed_recommendation = Column(Boolean)
-    acted_by = Column(String(255))
-    acted_at = Column(DateTime)
+    severity = Column(
+        String(40),
+        default="Moderate",
+    )
 
-    event_date = Column(DateTime, default=utc_now)
+    description = Column(
+        Text
+    )
+
+    previous_value = Column(
+        String(120)
+    )
+
+    new_value = Column(
+        String(120)
+    )
+
+    requires_review = Column(
+        Boolean,
+        default=True,
+    )
+
+    status = Column(
+        String(50),
+        default="Open",
+    )
+
+    materiality = Column(
+        String(40)
+    )
+
+    decision_impact = Column(
+        String(80)
+    )
+
+    recommended_action = Column(
+        String(80)
+    )
+
+    affected_domain = Column(
+        String(120)
+    )
+
+    recommendation_rationale = Column(
+        Text
+    )
+
+    recommendation_confidence = Column(
+        String(40)
+    )
+
+    analyst_action = Column(
+        String(80)
+    )
+
+    analyst_rationale = Column(
+        Text
+    )
+
+    analyst_followed_recommendation = Column(
+        Boolean
+    )
+
+    acted_by = Column(
+        String(255)
+    )
+
+    acted_at = Column(
+        DateTime
+    )
+
+    event_date = Column(
+        DateTime,
+        default=utc_now,
+    )
 
     vendor = relationship(
         "Vendor",
@@ -440,7 +1038,12 @@ class MonitoringEvent(Base):
 
 
 def init_db():
-    """Application startup hook; Alembic owns schema creation/evolution."""
+    """
+    Application startup hook.
+
+    Alembic owns schema creation and evolution.
+    """
+
     return None
 
 
