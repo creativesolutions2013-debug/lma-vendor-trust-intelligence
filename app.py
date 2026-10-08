@@ -10,6 +10,7 @@ from src.db import (
     ApprovalDecision,
     Assessment,
     AuditLog,
+    ControlDispositionRecord,
     Engagement,
     Evidence,
     EvidenceRequestPackage,
@@ -27,6 +28,23 @@ from src.applicability import (
 )
 from src.assessment_orchestrator import (
     build_assessment_work_plan,
+)
+from src.control_disposition import (
+    AnalystDisposition,
+    DISPOSITION_COMPENSATING_CONTROL,
+    DISPOSITION_NOT_APPLICABLE,
+    DISPOSITION_NOT_SATISFIED,
+    DISPOSITION_PARTIALLY_SATISFIED,
+    DISPOSITION_SATISFIED,
+    evaluate_control_disposition,
+)
+
+from src.control_disposition_service import (
+    save_control_disposition,
+)
+
+from src.control_sufficiency import (
+    ControlEvidenceDecision,
 )
 from src.attention import calculate_vendor_attention
 from src.audit import record_audit_event
@@ -1801,55 +1819,147 @@ def render_vendors():
             st.info(
                 "No assessments yet."
             )
-    # =====================================================
+       # =====================================================
     # Assurance
     # =====================================================
 
     with tabs[3]:
-        st.markdown("### Assurance Decision Intelligence")
-
-        st.caption(
-            "See which controls apply, what existing evidence "
-            "already supports, and what still requires action."
+        st.markdown(
+            "### Assurance Decision Intelligence"
         )
 
-        profile = vendor_tier_profile(selected)
+        st.caption(
+            "Evaluate applicable controls using evidence, "
+            "identify what requires analyst judgment, and "
+            "preserve human control-disposition decisions "
+            "with policy and evidence traceability."
+        )
 
-        applicability = evaluate_applicability(
-            profile,
-            vendor_applicability_context(selected),
+        profile = vendor_tier_profile(
+            selected
+        )
+
+        applicability = (
+            evaluate_applicability(
+                profile,
+                vendor_applicability_context(
+                    selected
+                ),
+            )
         )
 
         vendor_evidence = (
-            session.query(Evidence)
-            .filter_by(vendor_id=selected.id)
+            session.query(
+                Evidence
+            )
+            .filter_by(
+                vendor_id=selected.id
+            )
             .all()
         )
 
-        work_plan = build_assessment_work_plan(
-            applicability,
-            vendor_evidence,
+        vendor_assessments = (
+            session.query(
+                Assessment
+            )
+            .filter_by(
+                vendor_id=selected.id
+            )
+            .order_by(
+                Assessment.created_at.desc()
+            )
+            .all()
+        )
+
+        # -------------------------------------------------
+        # Assessment context
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Assessment Context"
+        )
+
+        if vendor_assessments:
+
+            selected_assessment = (
+                st.selectbox(
+                    "Assessment",
+                    vendor_assessments,
+                    format_func=lambda item: (
+                        f"{item.assessment_type} "
+                        f"— {item.status} "
+                        f"(ID {item.id})"
+                    ),
+                    key=(
+                        "assurance_assessment_"
+                        f"{selected.id}"
+                    ),
+                )
+            )
+
+        else:
+            selected_assessment = None
+
+            st.warning(
+                "No assessment exists for this vendor. "
+                "A formal control disposition cannot be "
+                "recorded until an assessment exists."
+            )
+
+        # -------------------------------------------------
+        # Build assurance work plan
+        # -------------------------------------------------
+
+        work_plan = (
+            build_assessment_work_plan(
+                applicability,
+                vendor_evidence,
+            )
         )
 
         supported = sum(
             1
             for item in work_plan.items
-            if item.workflow_action == "Reuse Evidence"
+            if (
+                item.workflow_action
+                == "Reuse Evidence"
+            )
         )
 
         review = sum(
             1
             for item in work_plan.items
-            if item.workflow_action == "Analyst Validate"
+            if (
+                item.workflow_action
+                == "Analyst Validate"
+            )
         )
 
         unsupported = sum(
             1
             for item in work_plan.items
-            if item.workflow_action == "Ask Vendor"
+            if (
+                item.workflow_action
+                == "Ask Vendor"
+            )
         )
 
-        c1, c2, c3, c4 = st.columns(4)
+        governed_controls = sum(
+            1
+            for item in work_plan.items
+            if (
+                item.sufficiency_status
+                is not None
+            )
+        )
+
+        # -------------------------------------------------
+        # Assurance metrics
+        # -------------------------------------------------
+
+        c1, c2, c3, c4 = (
+            st.columns(4)
+        )
 
         c1.metric(
             "Applicable Controls",
@@ -1857,21 +1967,23 @@ def render_vendors():
         )
 
         c2.metric(
-            "Supported",
+            "Evidence Supported",
             supported,
         )
 
         c3.metric(
-            "Review",
+            "Analyst Review",
             review,
         )
 
         c4.metric(
-            "Unsupported",
+            "Vendor Input",
             unsupported,
         )
 
-        q1, q2, q3 = st.columns(3)
+        q1, q2, q3, q4 = (
+            st.columns(4)
+        )
 
         q1.metric(
             "Questionnaire Reduction",
@@ -1888,32 +2000,83 @@ def render_vendors():
             work_plan.questions_generated,
         )
 
-        st.markdown("### Assurance Delta")
+        q4.metric(
+            "Governed Control Claims",
+            governed_controls,
+        )
+
+        # -------------------------------------------------
+        # Assurance delta
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Assurance Delta"
+        )
 
         assurance_rows = []
 
         for item in work_plan.items:
-            if item.workflow_action == "Reuse Evidence":
-                status = "✅ Supported"
 
-            elif item.workflow_action == "Analyst Validate":
-                status = "🔎 Review"
+            if (
+                item.workflow_action
+                == "Reuse Evidence"
+            ):
+                status = (
+                    "✅ Evidence Supported"
+                )
+
+            elif (
+                item.workflow_action
+                == "Analyst Validate"
+            ):
+                status = (
+                    "🔎 Analyst Review"
+                )
 
             else:
-                status = "❌ Unsupported"
+                status = (
+                    "❌ Additional Evidence"
+                )
+
+            governed_disposition = (
+                item
+                .recommended_control_disposition
+                or "Not yet established"
+            )
 
             assurance_rows.append(
                 {
-                    "Control": item.control_id,
-                    "Domain": item.domain,
-                    "Status": status,
-                    "Requirement": item.requirement,
-                    "Action": item.workflow_action,
-                    "Evidence": (
+                    "Control": (
+                        item.control_id
+                    ),
+                    "Domain": (
+                        item.domain
+                    ),
+                    "Evidence State": (
+                        status
+                    ),
+                    "Sufficiency": (
+                        item.sufficiency_status
+                        or "Document-level only"
+                    ),
+                    "Recommended Disposition": (
+                        governed_disposition
+                    ),
+                    "Requirement": (
+                        item.requirement
+                    ),
+                    "Action": (
+                        item.workflow_action
+                    ),
+                    "Evidence Requirements": (
                         ", ".join(
-                            item.evidence_requirements
+                            item
+                            .evidence_requirements
                         )
-                        if item.evidence_requirements
+                        if (
+                            item
+                            .evidence_requirements
+                        )
                         else "—"
                     ),
                 }
@@ -1921,16 +2084,535 @@ def render_vendors():
 
         if assurance_rows:
             st.dataframe(
-                pd.DataFrame(assurance_rows),
+                pd.DataFrame(
+                    assurance_rows
+                ),
                 use_container_width=True,
                 hide_index=True,
             )
+
+        else:
+            st.info(
+                "No applicable controls were "
+                "identified."
+            )
+
+        # -------------------------------------------------
+        # Governance notice
+        # -------------------------------------------------
+
+        if governed_controls == 0:
+            st.info(
+                "Current controls are still being evaluated "
+                "through document-level evidence fallback. "
+                "Formal analyst control dispositions are "
+                "disabled until a structured evidence-to-control "
+                "claim establishes control-level sufficiency."
+            )
+
+        else:
+            st.success(
+                f"{governed_controls} control(s) currently "
+                "have structured control-level assurance "
+                "conclusions available for governed review."
+            )
+
+        # -------------------------------------------------
+        # Analyst control review
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Analyst Control Review"
+        )
+
+        reviewable_items = [
+            item
+            for item in work_plan.items
+            if (
+                item.sufficiency_status
+                is not None
+            )
+        ]
+
+        if (
+            selected_assessment
+            is None
+        ):
+            st.info(
+                "Create or select an assessment "
+                "before recording control "
+                "dispositions."
+            )
+
+        elif not reviewable_items:
+            st.info(
+                "No structured control-level "
+                "assurance decisions are available "
+                "for analyst disposition yet."
+            )
+
+        else:
+            selected_control = (
+                st.selectbox(
+                    "Control to review",
+                    reviewable_items,
+                    format_func=lambda item: (
+                        f"{item.control_id} — "
+                        f"{item.domain} — "
+                        f"{item.recommended_control_disposition}"
+                    ),
+                    key=(
+                        "control_review_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}"
+                    ),
+                )
+            )
+
+            # ---------------------------------------------
+            # Current system recommendation
+            # ---------------------------------------------
+
+            st.write(
+                "**Requirement:** "
+                f"{selected_control.requirement}"
+            )
+
+            st.write(
+                "**Sufficiency status:** "
+                f"{selected_control.sufficiency_status}"
+            )
+
+            st.write(
+                "**System recommendation:** "
+                f"{selected_control.recommended_control_disposition}"
+            )
+
+            if (
+                selected_control
+                .supporting_evidence_ids
+            ):
+                st.write(
+                    "**Supporting evidence IDs:** "
+                    + ", ".join(
+                        str(item)
+                        for item
+                        in selected_control
+                        .supporting_evidence_ids
+                    )
+                )
+
+            if (
+                selected_control
+                .review_evidence_ids
+            ):
+                st.write(
+                    "**Evidence requiring review:** "
+                    + ", ".join(
+                        str(item)
+                        for item
+                        in selected_control
+                        .review_evidence_ids
+                    )
+                )
+
+            st.caption(
+                selected_control.reason
+            )
+
+            # ---------------------------------------------
+            # Prior control disposition
+            # ---------------------------------------------
+
+            previous_dispositions = (
+                session.query(
+                    ControlDispositionRecord
+                )
+                .filter_by(
+                    vendor_id=selected.id,
+                    assessment_id=(
+                        selected_assessment.id
+                    ),
+                    control_id=(
+                        selected_control.control_id
+                    ),
+                )
+                .order_by(
+                    ControlDispositionRecord
+                    .decided_at
+                    .desc()
+                )
+                .all()
+            )
+
+            if previous_dispositions:
+
+                latest_disposition = (
+                    previous_dispositions[0]
+                )
+
+                st.markdown(
+                    "#### Latest Recorded Decision"
+                )
+
+                d1, d2, d3 = (
+                    st.columns(3)
+                )
+
+                d1.metric(
+                    "Final Disposition",
+                    latest_disposition
+                    .final_disposition,
+                )
+
+                d2.metric(
+                    "Analyst",
+                    (
+                        latest_disposition
+                        .analyst_name
+                        or latest_disposition
+                        .analyst_subject
+                    ),
+                )
+
+                d3.metric(
+                    "Policy",
+                    latest_disposition
+                    .disposition_policy_version,
+                )
+
+                st.write(
+                    "**Rationale:** "
+                    f"{latest_disposition.rationale}"
+                )
+
+                if (
+                    latest_disposition
+                    .compensating_control
+                ):
+                    st.write(
+                        "**Compensating control:** "
+                        f"{latest_disposition.compensating_control}"
+                    )
+
+            # ---------------------------------------------
+            # Analyst disposition form
+            # ---------------------------------------------
+
+            disposition_options = [
+                DISPOSITION_SATISFIED,
+                DISPOSITION_PARTIALLY_SATISFIED,
+                DISPOSITION_NOT_SATISFIED,
+                DISPOSITION_NOT_APPLICABLE,
+                DISPOSITION_COMPENSATING_CONTROL,
+            ]
+
+            recommended = (
+                selected_control
+                .recommended_control_disposition
+            )
+
+            if (
+                recommended
+                in disposition_options
+            ):
+                default_disposition_index = (
+                    disposition_options.index(
+                        recommended
+                    )
+                )
+
+            else:
+                default_disposition_index = 0
+
+            with st.form(
+                (
+                    "control_disposition_form_"
+                    f"{selected.id}_"
+                    f"{selected_assessment.id}_"
+                    f"{selected_control.control_id}"
+                )
+            ):
+
+                st.write(
+                    "**Analyst:** "
+                    f"{CURRENT_USER.display_name} "
+                    f"({CURRENT_USER.role})"
+                )
+
+                final_disposition = (
+                    st.selectbox(
+                        "Final control disposition",
+                        disposition_options,
+                        index=(
+                            default_disposition_index
+                        ),
+                    )
+                )
+
+                disposition_rationale = (
+                    st.text_area(
+                        "Disposition rationale *",
+                        placeholder=(
+                            "Explain why the available "
+                            "evidence supports this "
+                            "control disposition."
+                        ),
+                    )
+                )
+
+                compensating_control = ""
+
+                if (
+                    final_disposition
+                    == (
+                        DISPOSITION_COMPENSATING_CONTROL
+                    )
+                ):
+                    compensating_control = (
+                        st.text_area(
+                            "Compensating control *",
+                            placeholder=(
+                                "Describe the alternative "
+                                "control and why it adequately "
+                                "reduces the identified risk."
+                            ),
+                        )
+                    )
+
+                disposition_submitted = (
+                    st.form_submit_button(
+                        "Record control disposition",
+                        type="primary",
+                    )
+                )
+
+            if disposition_submitted:
+
+                errors = []
+
+                if not (
+                    disposition_rationale
+                    .strip()
+                ):
+                    errors.append(
+                        "Disposition rationale "
+                        "is required."
+                    )
+
+                if (
+                    final_disposition
+                    == (
+                        DISPOSITION_COMPENSATING_CONTROL
+                    )
+                    and not (
+                        compensating_control
+                        .strip()
+                    )
+                ):
+                    errors.append(
+                        "A compensating control "
+                        "description is required."
+                    )
+
+                if errors:
+                    for error in errors:
+                        st.error(
+                            error
+                        )
+
+                else:
+                    try:
+                        sufficiency_snapshot = (
+                            ControlEvidenceDecision(
+                                control_id=(
+                                    selected_control
+                                    .control_id
+                                ),
+                                status=(
+                                    selected_control
+                                    .sufficiency_status
+                                ),
+                                supporting_evidence_ids=(
+                                    selected_control
+                                    .supporting_evidence_ids
+                                ),
+                                evidence_review_ids=(
+                                    selected_control
+                                    .review_evidence_ids
+                                ),
+                                reasons=(
+                                    (
+                                        selected_control
+                                        .reason,
+                                    )
+                                ),
+                                analyst_review_required=(
+                                    selected_control
+                                    .disposition_review_required
+                                ),
+                            )
+                        )
+
+                        analyst_decision = (
+                            AnalystDisposition(
+                                control_id=(
+                                    selected_control
+                                    .control_id
+                                ),
+                                disposition=(
+                                    final_disposition
+                                ),
+                                rationale=(
+                                    disposition_rationale
+                                    .strip()
+                                ),
+                                decided_by=(
+                                    CURRENT_USER.subject
+                                ),
+                                compensating_control=(
+                                    (
+                                        compensating_control
+                                        .strip()
+                                    )
+                                    or None
+                                ),
+                            )
+                        )
+
+                        governed_decision = (
+                            evaluate_control_disposition(
+                                sufficiency_snapshot,
+                                analyst_decision,
+                            )
+                        )
+
+                        saved_disposition = (
+                            save_control_disposition(
+                                session,
+                                vendor_id=(
+                                    selected.id
+                                ),
+                                assessment_id=(
+                                    selected_assessment.id
+                                ),
+                                sufficiency_status=(
+                                    selected_control
+                                    .sufficiency_status
+                                ),
+                                decision=(
+                                    governed_decision
+                                ),
+                                principal=(
+                                    CURRENT_USER
+                                ),
+                                orchestrator_policy_version=(
+                                    work_plan
+                                    .policy_version
+                                ),
+                            )
+                        )
+
+                        session.commit()
+
+                        st.success(
+                            "Control disposition "
+                            f"{saved_disposition.final_disposition} "
+                            "recorded successfully."
+                        )
+
+                        st.rerun()
+
+                    except (
+                        ValueError,
+                        PermissionError,
+                    ) as exc:
+
+                        session.rollback()
+
+                        st.error(
+                            str(exc)
+                        )
+
+                    except Exception:
+
+                        session.rollback()
+
+                        st.error(
+                            "Unable to record the "
+                            "control disposition."
+                        )
+
+            # ---------------------------------------------
+            # Decision history
+            # ---------------------------------------------
+
+            if previous_dispositions:
+                with st.expander(
+                    "Control Disposition History"
+                ):
+
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {
+                                    "Control": (
+                                        item
+                                        .control_id
+                                    ),
+                                    "System Recommendation": (
+                                        item
+                                        .system_recommendation
+                                    ),
+                                    "Final Disposition": (
+                                        item
+                                        .final_disposition
+                                    ),
+                                    "Analyst": (
+                                        item
+                                        .analyst_name
+                                        or item
+                                        .analyst_subject
+                                    ),
+                                    "Role": (
+                                        item
+                                        .analyst_role
+                                    ),
+                                    "Rationale": (
+                                        item
+                                        .rationale
+                                    ),
+                                    "Policy": (
+                                        item
+                                        .disposition_policy_version
+                                    ),
+                                    "Orchestrator": (
+                                        item
+                                        .orchestrator_policy_version
+                                    ),
+                                    "Decided At": (
+                                        item
+                                        .decided_at
+                                    ),
+                                }
+                                for item
+                                in previous_dispositions
+                            ]
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+        # -------------------------------------------------
+        # Targeted vendor questions
+        # -------------------------------------------------
 
         vendor_questions = [
             item
             for item in work_plan.items
             if (
-                item.workflow_action == "Ask Vendor"
+                item.workflow_action
+                == "Ask Vendor"
                 and item.question
             )
         ]
@@ -1939,7 +2621,9 @@ def render_vendors():
             with st.expander(
                 "Targeted Vendor Questions"
             ):
-                for item in vendor_questions:
+                for item in (
+                    vendor_questions
+                ):
                     st.markdown(
                         f"**{item.control_id} — "
                         f"{item.domain}**"
@@ -1949,10 +2633,26 @@ def render_vendors():
                         item.question
                     )
 
+                    if (
+                        item
+                        .evidence_requirements
+                    ):
+                        st.caption(
+                            "Requested evidence: "
+                            + ", ".join(
+                                item
+                                .evidence_requirements
+                            )
+                        )
+
                     st.divider()
 
+        # -------------------------------------------------
+        # Policy traceability
+        # -------------------------------------------------
+
         st.caption(
-            f"Policies: "
+            "Policy chain: "
             f"{profile.policy_version} → "
             f"{applicability.policy_version} → "
             f"{work_plan.policy_version}"
