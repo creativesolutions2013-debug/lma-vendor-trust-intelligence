@@ -3035,6 +3035,162 @@ def render_vendors():
                     )
                 )
 
+                # -----------------------------------------
+                # Control decision lineage
+                # -----------------------------------------
+
+                st.markdown(
+                    "#### Control Decision Lineage"
+                )
+
+                trace_work_item = next(
+                    (
+                        item
+                        for item in work_plan.items
+                        if (
+                            item.control_id
+                            == trace_control_id
+                        )
+                    ),
+                    None,
+                )
+
+                latest_trace_disposition = (
+                    session.query(
+                        ControlDispositionRecord
+                    )
+                    .filter_by(
+                        vendor_id=selected.id,
+                        assessment_id=(
+                            selected_assessment.id
+                        ),
+                        control_id=(
+                            trace_control_id
+                        ),
+                    )
+                    .order_by(
+                        ControlDispositionRecord
+                        .decided_at
+                        .desc(),
+                        ControlDispositionRecord
+                        .id
+                        .desc(),
+                    )
+                    .first()
+                )
+
+                if trace_work_item is None:
+                    st.info(
+                        "No current assessment work item "
+                        "was found for this control."
+                    )
+
+                else:
+                    lineage_c1, lineage_c2, lineage_c3 = (
+                        st.columns(3)
+                    )
+
+                    lineage_c1.metric(
+                        "Sufficiency",
+                        (
+                            trace_work_item
+                            .sufficiency_status
+                            or "Not established"
+                        ),
+                    )
+
+                    lineage_c2.metric(
+                        "System Recommendation",
+                        (
+                            trace_work_item
+                            .recommended_control_disposition
+                            or "Not established"
+                        ),
+                    )
+
+                    lineage_c3.metric(
+                        "Final Disposition",
+                        (
+                            latest_trace_disposition.final_disposition
+                            if latest_trace_disposition
+                            else "Not yet confirmed"
+                        ),
+                    )
+
+                    st.write(
+                        "**Workflow action:** "
+                        f"{trace_work_item.workflow_action}"
+                    )
+
+                    if trace_work_item.supporting_evidence_ids:
+                        st.write(
+                            "**Supporting evidence IDs:** "
+                            + ", ".join(
+                                str(item)
+                                for item in (
+                                    trace_work_item
+                                    .supporting_evidence_ids
+                                )
+                            )
+                        )
+
+                    if trace_work_item.review_evidence_ids:
+                        st.write(
+                            "**Evidence requiring review:** "
+                            + ", ".join(
+                                str(item)
+                                for item in (
+                                    trace_work_item
+                                    .review_evidence_ids
+                                )
+                            )
+                        )
+
+                    if latest_trace_disposition:
+                        st.success(
+                            "Human-confirmed control disposition "
+                            "is recorded."
+                        )
+
+                        st.write(
+                            "**Disposition rationale:** "
+                            f"{latest_trace_disposition.rationale}"
+                        )
+
+                        st.write(
+                            "**Decision owner:** ",
+                            (
+                                latest_trace_disposition.analyst_name
+                                or latest_trace_disposition.analyst_subject
+                            ),
+                        )
+
+                        st.write(
+                            "**Disposition policy:** "
+                            f"{latest_trace_disposition.disposition_policy_version}"
+                        )
+
+                        st.write(
+                            "**Orchestrator policy:** ",
+                            (
+                                latest_trace_disposition.orchestrator_policy_version
+                                or "Not recorded"
+                            ),
+                        )
+
+                        if latest_trace_disposition.compensating_control:
+                            st.write(
+                                "**Compensating control:** "
+                                f"{latest_trace_disposition.compensating_control}"
+                            )
+
+                    else:
+                        st.warning(
+                            "The system has produced a control "
+                            "recommendation, but no human-confirmed "
+                            "final disposition has been recorded yet."
+                        )
+
                 if not claim_history:
                     st.info(
                         "No governed claim history was found "
