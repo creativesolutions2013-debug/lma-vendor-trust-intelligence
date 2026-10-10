@@ -33,6 +33,10 @@ from src.control_effectiveness import (
     evaluate_control_effectiveness,
 )
 
+from src.control_effectiveness_guardrail import (
+    select_control_effectiveness_input,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -2018,6 +2022,24 @@ def render_vendors():
                 confirmed_dispositions,
             )
         )
+
+
+        guarded_effectiveness = (
+            select_control_effectiveness_input(
+                legacy_effectiveness=(
+                    selected.control_effectiveness
+                    or 0
+                ),
+                governed_effectiveness=(
+                    control_effectiveness_result
+                    .effectiveness_score
+                ),
+                decision_coverage_percent=(
+                    control_effectiveness_result
+                    .decision_coverage_percent
+                ),
+            )
+        )
             
 
         # -------------------------------------------------
@@ -2118,6 +2140,47 @@ def render_vendors():
             f"{control_effectiveness_result.not_applicable_controls} "
             "not applicable. "
             "Unknown controls are not treated as failed controls."
+        )
+
+        st.markdown(
+            "#### Residual Risk Input Preview"
+        )
+
+        r1, r2, r3, r4 = st.columns(4)
+
+        r1.metric(
+            "Existing Control Input",
+            f"{guarded_effectiveness.legacy_effectiveness:.0f}%",
+        )
+
+        r2.metric(
+            "Governed Effectiveness",
+            (
+                f"{guarded_effectiveness.governed_effectiveness:.0f}%"
+                if guarded_effectiveness.governed_effectiveness
+                is not None
+                else "—"
+            ),
+        )
+
+        r3.metric(
+            "Effective Risk Input",
+            f"{guarded_effectiveness.effective_control_input:.0f}%",
+        )
+
+        r4.metric(
+            "Guardrail Mode",
+            guarded_effectiveness.mode,
+        )
+
+        st.caption(
+            guarded_effectiveness.reason
+        )
+
+        st.caption(
+            f"Policy {guarded_effectiveness.policy_version} · "
+            f"Governed weight {guarded_effectiveness.governed_weight:.0%} · "
+            f"Legacy weight {guarded_effectiveness.legacy_weight:.0%}"
         )
 
         # -------------------------------------------------
