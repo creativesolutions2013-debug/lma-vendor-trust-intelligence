@@ -37,6 +37,10 @@ from src.control_effectiveness_guardrail import (
     select_control_effectiveness_input,
 )
 
+from src.governed_residual_risk import (
+    preview_governed_residual_risk,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -2040,6 +2044,27 @@ def render_vendors():
                 ),
             )
         )
+
+
+        governed_risk_preview = (
+            preview_governed_residual_risk(
+                inherent_risk=(
+                    selected.inherent_risk_score
+                    or 0
+                ),
+                external_risk=(
+                    selected.external_risk_score
+                    or 0
+                ),
+                existing_residual_risk=(
+                    selected.residual_risk_score
+                    or 0
+                ),
+                guarded_effectiveness=(
+                    guarded_effectiveness
+                ),
+            )
+        )
             
 
         # -------------------------------------------------
@@ -2181,6 +2206,50 @@ def render_vendors():
             f"Policy {guarded_effectiveness.policy_version} · "
             f"Governed weight {guarded_effectiveness.governed_weight:.0%} · "
             f"Legacy weight {guarded_effectiveness.legacy_weight:.0%}"
+        )
+
+        st.markdown(
+            "### Governed Residual Risk Preview"
+        )
+
+        g1, g2, g3, g4 = st.columns(4)
+
+        g1.metric(
+            "Current Residual Risk",
+            f"{governed_risk_preview.existing_residual_risk:.1f}",
+        )
+
+        g2.metric(
+            "Governed Preview Risk",
+            f"{governed_risk_preview.preview_residual_risk:.1f}",
+            delta=(
+                f"{governed_risk_preview.score_delta:+.1f}"
+            ),
+        )
+
+        g3.metric(
+            "Preview Rating",
+            governed_risk_preview.preview_rating,
+        )
+
+        g4.metric(
+            "Activation Ready",
+            (
+                "Yes"
+                if governed_risk_preview.ready_for_activation
+                else "No"
+            ),
+        )
+
+        st.caption(
+            governed_risk_preview.activation_reason
+        )
+
+        st.caption(
+            f"Policy {governed_risk_preview.policy_version} · "
+            f"Control input mode {governed_risk_preview.control_input_mode} · "
+            f"Effective control input "
+            f"{governed_risk_preview.effective_control_input:.0f}%"
         )
 
         # -------------------------------------------------
