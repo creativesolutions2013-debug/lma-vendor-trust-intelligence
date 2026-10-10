@@ -29,6 +29,10 @@ from src.applicability import (
 from src.assessment_orchestrator import (
     build_assessment_work_plan,
 )
+from src.control_effectiveness import (
+    evaluate_control_effectiveness,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -1916,6 +1920,9 @@ def render_vendors():
                 )
             )
 
+
+
+        else:
             st.warning(
                 "No assessment exists for this vendor. "
                 "A formal control disposition cannot be "
@@ -1982,6 +1989,35 @@ def render_vendors():
         governed_controls = len(
             accepted_control_claims
         )
+
+
+        applicable_control_ids = tuple(
+            control.control_id
+            for control in applicability.controls
+        )
+
+        confirmed_dispositions = ()
+
+        if selected_assessment is not None:
+            confirmed_dispositions = tuple(
+                session.query(
+                    ControlDispositionRecord
+                )
+                .filter_by(
+                    vendor_id=selected.id,
+                    assessment_id=(
+                        selected_assessment.id
+                    ),
+                )
+                .all()
+            )
+
+        control_effectiveness_result = (
+            evaluate_control_effectiveness(
+                applicable_control_ids,
+                confirmed_dispositions,
+            )
+        )
             
 
         # -------------------------------------------------
@@ -2034,6 +2070,54 @@ def render_vendors():
         q4.metric(
             "Governed Control Claims",
             governed_controls,
+        )
+
+        e1, e2, e3, e4 = (
+            st.columns(4)
+        )
+
+        effectiveness_value = (
+            (
+                f"{control_effectiveness_result.effectiveness_score:.0f}%"
+            )
+            if (
+                control_effectiveness_result
+                .effectiveness_score
+                is not None
+            )
+            else "—"
+        )
+
+        e1.metric(
+            "Control Effectiveness",
+            effectiveness_value,
+        )
+
+        e2.metric(
+            "Decision Coverage",
+            (
+                f"{control_effectiveness_result.decision_coverage_percent}%"
+            ),
+        )
+
+        e3.metric(
+            "Governance Status",
+            control_effectiveness_result.status,
+        )
+
+        e4.metric(
+            "Effectiveness Policy",
+            control_effectiveness_result.policy_version,
+        )
+
+        st.caption(
+            f"{control_effectiveness_result.scored_controls} "
+            "control(s) scored · "
+            f"{control_effectiveness_result.unknown_controls} "
+            "awaiting human disposition · "
+            f"{control_effectiveness_result.not_applicable_controls} "
+            "not applicable. "
+            "Unknown controls are not treated as failed controls."
         )
 
         # -------------------------------------------------
