@@ -14,6 +14,7 @@ from src.control_claim_review import (
 )
 from src.control_claim_service import (
     load_accepted_control_claims,
+    load_control_claim_history,
     save_control_claim,
 )
 from src.control_claims import (
@@ -598,3 +599,159 @@ def test_confirming_identity_must_match_authenticated_principal():
         )
 
     session.close()
+
+
+def test_history_includes_evidence_and_provenance():
+    session = make_session()
+
+    vendor, assessment, evidence = (
+        seed_context(
+            session
+        )
+    )
+
+    principal = make_principal()
+
+    save_control_claim(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        review=make_review(
+            evidence_id=evidence.id,
+            principal=principal,
+        ),
+        principal=principal,
+    )
+
+    session.commit()
+
+    history = load_control_claim_history(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+    )
+
+    assert len(history) == 1
+
+    item = history[0]
+
+    assert item.control_id == "IAM-01"
+    assert item.evidence_id == evidence.id
+    assert item.evidence_name == "Example SOC 2"
+    assert item.evidence_type == "SOC 2 Type II"
+
+    assert item.confirmed_by == "analyst-123"
+    assert item.confidence == 0.92
+
+    assert item.claim_policy_version == "CG-1.1"
+    assert item.review_policy_version == "CCR-1.0"
+
+    assert item.is_current is True
+
+    session.close()
+
+
+def test_history_marks_latest_record_current():
+    session = make_session()
+
+    vendor, assessment, evidence = (
+        seed_context(
+            session
+        )
+    )
+
+    principal = make_principal()
+
+    save_control_claim(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        review=make_review(
+            evidence_id=evidence.id,
+            principal=principal,
+            exception_present=True,
+        ),
+        principal=principal,
+    )
+
+    save_control_claim(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        review=make_review(
+            evidence_id=evidence.id,
+            principal=principal,
+            exception_present=False,
+        ),
+        principal=principal,
+    )
+
+    session.commit()
+
+    history = load_control_claim_history(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        control_id="IAM-01",
+    )
+
+    assert len(history) == 2
+
+    assert history[0].is_current is True
+    assert history[0].exception_present is False
+
+    assert history[1].is_current is False
+    assert history[1].exception_present is True
+
+    session.close()
+
+
+def test_history_can_filter_by_control():
+    session = make_session()
+
+    vendor, assessment, evidence = (
+        seed_context(
+            session
+        )
+    )
+
+    principal = make_principal()
+
+    save_control_claim(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        review=make_review(
+            evidence_id=evidence.id,
+            principal=principal,
+            control_id="IAM-01",
+        ),
+        principal=principal,
+    )
+
+    save_control_claim(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        review=make_review(
+            evidence_id=evidence.id,
+            principal=principal,
+            control_id="VM-01",
+        ),
+        principal=principal,
+    )
+
+    session.commit()
+
+    history = load_control_claim_history(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        control_id="IAM-01",
+    )
+
+    assert len(history) == 1
+    assert history[0].control_id == "IAM-01"
+
+    session.close()
+

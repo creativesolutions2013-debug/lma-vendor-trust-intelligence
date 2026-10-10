@@ -50,6 +50,7 @@ from src.control_claim_review import (
 
 from src.control_claim_service import (
     load_accepted_control_claims,
+    load_control_claim_history,
     save_control_claim,
 )
 
@@ -2976,8 +2977,218 @@ def render_vendors():
                         use_container_width=True,
                         hide_index=True,
                     )
-
+         
         # -------------------------------------------------
+        # -------------------------------------------------
+        # Governed claim trace
+        # -------------------------------------------------
+
+        st.markdown(
+            "### Governed Claim Trace"
+        )
+
+        st.caption(
+            "See the evidence, analyst confirmation, provenance, "
+            "and policy versions behind the current control conclusion."
+        )
+
+        if selected_assessment is None:
+            st.info(
+                "Select an assessment to view governed claim history."
+            )
+
+        else:
+            trace_control_ids = sorted(
+                {
+                    claim.control_id
+                    for claim in accepted_control_claims
+                }
+            )
+
+            if not trace_control_ids:
+                st.info(
+                    "No governed control claims are available "
+                    "for this assessment."
+                )
+
+            else:
+                trace_control_id = st.selectbox(
+                    "Control trace",
+                    trace_control_ids,
+                    key=(
+                        "governed_claim_trace_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}"
+                    ),
+                )
+
+                claim_history = (
+                    load_control_claim_history(
+                        session,
+                        vendor_id=selected.id,
+                        assessment_id=(
+                            selected_assessment.id
+                        ),
+                        control_id=(
+                            trace_control_id
+                        ),
+                    )
+                )
+
+                if not claim_history:
+                    st.info(
+                        "No governed claim history was found "
+                        "for this control."
+                    )
+
+                else:
+                    current_items = [
+                        item
+                        for item in claim_history
+                        if item.is_current
+                    ]
+
+                    st.write(
+                        f"**Current governed evidence mappings:** "
+                        f"{len(current_items)}"
+                    )
+
+                    for item in claim_history:
+                        state_label = (
+                            "Current"
+                            if item.is_current
+                            else "Historical"
+                        )
+
+                        expander_label = (
+                            f"{state_label} — "
+                            f"{item.evidence_name} "
+                            f"(Evidence {item.evidence_id})"
+                        )
+
+                        with st.expander(
+                            expander_label,
+                            expanded=item.is_current,
+                        ):
+                            c1, c2, c3 = st.columns(3)
+
+                            c1.metric(
+                                "Confidence",
+                                f"{item.confidence:.0%}",
+                            )
+
+                            c2.metric(
+                                "Claim Policy",
+                                item.claim_policy_version,
+                            )
+
+                            c3.metric(
+                                "Review Policy",
+                                (
+                                    item.review_policy_version
+                                    or "Not recorded"
+                                ),
+                            )
+
+                            st.write(
+                                "**Evidence type:** "
+                                f"{item.evidence_type}"
+                            )
+
+                            st.write(
+                                "**Control:** "
+                                f"{item.control_id}"
+                            )
+
+                            st.write(
+                                "**Source reference:** "
+                                f"{item.source_reference}"
+                            )
+
+                            st.write(
+                                "**Claim statement:** "
+                                f"{item.statement}"
+                            )
+
+                            fact_rows = [
+                                {
+                                    "Assurance Fact": "Control covered",
+                                    "Confirmed": (
+                                        "Yes" if item.covered else "No"
+                                    ),
+                                },
+                                {
+                                    "Assurance Fact": (
+                                        "Operating effectiveness tested"
+                                    ),
+                                    "Confirmed": (
+                                        "Yes" if item.tested else "No"
+                                    ),
+                                },
+                                {
+                                    "Assurance Fact": (
+                                        "Assessment scope matches"
+                                    ),
+                                    "Confirmed": (
+                                        "Yes"
+                                        if item.scope_matches
+                                        else "No"
+                                    ),
+                                },
+                                {
+                                    "Assurance Fact": (
+                                        "Service scope matches"
+                                    ),
+                                    "Confirmed": (
+                                        "Yes"
+                                        if item.service_matches
+                                        else "No"
+                                    ),
+                                },
+                                {
+                                    "Assurance Fact": (
+                                        "Relevant exception present"
+                                    ),
+                                    "Confirmed": (
+                                        "Yes"
+                                        if item.exception_present
+                                        else "No"
+                                    ),
+                                },
+                            ]
+
+                            st.dataframe(
+                                pd.DataFrame(fact_rows),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                            st.write(
+                                "**Confirmed by:** "
+                                f"{item.confirmed_by or 'Unknown'}"
+                            )
+
+                            st.write(
+                                "**Analyst rationale:** "
+                                f"{item.analyst_rationale or 'Not recorded'}"
+                            )
+
+                            st.write(
+                                "**Recorded at:** "
+                                f"{format_analysis_time(item.created_at)}"
+                            )
+
+                            if item.is_current:
+                                st.success(
+                                    "This claim is part of the current "
+                                    "governed evidence state."
+                                )
+                            else:
+                                st.caption(
+                                    "Historical version retained for "
+                                    "audit traceability."
+                                )
+
         # Targeted vendor questions
         # -------------------------------------------------
 

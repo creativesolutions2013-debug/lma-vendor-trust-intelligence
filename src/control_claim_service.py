@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from src.audit import record_audit_event
 from src.authz import (
     PERMISSION_ASSESSMENT_MANAGE,
@@ -15,7 +17,40 @@ from src.control_sufficiency import (
 )
 from src.db import (
     ControlClaimRecord,
+    Evidence,
 )
+
+
+@dataclass(frozen=True)
+class ControlClaimHistoryItem:
+    record_id: int
+
+    evidence_id: int
+    evidence_name: str
+    evidence_type: str
+
+    control_id: str
+
+    statement: str
+    source_reference: str
+
+    covered: bool
+    tested: bool
+    scope_matches: bool
+    service_matches: bool
+    exception_present: bool
+
+    confidence: float
+
+    confirmed_by: str | None
+    analyst_rationale: str | None
+
+    claim_policy_version: str
+    review_policy_version: str | None
+
+    created_at: object
+
+    is_current: bool
 
 
 def save_control_claim(
@@ -245,3 +280,141 @@ def load_accepted_control_claims(
         for record
         in latest.values()
     )
+
+
+def load_control_claim_history(
+    session,
+    *,
+    vendor_id: int,
+    assessment_id: int,
+    control_id: str | None = None,
+) -> tuple[ControlClaimHistoryItem, ...]:
+    """
+    Load governed claim history with evidence provenance.
+
+    Historical records are preserved for traceability.
+
+    is_current identifies the latest accepted record for each
+    unique evidence/control pair. Older records remain visible
+    but no longer drive the assessment orchestrator.
+    """
+
+    query = (
+        session.query(
+            ControlClaimRecord,
+            Evidence,
+        )
+        .join(
+            Evidence,
+            Evidence.id
+            == ControlClaimRecord.evidence_id,
+        )
+        .filter(
+            ControlClaimRecord.vendor_id
+            == vendor_id,
+            ControlClaimRecord.assessment_id
+            == assessment_id,
+            ControlClaimRecord.generation_status
+            == STATUS_ACCEPTED,
+        )
+    )
+
+    normalized_control_id = (
+        (control_id or "")
+        .strip()
+        .upper()
+    )
+
+    if normalized_control_id:
+        query = query.filter(
+            ControlClaimRecord.control_id
+            == normalized_control_id
+        )
+
+    rows = (
+        query
+        .order_by(
+            ControlClaimRecord.created_at.desc(),
+            ControlClaimRecord.id.desc(),
+        )
+        .all()
+    )
+
+    current_pairs = set()
+    history = []
+
+    for record, evidence in rows:
+        pair = (
+            record.evidence_id,
+            record.control_id,
+        )
+
+        is_current = (
+            pair not in current_pairs
+        )
+
+        if is_current:
+            current_pairs.add(
+                pair
+            )
+
+        history.append(
+            ControlClaimHistoryItem(
+                record_id=record.id,
+                evidence_id=record.evidence_id,
+                evidence_name=(
+                    evidence.document_name
+                ),
+                evidence_type=(
+                    evidence.document_type
+                ),
+                control_id=(
+                    record.control_id
+                ),
+                statement=(
+                    record.statement
+                ),
+                source_reference=(
+                    record.source_reference
+                ),
+                covered=(
+                    record.covered
+                ),
+                tested=(
+                    record.tested
+                ),
+                scope_matches=(
+                    record.scope_matches
+                ),
+                service_matches=(
+                    record.service_matches
+                ),
+                exception_present=(
+                    record.exception_present
+                ),
+                confidence=(
+                    record.confidence
+                ),
+                confirmed_by=(
+                    record.confirmed_by
+                ),
+                analyst_rationale=(
+                    record.analyst_rationale
+                ),
+                claim_policy_version=(
+                    record.claim_policy_version
+                ),
+                review_policy_version=(
+                    record.review_policy_version
+                ),
+                created_at=(
+                    record.created_at
+                ),
+                is_current=is_current,
+            )
+        )
+
+    return tuple(
+        history
+    )
+
