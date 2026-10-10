@@ -3,7 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 REQUIRED_TABLES = {
-    "vendors",
+   "vendors",
     "engagements",
     "assessments",
     "evidence",
@@ -12,6 +12,8 @@ REQUIRED_TABLES = {
     "audit_logs",
     "approval_decisions",
     "evidence_request_packages",
+    "control_disposition_records",
+    "control_claim_records",
     "alembic_version",
 }
 

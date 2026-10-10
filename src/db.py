@@ -215,6 +215,11 @@ class Vendor(Base):
         cascade="all, delete-orphan",
     )
 
+    control_claims = relationship(
+        "ControlClaimRecord",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
 
 class Engagement(Base):
     __tablename__ = "engagements"
@@ -867,6 +872,115 @@ class ControlDispositionRecord(Base):
         back_populates="control_dispositions",
     )
 
+class ControlClaimRecord(Base):
+    __tablename__ = "control_claim_records"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+        nullable=False,
+    )
+
+    evidence_id = Column(
+        Integer,
+        ForeignKey("evidence.id"),
+        nullable=False,
+    )
+
+    control_id = Column(
+        String(80),
+        nullable=False,
+    )
+
+    statement = Column(
+        Text,
+        nullable=False,
+    )
+
+    source_reference = Column(
+        Text,
+        nullable=False,
+    )
+
+    covered = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    tested = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    scope_matches = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    service_matches = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    exception_present = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    confidence = Column(
+        Float,
+        nullable=False,
+    )
+
+    generation_status = Column(
+        String(40),
+        nullable=False,
+    )
+
+    human_confirmed = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    confirmed_by = Column(
+        String(255),
+    )
+
+    analyst_rationale = Column(
+        Text,
+    )
+
+    claim_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    review_policy_version = Column(
+        String(40),
+    )
+
+    created_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="control_claims",
+    )
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

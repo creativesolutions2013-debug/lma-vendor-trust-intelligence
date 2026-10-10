@@ -43,6 +43,20 @@ from src.control_disposition_service import (
     save_control_disposition,
 )
 
+from src.control_claim_review import (
+    AnalystClaimConfirmation,
+    review_control_claim_candidate,
+)
+
+from src.control_claim_service import (
+    load_accepted_control_claims,
+    save_control_claim,
+)
+
+from src.evidence_control_claim_adapter import (
+    build_evidence_control_candidates,
+)
+
 from src.control_sufficiency import (
     ControlEvidenceDecision,
 )
@@ -1879,8 +1893,12 @@ def render_vendors():
             "### Assessment Context"
         )
 
-        if vendor_assessments:
+        selected_assessment = None
 
+        selected_assessment = None
+
+
+        if vendor_assessments:
             selected_assessment = (
                 st.selectbox(
                     "Assessment",
@@ -1896,9 +1914,6 @@ def render_vendors():
                     ),
                 )
             )
-
-        else:
-            selected_assessment = None
 
             st.warning(
                 "No assessment exists for this vendor. "
@@ -1917,6 +1932,25 @@ def render_vendors():
             )
         )
 
+        accepted_control_claims = ()
+
+        if selected_assessment is not None:
+            accepted_control_claims = (
+                load_accepted_control_claims(
+                    session,
+                    vendor_id=selected.id,
+                    assessment_id=selected_assessment.id,
+            )
+        )
+
+        work_plan = (
+            build_assessment_work_plan(
+                applicability,
+                vendor_evidence,
+                accepted_control_claims,
+        )
+    )
+ 
         supported = sum(
             1
             for item in work_plan.items
@@ -1944,14 +1978,10 @@ def render_vendors():
             )
         )
 
-        governed_controls = sum(
-            1
-            for item in work_plan.items
-            if (
-                item.sufficiency_status
-                is not None
-            )
+        governed_controls = len(
+            accepted_control_claims
         )
+            
 
         # -------------------------------------------------
         # Assurance metrics
@@ -2117,7 +2147,351 @@ def render_vendors():
                 "conclusions available for governed review."
             )
 
+                # -------------------------------------------------
+        # Evidence-to-control claim review
         # -------------------------------------------------
+
+        st.markdown(
+            "### Evidence-to-Control Claim Review"
+        )
+
+        st.caption(
+            "Review potential evidence-to-control mappings and "
+            "explicitly confirm the assurance facts required "
+            "before the mapping can influence control sufficiency."
+        )
+
+        if selected_assessment is None:
+            st.info(
+                "Select an assessment before reviewing "
+                "evidence-to-control claims."
+            )
+
+        else:
+            allowed_control_ids = tuple(
+                control.control_id
+                for control in applicability.controls
+            )
+
+            existing_claim_pairs = {
+                (
+                    claim.evidence_id,
+                    claim.control_id,
+                )
+                for claim in accepted_control_claims
+            }
+
+            candidate_options = []
+
+            for evidence in vendor_evidence:
+                candidate_result = (
+                    build_evidence_control_candidates(
+                        evidence,
+                        allowed_control_ids=(
+                            allowed_control_ids
+                        ),
+                    )
+                )
+
+                for candidate in (
+                    candidate_result.candidates
+                ):
+                    pair = (
+                        evidence.id,
+                        candidate.control_id,
+                    )
+
+                    if pair in existing_claim_pairs:
+                        continue
+
+                    candidate_options.append(
+                        (
+                            evidence,
+                            candidate,
+                        )
+                    )
+
+            if not candidate_options:
+                if accepted_control_claims:
+                    st.success(
+                        "All currently identified evidence-to-control "
+                        "candidates have governed claims."
+                    )
+                else:
+                    st.info(
+                        "No evidence-to-control candidates are "
+                        "currently available for review."
+                    )
+
+            else:
+                selected_candidate_pair = (
+                    st.selectbox(
+                        "Evidence mapping to review",
+                        candidate_options,
+                        format_func=lambda pair: (
+                            f"Evidence {pair[0].id} — "
+                            f"{pair[0].document_name} → "
+                            f"{pair[1].control_id}"
+                        ),
+                        key=(
+                            "claim_candidate_"
+                            f"{selected.id}_"
+                            f"{selected_assessment.id}"
+                        ),
+                    )
+                )
+
+                candidate_evidence = (
+                    selected_candidate_pair[0]
+                )
+
+                candidate = (
+                    selected_candidate_pair[1]
+                )
+
+                st.write(
+                    "**Control:** "
+                    f"{candidate.control_id}"
+                )
+
+                st.write(
+                    "**Source evidence:** "
+                    f"{candidate_evidence.document_name} "
+                    f"(Evidence ID {candidate_evidence.id})"
+                )
+
+                st.write(
+                    "**Candidate statement:** "
+                    f"{candidate.statement}"
+                )
+
+                st.write(
+                    "**Source reference:** "
+                    f"{candidate.source_reference}"
+                )
+
+                st.write(
+                    "**Candidate confidence:** "
+                    f"{candidate.confidence:.0%}"
+                )
+
+                if (
+                    candidate.exception_present
+                    is True
+                ):
+                    st.warning(
+                        "The candidate contains an explicitly "
+                        "identified control exception."
+                    )
+
+                fact_options = [
+                    "Not confirmed",
+                    "Yes",
+                    "No",
+                ]
+
+                def fact_index(value):
+                    if value is True:
+                        return 1
+
+                    if value is False:
+                        return 2
+
+                    return 0
+
+                def fact_value(value):
+                    if value == "Yes":
+                        return True
+
+                    if value == "No":
+                        return False
+
+                    return None
+
+                with st.form(
+                    (
+                        "claim_review_form_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}_"
+                        f"{candidate_evidence.id}_"
+                        f"{candidate.control_id}"
+                    )
+                ):
+
+                    st.markdown(
+                        "#### Confirm Assurance Facts"
+                    )
+
+                    st.caption(
+                        "Do not infer a fact from document presence. "
+                        "Confirm Yes or No only when the evidence "
+                        "supports that conclusion."
+                    )
+
+                    covered_value = st.selectbox(
+                        "Does the evidence cover this control?",
+                        fact_options,
+                        index=fact_index(
+                            candidate.covered
+                        ),
+                    )
+
+                    tested_value = st.selectbox(
+                        "Was operating effectiveness tested?",
+                        fact_options,
+                        index=fact_index(
+                            candidate.tested
+                        ),
+                    )
+
+                    scope_value = st.selectbox(
+                        "Does the evidence scope match the assessment?",
+                        fact_options,
+                        index=fact_index(
+                            candidate.scope_matches
+                        ),
+                    )
+
+                    service_value = st.selectbox(
+                        "Does the evidence apply to the service under review?",
+                        fact_options,
+                        index=fact_index(
+                            candidate.service_matches
+                        ),
+                    )
+
+                    exception_value = st.selectbox(
+                        "Is a relevant exception present?",
+                        fact_options,
+                        index=fact_index(
+                            candidate.exception_present
+                        ),
+                    )
+
+                    claim_rationale = (
+                        st.text_area(
+                            "Analyst rationale *",
+                            placeholder=(
+                                "Explain what you reviewed and why "
+                                "these assurance facts are supported."
+                            ),
+                        )
+                    )
+
+                    st.write(
+                        "**Reviewer:** "
+                        f"{CURRENT_USER.display_name} "
+                        f"({CURRENT_USER.role})"
+                    )
+
+                    claim_submitted = (
+                        st.form_submit_button(
+                            "Confirm governed control claim",
+                            type="primary",
+                        )
+                    )
+
+                if claim_submitted:
+                    confirmation = (
+                        AnalystClaimConfirmation(
+                            covered=fact_value(
+                                covered_value
+                            ),
+                            tested=fact_value(
+                                tested_value
+                            ),
+                            scope_matches=fact_value(
+                                scope_value
+                            ),
+                            service_matches=fact_value(
+                                service_value
+                            ),
+                            exception_present=fact_value(
+                                exception_value
+                            ),
+                            confirmed_by=(
+                                CURRENT_USER.subject
+                            ),
+                            analyst_rationale=(
+                                claim_rationale.strip()
+                            ),
+                        )
+                    )
+
+                    try:
+                        review_result = (
+                            review_control_claim_candidate(
+                                candidate_evidence.id,
+                                candidate,
+                                confirmation,
+                                allowed_control_ids=(
+                                    allowed_control_ids
+                                ),
+                            )
+                        )
+
+                        if (
+                            review_result.result.claim
+                            is None
+                        ):
+                            st.error(
+                                "The candidate cannot yet become "
+                                "an authoritative control claim."
+                            )
+
+                            st.warning(
+                                review_result
+                                .result
+                                .provenance
+                                .reason
+                            )
+
+                        else:
+                            saved_claim = (
+                                save_control_claim(
+                                    session,
+                                    vendor_id=selected.id,
+                                    assessment_id=(
+                                        selected_assessment.id
+                                    ),
+                                    review=(
+                                        review_result
+                                    ),
+                                    principal=(
+                                        CURRENT_USER
+                                    ),
+                                )
+                            )
+
+                            session.commit()
+
+                            st.success(
+                                "Governed control claim "
+                                f"{saved_claim.control_id} "
+                                "recorded successfully."
+                            )
+
+                            st.rerun()
+
+                    except (
+                        ValueError,
+                        PermissionError,
+                    ) as exc:
+                        session.rollback()
+
+                        st.error(
+                            str(exc)
+                        )
+
+                    except Exception:
+                        session.rollback()
+
+                        st.error(
+                            "Unable to record the "
+                            "governed control claim."
+                        )
+
+                # -------------------------------------------------
         # Analyst control review
         # -------------------------------------------------
 
