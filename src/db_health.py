@@ -14,6 +14,7 @@ REQUIRED_TABLES = {
     "evidence_request_packages",
     "control_disposition_records",
     "control_claim_records",
+    "residual_risk_activation_records",
     "alembic_version",
 }
 

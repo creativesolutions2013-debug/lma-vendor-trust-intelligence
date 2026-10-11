@@ -221,6 +221,12 @@ class Vendor(Base):
         cascade="all, delete-orphan",
     )
 
+    residual_risk_activation_records = relationship(
+        "ResidualRiskActivationRecord",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+
 class Engagement(Base):
     __tablename__ = "engagements"
 
@@ -981,6 +987,139 @@ class ControlClaimRecord(Base):
         "Vendor",
         back_populates="control_claims",
     )
+
+class ResidualRiskActivationRecord(Base):
+    __tablename__ = "residual_risk_activation_records"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+        nullable=False,
+    )
+
+    stored_residual_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    fresh_baseline_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    proposed_residual_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    stored_to_baseline_delta = Column(
+        Float,
+        nullable=False,
+    )
+
+    governed_contribution_delta = Column(
+        Float,
+        nullable=False,
+    )
+
+    stored_to_governed_delta = Column(
+        Float,
+        nullable=False,
+    )
+
+    governed_rating = Column(
+        String(40),
+        nullable=False,
+    )
+
+    control_input_mode = Column(
+        String(80),
+        nullable=False,
+    )
+
+    decision_status = Column(
+        String(80),
+        nullable=False,
+    )
+
+    system_ready = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    analyst_approved = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    activation_eligible = Column(
+        Boolean,
+        nullable=False,
+    )
+
+    blocking_reasons_json = Column(
+        Text
+    )
+
+    analyst_subject = Column(
+        String(255),
+        nullable=False,
+    )
+
+    analyst_name = Column(
+        String(255)
+    )
+
+    analyst_email = Column(
+        String(255)
+    )
+
+    analyst_role = Column(
+        String(80)
+    )
+
+    rationale = Column(
+        Text,
+        nullable=False,
+    )
+
+    activation_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    reconciliation_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    residual_risk_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    reviewed_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="residual_risk_activation_records",
+    )
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
