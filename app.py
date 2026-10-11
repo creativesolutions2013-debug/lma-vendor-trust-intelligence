@@ -45,6 +45,10 @@ from src.residual_risk_reconciliation import (
     reconcile_residual_risk,
 )
 
+from src.residual_risk_activation import (
+    evaluate_residual_risk_activation,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -118,8 +122,10 @@ from src.response_reconciliation import (
 )
 from src.scoring import (
     InherentRiskInput,
+    ResidualRiskContext,
     calculate_inherent_risk,
     calculate_residual_risk,
+    evaluate_residual_risk,
     rating_from_score,
     tier_from_score,
 )
@@ -2094,6 +2100,114 @@ def render_vendors():
                 ),
             )
         )
+
+
+        activation_events = (
+            session.query(MonitoringEvent)
+            .filter_by(
+                vendor_id=selected.id
+            )
+            .all()
+        )
+
+        active_critical_incident = any(
+            (
+                (event.severity or "").lower()
+                == "critical"
+            )
+            and (
+                (event.status or "").lower()
+                not in {
+                    "closed",
+                    "resolved",
+                }
+            )
+            for event in activation_events
+        )
+
+        unresolved_critical_finding = any(
+            (
+                (finding.severity or "").lower()
+                == "critical"
+            )
+            and (
+                (finding.status or "").lower()
+                not in {
+                    "closed",
+                    "resolved",
+                    "remediated",
+                }
+            )
+            for finding in vendor_findings
+        )
+
+        required_evidence_expired = any(
+            evidence_status(
+                evidence.expiration_date
+            )
+            == "Expired"
+            for evidence in evidence_records
+            if evidence.expiration_date
+        )
+
+        assessment_complete = (
+            selected_assessment is not None
+            and (
+                selected_assessment.status
+                or ""
+            ).lower()
+            == "completed"
+        )
+
+        activation_risk_context = (
+            ResidualRiskContext(
+                active_critical_incident=(
+                    active_critical_incident
+                ),
+                unresolved_critical_finding=(
+                    unresolved_critical_finding
+                ),
+                required_evidence_expired=(
+                    required_evidence_expired
+                ),
+                assessment_complete=(
+                    assessment_complete
+                ),
+            )
+        )
+
+        activation_risk_decision = (
+            evaluate_residual_risk(
+                inherent_risk=(
+                    selected.inherent_risk_score
+                    or 0
+                ),
+                control_effectiveness=(
+                    guarded_effectiveness
+                    .effective_control_input
+                ),
+                external_risk=(
+                    selected.external_risk_score
+                    or 0
+                ),
+                context=(
+                    activation_risk_context
+                ),
+            )
+        )
+
+        risk_activation_decision = (
+            evaluate_residual_risk_activation(
+                reconciliation=(
+                    risk_reconciliation
+                ),
+                residual_risk_decision=(
+                    activation_risk_decision
+                ),
+                inputs_traceable=True,
+                analyst_approved=False,
+            )
+        )
             
 
         # -------------------------------------------------
@@ -2368,6 +2482,86 @@ def render_vendors():
             f"Stored rating {risk_reconciliation.stored_rating} · "
             f"Baseline rating {risk_reconciliation.baseline_rating} · "
             f"Governed rating {risk_reconciliation.governed_rating}"
+        )
+
+        st.markdown(
+            "### Residual Risk Activation Decision"
+        )
+
+        ra1, ra2, ra3, ra4 = st.columns(4)
+
+        ra1.metric(
+            "Activation Status",
+            risk_activation_decision.status,
+        )
+
+        ra2.metric(
+            "System Ready",
+            (
+                "Yes"
+                if risk_activation_decision.system_ready
+                else "No"
+            ),
+        )
+
+        ra3.metric(
+            "Analyst Approved",
+            (
+                "Yes"
+                if risk_activation_decision.analyst_approved
+                else "No"
+            ),
+        )
+
+        ra4.metric(
+            "Activation Eligible",
+            (
+                "Yes"
+                if risk_activation_decision.activation_eligible
+                else "No"
+            ),
+        )
+
+        if risk_activation_decision.blocking_reasons:
+            st.error(
+                "Activation blocked: "
+                + ", ".join(
+                    risk_activation_decision.blocking_reasons
+                )
+            )
+        elif (
+            risk_activation_decision.system_ready
+            and not risk_activation_decision.analyst_approved
+        ):
+            st.warning(
+                "The governed residual-risk result has passed "
+                "system guardrails but still requires explicit "
+                "analyst approval before it can become authoritative."
+            )
+        else:
+            st.success(
+                "The governed residual-risk result is eligible "
+                "for controlled activation."
+            )
+
+        st.caption(
+            f"Governed risk "
+            f"{risk_activation_decision.governed_residual_risk:.1f} · "
+            f"Final rating "
+            f"{risk_activation_decision.governed_rating} · "
+            f"Control mode "
+            f"{risk_activation_decision.control_input_mode}"
+        )
+
+        st.caption(
+            f"Policy {risk_activation_decision.policy_version} · "
+            f"{risk_activation_decision.reconciliation_policy_version} · "
+            f"{risk_activation_decision.residual_risk_policy_version}"
+        )
+
+        st.caption(
+            "Read-only governance preview. "
+            "No residual-risk value is changed by this decision."
         )
 
         # -------------------------------------------------
