@@ -41,6 +41,10 @@ from src.governed_residual_risk import (
     preview_governed_residual_risk,
 )
 
+from src.residual_risk_reconciliation import (
+    reconcile_residual_risk,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -2065,6 +2069,31 @@ def render_vendors():
                 ),
             )
         )
+
+
+        risk_reconciliation = (
+            reconcile_residual_risk(
+                inherent_risk=(
+                    selected.inherent_risk_score
+                    or 0
+                ),
+                external_risk=(
+                    selected.external_risk_score
+                    or 0
+                ),
+                stored_residual_risk=(
+                    selected.residual_risk_score
+                    or 0
+                ),
+                legacy_effectiveness=(
+                    selected.control_effectiveness
+                    or 0
+                ),
+                guarded_effectiveness=(
+                    guarded_effectiveness
+                ),
+            )
+        )
             
 
         # -------------------------------------------------
@@ -2250,6 +2279,95 @@ def render_vendors():
             f"Control input mode {governed_risk_preview.control_input_mode} · "
             f"Effective control input "
             f"{governed_risk_preview.effective_control_input:.0f}%"
+        )
+
+        st.markdown(
+            "### Residual Risk Reconciliation"
+        )
+
+        rr1, rr2, rr3 = st.columns(3)
+
+        rr1.metric(
+            "Stored Residual Risk",
+            f"{risk_reconciliation.stored_residual_risk:.1f}",
+        )
+
+        rr2.metric(
+            "Fresh RR-2.0 Baseline",
+            f"{risk_reconciliation.fresh_baseline_risk:.1f}",
+            delta=(
+                f"{risk_reconciliation.stored_to_baseline_delta:+.1f}"
+            ),
+        )
+
+        rr3.metric(
+            "Governed Preview Risk",
+            f"{risk_reconciliation.governed_preview_risk:.1f}",
+            delta=(
+                f"{risk_reconciliation.governed_contribution_delta:+.1f}"
+            ),
+        )
+
+        rd1, rd2, rd3 = st.columns(3)
+
+        rd1.metric(
+            "Stored → Baseline Drift",
+            f"{risk_reconciliation.stored_to_baseline_delta:+.1f}",
+        )
+
+        rd2.metric(
+            "Governed Contribution",
+            f"{risk_reconciliation.governed_contribution_delta:+.1f}",
+        )
+
+        rd3.metric(
+            "Stored → Governed Delta",
+            f"{risk_reconciliation.stored_to_governed_delta:+.1f}",
+        )
+
+        rg1, rg2, rg3 = st.columns(3)
+
+        rg1.metric(
+            "Drift Detected",
+            (
+                "Yes"
+                if risk_reconciliation.drift_detected
+                else "No"
+            ),
+        )
+
+        rg2.metric(
+            "Control Input Mode",
+            risk_reconciliation.control_input_mode,
+        )
+
+        rg3.metric(
+            "Activation Ready",
+            (
+                "Yes"
+                if risk_reconciliation.activation_ready
+                else "No"
+            ),
+        )
+
+        if risk_reconciliation.drift_detected:
+            st.warning(
+                "Stored residual risk differs from a fresh "
+                "RR-2.0 calculation using the existing control "
+                "input. The drift is shown separately from any "
+                "governed control-effectiveness contribution."
+            )
+        else:
+            st.success(
+                "Stored residual risk is aligned with the current "
+                "RR-2.0 baseline."
+            )
+
+        st.caption(
+            f"Policy {risk_reconciliation.policy_version} · "
+            f"Stored rating {risk_reconciliation.stored_rating} · "
+            f"Baseline rating {risk_reconciliation.baseline_rating} · "
+            f"Governed rating {risk_reconciliation.governed_rating}"
         )
 
         # -------------------------------------------------
