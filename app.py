@@ -16,6 +16,7 @@ from src.db import (
     EvidenceRequestPackage,
     Finding,
     MonitoringEvent,
+    ResidualRiskActivationRecord,
     Vendor,
     engine,
     get_session,
@@ -47,6 +48,10 @@ from src.residual_risk_reconciliation import (
 
 from src.residual_risk_activation import (
     evaluate_residual_risk_activation,
+)
+
+from src.residual_risk_activation_service import (
+    save_residual_risk_activation_review,
 )
 
 from src.control_disposition import (
@@ -2563,6 +2568,231 @@ def render_vendors():
             "Read-only governance preview. "
             "No residual-risk value is changed by this decision."
         )
+
+        st.markdown(
+            "### Residual Risk Activation Review"
+        )
+
+        st.caption(
+            "Record the analyst's review of the activation decision. "
+            "This creates a governed review record and audit event, "
+            "but does not update the vendor's authoritative risk score."
+        )
+
+        if selected_assessment is None:
+            st.info(
+                "Select an assessment before recording an "
+                "activation review."
+            )
+        else:
+            can_record_activation_review = can(
+                CURRENT_USER,
+                PERMISSION_ASSESSMENT_MANAGE,
+            )
+
+            with st.form(
+                key=(
+                    f"residual_activation_review_"
+                    f"{selected.id}_"
+                    f"{selected_assessment.id}"
+                )
+            ):
+                approval_requested = st.checkbox(
+                    "Approve governed residual risk for future activation",
+                    value=False,
+                    disabled=(
+                        not risk_activation_decision.system_ready
+                    ),
+                    help=(
+                        "Approval is available only after all RRA-1.0 "
+                        "system guardrails have passed."
+                    ),
+                )
+
+                activation_rationale = st.text_area(
+                    "Analyst rationale",
+                    placeholder=(
+                        "Document why the activation decision is "
+                        "accepted, deferred, or blocked."
+                    ),
+                )
+
+                record_activation_review = (
+                    st.form_submit_button(
+                        "Record Activation Review",
+                        disabled=(
+                            not can_record_activation_review
+                        ),
+                    )
+                )
+
+            if record_activation_review:
+                try:
+                    confirmed_activation_decision = (
+                        evaluate_residual_risk_activation(
+                            reconciliation=(
+                                risk_reconciliation
+                            ),
+                            residual_risk_decision=(
+                                activation_risk_decision
+                            ),
+                            inputs_traceable=True,
+                            analyst_approved=(
+                                approval_requested
+                            ),
+                        )
+                    )
+
+                    save_residual_risk_activation_review(
+                        session,
+                        vendor_id=selected.id,
+                        assessment_id=(
+                            selected_assessment.id
+                        ),
+                        reconciliation=(
+                            risk_reconciliation
+                        ),
+                        decision=(
+                            confirmed_activation_decision
+                        ),
+                        principal=CURRENT_USER,
+                        rationale=(
+                            activation_rationale
+                        ),
+                    )
+
+                    session.commit()
+
+                    st.success(
+                        "Residual risk activation review recorded."
+                    )
+
+                    st.rerun()
+
+                except Exception as exc:
+                    session.rollback()
+
+                    st.error(
+                        f"Unable to record activation review: {exc}"
+                    )
+
+            activation_history = (
+                session.query(
+                    ResidualRiskActivationRecord
+                )
+                .filter_by(
+                    vendor_id=selected.id,
+                    assessment_id=(
+                        selected_assessment.id
+                    ),
+                )
+                .order_by(
+                    ResidualRiskActivationRecord.reviewed_at.desc(),
+                    ResidualRiskActivationRecord.id.desc(),
+                )
+                .all()
+            )
+
+            st.markdown(
+                "#### Activation Review History"
+            )
+
+            if activation_history:
+                activation_history_rows = []
+
+                for review_record in activation_history:
+                    activation_history_rows.append(
+                        {
+                            "Reviewed At": (
+                                review_record.reviewed_at
+                            ),
+                            "Status": (
+                                review_record.decision_status
+                            ),
+                            "Stored Risk": (
+                                review_record.stored_residual_risk
+                            ),
+                            "Proposed Risk": (
+                                review_record.proposed_residual_risk
+                            ),
+                            "System Ready": (
+                                "Yes"
+                                if review_record.system_ready
+                                else "No"
+                            ),
+                            "Analyst Approved": (
+                                "Yes"
+                                if review_record.analyst_approved
+                                else "No"
+                            ),
+                            "Activation Eligible": (
+                                "Yes"
+                                if review_record.activation_eligible
+                                else "No"
+                            ),
+                            "Reviewer": (
+                                review_record.analyst_name
+                                or review_record.analyst_subject
+                            ),
+                            "Policy": (
+                                review_record.activation_policy_version
+                            ),
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(
+                        activation_history_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                latest_activation_review = (
+                    activation_history[0]
+                )
+
+                with st.expander(
+                    "Latest Activation Review Details"
+                ):
+                    st.write(
+                        "**Rationale:**",
+                        latest_activation_review.rationale,
+                    )
+
+                    st.write(
+                        "**Control input mode:**",
+                        latest_activation_review.control_input_mode,
+                    )
+
+                    st.write(
+                        "**Policy lineage:**",
+                        (
+                            f"{latest_activation_review.activation_policy_version} "
+                            f"→ {latest_activation_review.reconciliation_policy_version} "
+                            f"→ {latest_activation_review.residual_risk_policy_version}"
+                        ),
+                    )
+
+                    blocking_reasons = json.loads(
+                        latest_activation_review.blocking_reasons_json
+                        or "[]"
+                    )
+
+                    st.write(
+                        "**Blocking reasons:**",
+                        (
+                            ", ".join(blocking_reasons)
+                            if blocking_reasons
+                            else "None"
+                        ),
+                    )
+
+            else:
+                st.info(
+                    "No residual risk activation reviews "
+                    "have been recorded for this assessment."
+                )
 
         # -------------------------------------------------
         # Assurance delta
