@@ -15,6 +15,7 @@ REQUIRED_TABLES = {
     "control_disposition_records",
     "control_claim_records",
     "residual_risk_activation_records",
+    "residual_risk_activation_executions",
     "alembic_version",
 }
 

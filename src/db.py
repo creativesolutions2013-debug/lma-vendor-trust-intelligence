@@ -227,6 +227,12 @@ class Vendor(Base):
         cascade="all, delete-orphan",
     )
 
+    residual_risk_activation_executions = relationship(
+        "ResidualRiskActivationExecution",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+
 class Engagement(Base):
     __tablename__ = "engagements"
 
@@ -1118,6 +1124,112 @@ class ResidualRiskActivationRecord(Base):
     vendor = relationship(
         "Vendor",
         back_populates="residual_risk_activation_records",
+    )
+
+
+class ResidualRiskActivationExecution(Base):
+    __tablename__ = "residual_risk_activation_executions"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    activation_review_id = Column(
+        Integer,
+        ForeignKey(
+            "residual_risk_activation_records.id"
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+        nullable=False,
+    )
+
+    previous_residual_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    activated_residual_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    previous_risk_rating = Column(
+        String(40)
+    )
+
+    activated_risk_rating = Column(
+        String(40),
+        nullable=False,
+    )
+
+    executor_subject = Column(
+        String(255),
+        nullable=False,
+    )
+
+    executor_name = Column(
+        String(255)
+    )
+
+    executor_email = Column(
+        String(255)
+    )
+
+    executor_role = Column(
+        String(80)
+    )
+
+    execution_rationale = Column(
+        Text,
+        nullable=False,
+    )
+
+    execution_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    activation_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    reconciliation_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    residual_risk_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    activated_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="residual_risk_activation_executions",
+    )
+
+    review = relationship(
+        "ResidualRiskActivationRecord"
     )
 
 
