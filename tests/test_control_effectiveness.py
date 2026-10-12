@@ -13,7 +13,7 @@ class DispositionStub:
     control_id: str
     final_disposition: str
     decided_at: datetime
-
+    claim_basis_verified: bool = True
 
 def record(
     *,
@@ -300,5 +300,24 @@ def test_policy_version():
 
     assert (
         result.policy_version
-        == "CE-1.0"
+        == "CE-1.1"
     )
+
+def test_unverified_disposition_does_not_affect_effectiveness():
+    unverified = record(
+        id=1,
+         control_id="IAM-01",
+        disposition="Satisfied",
+    )
+
+    unverified.claim_basis_verified = False
+
+    result = evaluate_control_effectiveness(
+        ("IAM-01",),
+        (unverified,),
+    )
+
+    assert result.effectiveness_score is None
+    assert result.decision_coverage_percent == 0
+    assert result.unknown_controls == 1
+    assert result.status == "Insufficient Decisions"

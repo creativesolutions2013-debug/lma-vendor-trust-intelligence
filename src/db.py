@@ -873,6 +873,34 @@ class ControlDispositionRecord(Base):
         String(40)
     )
 
+    claim_basis_verified = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    claim_basis_mode = Column(
+        String(40),
+        default="LEGACY_UNVERIFIED",
+        nullable=False,
+    )
+
+    claim_basis_record_ids_json = Column(
+        Text
+    )
+
+    claim_basis_evidence_ids_json = Column(
+        Text
+    )
+
+    claim_basis_override_reason = Column(
+        Text
+    )
+
+    claim_basis_policy_version = Column(
+        String(40)
+    )
+
     decided_at = Column(
         DateTime,
         default=utc_now,

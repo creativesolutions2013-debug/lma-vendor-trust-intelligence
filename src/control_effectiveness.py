@@ -10,7 +10,7 @@ from src.control_disposition import (
 )
 
 
-CONTROL_EFFECTIVENESS_POLICY_VERSION = "CE-1.0"
+CONTROL_EFFECTIVENESS_POLICY_VERSION = "CE-1.1"
 
 
 DISPOSITION_WEIGHTS = {
@@ -55,10 +55,30 @@ class ControlEffectivenessResult:
 def _latest_dispositions_by_control(
     records: Iterable,
 ) -> dict:
+    """
+    Return only the latest claim-basis-verified disposition
+    for each control.
+
+    CBE-1.0 prevents legacy or unverified dispositions from
+    influencing governed control effectiveness.
+    """
+
+    verified_records = [
+        record
+        for record in records
+        if bool(
+            getattr(
+                record,
+                "claim_basis_verified",
+                False,
+            )
+        )
+    ]
+
     latest = {}
 
     ordered = sorted(
-        records,
+        verified_records,
         key=lambda item: (
             getattr(
                 item,
@@ -156,8 +176,7 @@ def evaluate_control_effectiveness(
                     score=None,
                     included_in_score=False,
                     reason=(
-                        "No human-confirmed control "
-                        "disposition is available."
+                        "No claim-backed human-confirmed control disposition is available."
                     ),
                 )
             )
@@ -235,8 +254,8 @@ def evaluate_control_effectiveness(
                 score=score,
                 included_in_score=True,
                 reason=(
-                    "Effectiveness contribution is based on "
-                    "the latest human-confirmed disposition."
+                    "Effectiveness contribution is based on the latest "
+                    "claim-backed human-confirmed disposition."
                 ),
             )
         )
