@@ -16,6 +16,7 @@ from src.db import (
     EvidenceRequestPackage,
     Finding,
     MonitoringEvent,
+    ResidualRiskActivationExecution,
     ResidualRiskActivationRecord,
     Vendor,
     engine,
@@ -52,6 +53,10 @@ from src.residual_risk_activation import (
 
 from src.residual_risk_activation_service import (
     save_residual_risk_activation_review,
+)
+
+from src.residual_risk_activation_execution_service import (
+    execute_residual_risk_activation,
 )
 
 from src.control_disposition import (
@@ -2792,6 +2797,279 @@ def render_vendors():
                 st.info(
                     "No residual risk activation reviews "
                     "have been recorded for this assessment."
+                )
+
+        st.markdown(
+            "### Controlled Residual Risk Activation"
+        )
+
+        st.caption(
+            "RAE-1.0 executes an already approved residual-risk "
+            "activation. The execution service revalidates eligibility, "
+            "policy lineage, stale-score protection, authorization, "
+            "and duplicate-execution protection before changing the "
+            "authoritative vendor risk."
+        )
+
+        if selected_assessment is None:
+            st.info(
+                "Select an assessment before executing "
+                "a residual-risk activation."
+            )
+        else:
+            activation_executions = (
+                session.query(
+                    ResidualRiskActivationExecution
+                )
+                .filter_by(
+                    vendor_id=selected.id,
+                    assessment_id=(
+                        selected_assessment.id
+                    ),
+                )
+                .order_by(
+                    ResidualRiskActivationExecution.activated_at.desc(),
+                    ResidualRiskActivationExecution.id.desc(),
+                )
+                .all()
+            )
+
+            executed_review_ids = {
+                execution.activation_review_id
+                for execution in activation_executions
+            }
+
+            eligible_activation_reviews = (
+                session.query(
+                    ResidualRiskActivationRecord
+                )
+                .filter_by(
+                    vendor_id=selected.id,
+                    assessment_id=(
+                        selected_assessment.id
+                    ),
+                    system_ready=True,
+                    analyst_approved=True,
+                    activation_eligible=True,
+                )
+                .order_by(
+                    ResidualRiskActivationRecord.reviewed_at.desc(),
+                    ResidualRiskActivationRecord.id.desc(),
+                )
+                .all()
+            )
+
+            eligible_activation_reviews = [
+                review
+                for review in eligible_activation_reviews
+                if review.id not in executed_review_ids
+            ]
+
+            can_execute_activation = can(
+                CURRENT_USER,
+                PERMISSION_VENDOR_WRITE,
+            )
+
+            if not eligible_activation_reviews:
+                st.info(
+                    "No approved and eligible residual-risk activation "
+                    "review is currently available for execution."
+                )
+            else:
+                selected_activation_review = st.selectbox(
+                    "Approved activation review",
+                    eligible_activation_reviews,
+                    format_func=lambda review: (
+                        f"Review {review.id} · "
+                        f"{review.stored_residual_risk:.1f} → "
+                        f"{review.proposed_residual_risk:.1f} · "
+                        f"{review.governed_rating} · "
+                        f"{review.reviewed_at}"
+                    ),
+                    key=(
+                        f"activation_execution_review_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}"
+                    ),
+                )
+
+                ex1, ex2, ex3, ex4 = st.columns(4)
+
+                ex1.metric(
+                    "Current Authoritative Risk",
+                    f"{float(selected.residual_risk_score or 0):.1f}",
+                )
+
+                ex2.metric(
+                    "Reviewed Starting Risk",
+                    f"{selected_activation_review.stored_residual_risk:.1f}",
+                )
+
+                ex3.metric(
+                    "Approved Risk",
+                    f"{selected_activation_review.proposed_residual_risk:.1f}",
+                )
+
+                ex4.metric(
+                    "Approved Rating",
+                    selected_activation_review.governed_rating,
+                )
+
+                score_is_current = (
+                    abs(
+                        float(
+                            selected.residual_risk_score or 0
+                        )
+                        - float(
+                            selected_activation_review.stored_residual_risk
+                        )
+                    )
+                    <= 0.01
+                )
+
+                if not score_is_current:
+                    st.error(
+                        "This approved review appears stale because the "
+                        "current authoritative residual risk no longer "
+                        "matches the score captured during review. "
+                        "RAE-1.0 will reject execution."
+                    )
+
+                st.caption(
+                    f"Approved under "
+                    f"{selected_activation_review.activation_policy_version} "
+                    f"→ "
+                    f"{selected_activation_review.reconciliation_policy_version} "
+                    f"→ "
+                    f"{selected_activation_review.residual_risk_policy_version}"
+                )
+
+                with st.form(
+                    key=(
+                        f"execute_residual_activation_"
+                        f"{selected_activation_review.id}"
+                    )
+                ):
+                    execution_rationale = st.text_area(
+                        "Execution rationale",
+                        placeholder=(
+                            "Document why this approved governed "
+                            "residual-risk value should now become "
+                            "authoritative."
+                        ),
+                    )
+
+                    execution_confirmation = st.checkbox(
+                        "I understand this will update the vendor's "
+                        "authoritative residual-risk score.",
+                        value=False,
+                    )
+
+                    execute_activation = (
+                        st.form_submit_button(
+                            "Activate Approved Residual Risk",
+                            disabled=(
+                                not can_execute_activation
+                                or not score_is_current
+                            ),
+                        )
+                    )
+
+                if execute_activation:
+                    if not execution_confirmation:
+                        st.error(
+                            "Confirm the authoritative risk update "
+                            "before executing activation."
+                        )
+                    else:
+                        try:
+                            execution = (
+                                execute_residual_risk_activation(
+                                    session,
+                                    activation_review_id=(
+                                        selected_activation_review.id
+                                    ),
+                                    principal=CURRENT_USER,
+                                    rationale=(
+                                        execution_rationale
+                                    ),
+                                )
+                            )
+
+                            session.commit()
+
+                            st.success(
+                                "Approved governed residual risk "
+                                "activated successfully. "
+                                f"{execution.previous_residual_risk:.1f} "
+                                "→ "
+                                f"{execution.activated_residual_risk:.1f}."
+                            )
+
+                            st.rerun()
+
+                        except Exception as exc:
+                            session.rollback()
+
+                            st.error(
+                                f"Unable to execute activation: {exc}"
+                            )
+
+            st.markdown(
+                "#### Activation Execution History"
+            )
+
+            if activation_executions:
+                execution_rows = []
+
+                for execution in activation_executions:
+                    execution_rows.append(
+                        {
+                            "Activated At": execution.activated_at,
+                            "Review ID": execution.activation_review_id,
+                            "Previous Risk": execution.previous_residual_risk,
+                            "Activated Risk": execution.activated_residual_risk,
+                            "Previous Rating": execution.previous_risk_rating,
+                            "Activated Rating": execution.activated_risk_rating,
+                            "Executor": (
+                                execution.executor_name
+                                or execution.executor_subject
+                            ),
+                            "Policy": execution.execution_policy_version,
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(execution_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                latest_execution = (
+                    activation_executions[0]
+                )
+
+                with st.expander(
+                    "Latest Activation Execution Details"
+                ):
+                    st.write(
+                        "**Execution rationale:**",
+                        latest_execution.execution_rationale,
+                    )
+
+                    st.write(
+                        "**Policy lineage:**",
+                        (
+                            f"{latest_execution.execution_policy_version} "
+                            f"→ {latest_execution.activation_policy_version} "
+                            f"→ {latest_execution.reconciliation_policy_version} "
+                            f"→ {latest_execution.residual_risk_policy_version}"
+                        ),
+                    )
+            else:
+                st.info(
+                    "No residual-risk activation has been executed "
+                    "for this assessment."
                 )
 
         # -------------------------------------------------
