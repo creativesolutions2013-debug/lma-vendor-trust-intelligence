@@ -9,7 +9,12 @@ from src.authz import (
 from src.control_disposition import (
     ControlDispositionDecision,
 )
-from src.db import ControlDispositionRecord
+from src.control_disposition_basis import (
+    evaluate_control_disposition_basis,
+)
+from src.db import (
+    ControlDispositionRecord,
+)
 
 
 def _serialize_json(
@@ -32,16 +37,19 @@ def save_control_disposition(
     decision: ControlDispositionDecision,
     principal: Principal,
     orchestrator_policy_version: str | None = None,
+    allow_unbacked_admin_override: bool = False,
+    basis_override_reason: str | None = None,
 ) -> ControlDispositionRecord:
     """
-    Persist a human-confirmed control disposition and write
-    a corresponding audit event.
+    Persist one human-confirmed control disposition.
 
-    This service intentionally persists only analyst-confirmed
-    decisions. Automated recommendations remain recommendations
-    until a human reviewer accepts or overrides them.
+    CBE-1.0 requires the disposition to be traceable to a
+    current accepted human-confirmed evidence-to-control claim.
 
-    The caller owns transaction commit/rollback.
+    Only an explicit Admin override may bypass claim-backed
+    enforcement.
+
+    Caller owns commit / rollback.
     """
 
     require(
@@ -69,6 +77,42 @@ def save_control_disposition(
     if not normalized_status:
         raise ValueError(
             "sufficiency_status is required."
+        )
+
+    disposition_evidence_ids = tuple(
+        dict.fromkeys(
+            tuple(
+                decision.supporting_evidence_ids
+            )
+            + tuple(
+                decision.review_evidence_ids
+            )
+        )
+    )
+
+    basis = (
+        evaluate_control_disposition_basis(
+            session,
+            vendor_id=vendor_id,
+            assessment_id=assessment_id,
+            control_id=decision.control_id,
+            evidence_ids=(
+                disposition_evidence_ids
+            ),
+            principal=principal,
+            allow_admin_override=(
+                allow_unbacked_admin_override
+            ),
+            override_reason=(
+                basis_override_reason
+            ),
+        )
+    )
+
+    if not basis.verified:
+        raise ValueError(
+            "Control disposition is not backed by an "
+            f"accepted governed claim. {basis.reason}"
         )
 
     record = ControlDispositionRecord(
@@ -117,12 +161,33 @@ def save_control_disposition(
         orchestrator_policy_version=(
             orchestrator_policy_version
         ),
+        claim_basis_verified=True,
+        claim_basis_mode=(
+            basis.mode
+        ),
+        claim_basis_record_ids_json=(
+            _serialize_json(
+                list(
+                    basis.claim_record_ids
+                )
+            )
+        ),
+        claim_basis_evidence_ids_json=(
+            _serialize_json(
+                list(
+                    basis.evidence_ids
+                )
+            )
+        ),
+        claim_basis_override_reason=(
+            basis.override_reason
+        ),
+        claim_basis_policy_version=(
+            basis.policy_version
+        ),
     )
 
-    session.add(
-        record
-    )
-
+    session.add(record)
     session.flush()
 
     record_audit_event(
@@ -149,6 +214,22 @@ def save_control_disposition(
             ),
             "review_evidence_ids": list(
                 decision.review_evidence_ids
+            ),
+            "claim_basis_verified": True,
+            "claim_basis_mode": (
+                basis.mode
+            ),
+            "claim_basis_record_ids": list(
+                basis.claim_record_ids
+            ),
+            "claim_basis_evidence_ids": list(
+                basis.evidence_ids
+            ),
+            "claim_basis_policy_version": (
+                basis.policy_version
+            ),
+            "claim_basis_override_reason": (
+                basis.override_reason
             ),
             "disposition_policy_version": (
                 decision.policy_version

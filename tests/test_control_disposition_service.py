@@ -26,7 +26,9 @@ from src.db import (
     Assessment,
     AuditLog,
     Base,
+    ControlClaimRecord,
     ControlDispositionRecord,
+    Evidence,
     Vendor,
 )
 
@@ -79,6 +81,51 @@ def seed_vendor_and_assessment(
 
     session.add(
         assessment
+    )
+
+    session.flush()
+
+    evidence = Evidence(
+        id=10,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        document_type="SOC 2 Type II",
+        document_name="Governed Test Evidence",
+    )
+
+    session.add(
+        evidence
+    )
+
+    session.flush()
+
+    claim = ControlClaimRecord(
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        evidence_id=evidence.id,
+        control_id="IAM-01",
+        statement=(
+            "IAM control state was explicitly reviewed."
+        ),
+        source_reference="SOC2 CC6.1",
+        covered=False,
+        tested=True,
+        scope_matches=True,
+        service_matches=True,
+        exception_present=True,
+        confidence=0.95,
+        generation_status="ACCEPTED",
+        human_confirmed=True,
+        confirmed_by="analyst-123",
+        analyst_rationale=(
+            "Governed test claim."
+        ),
+        claim_policy_version="CG-1.1",
+        review_policy_version="CCR-1.0",
+    )
+
+    session.add(
+        claim
     )
 
     session.flush()
@@ -427,5 +474,78 @@ def test_viewer_cannot_record_control_disposition():
                 "AO-1.2"
             ),
         )
+
+    session.close()
+
+
+def test_disposition_without_claim_basis_is_blocked():
+    session = make_session()
+
+    vendor, assessment = (
+        seed_vendor_and_assessment(
+            session
+        )
+    )
+
+    session.query(
+        ControlClaimRecord
+    ).delete()
+
+    session.flush()
+
+    with pytest.raises(
+        ValueError,
+        match="not backed by an accepted governed claim",
+    ):
+        save_control_disposition(
+            session,
+            vendor_id=vendor.id,
+            assessment_id=assessment.id,
+            sufficiency_status="UNSUPPORTED",
+            decision=make_human_decision(),
+            principal=make_principal(),
+            orchestrator_policy_version="AO-1.2",
+        )
+
+    session.close()
+
+
+def test_saved_disposition_records_claim_basis():
+    session = make_session()
+
+    vendor, assessment = (
+        seed_vendor_and_assessment(
+            session
+        )
+    )
+
+    saved = save_control_disposition(
+        session,
+        vendor_id=vendor.id,
+        assessment_id=assessment.id,
+        sufficiency_status="UNSUPPORTED",
+        decision=make_human_decision(),
+        principal=make_principal(),
+        orchestrator_policy_version="AO-1.2",
+    )
+
+    session.commit()
+
+    assert saved.claim_basis_verified is True
+    assert saved.claim_basis_mode == "CLAIM"
+    assert saved.claim_basis_policy_version == "CBE-1.0"
+
+    assert (
+        json.loads(
+            saved.claim_basis_evidence_ids_json
+        )
+        == [10]
+    )
+
+    assert (
+        json.loads(
+            saved.claim_basis_record_ids_json
+        )
+    )
 
     session.close()
