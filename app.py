@@ -59,6 +59,10 @@ from src.residual_risk_activation_execution_service import (
     execute_residual_risk_activation,
 )
 
+from src.residual_risk_activation_validity import (
+    evaluate_residual_risk_activation_validity,
+)
+
 from src.control_disposition import (
     AnalystDisposition,
     DISPOSITION_COMPENSATING_CONTROL,
@@ -2834,6 +2838,35 @@ def render_vendors():
                 .all()
             )
 
+
+            latest_activation_execution = (
+                activation_executions[0]
+                if activation_executions
+                else None
+            )
+
+            activation_validity = (
+                evaluate_residual_risk_activation_validity(
+                    latest_execution=(
+                        latest_activation_execution
+                    ),
+                    current_authoritative_risk=(
+                        selected.residual_risk_score
+                        or 0
+                    ),
+                    control_effectiveness=(
+                        control_effectiveness_result
+                    ),
+                    assessment_complete=(
+                        (
+                            selected_assessment.status
+                            or ""
+                        ).lower()
+                        == "completed"
+                    ),
+                )
+            )
+
             executed_review_ids = {
                 execution.activation_review_id
                 for execution in activation_executions
@@ -3014,6 +3047,69 @@ def render_vendors():
                             st.error(
                                 f"Unable to execute activation: {exc}"
                             )
+
+            st.markdown(
+                "### Activation Validity"
+            )
+
+            rv1, rv2, rv3, rv4 = st.columns(4)
+
+            rv1.metric(
+                "Validity Status",
+                activation_validity.status,
+            )
+
+            rv2.metric(
+                "Current Authoritative Risk",
+                f"{activation_validity.current_authoritative_risk:.1f}",
+            )
+
+            rv3.metric(
+                "Governed Decision Coverage",
+                f"{activation_validity.decision_coverage_percent}%",
+            )
+
+            rv4.metric(
+                "Revalidation Required",
+                (
+                    "Yes"
+                    if activation_validity.revalidation_required
+                    else "No"
+                ),
+            )
+
+            if activation_validity.status == "Valid":
+                st.success(
+                    "The activated residual-risk value remains supported "
+                    "by the current governed assurance state."
+                )
+
+            elif activation_validity.status == "Not Activated":
+                st.info(
+                    "No controlled residual-risk activation exists "
+                    "for this assessment."
+                )
+
+            else:
+                st.warning(
+                    "The authoritative residual-risk value requires "
+                    "revalidation because its supporting assurance "
+                    "state has changed."
+                )
+
+            if activation_validity.reasons:
+                st.caption(
+                    "Reasons: "
+                    + ", ".join(
+                        activation_validity.reasons
+                    )
+                )
+
+            st.caption(
+                f"Policy {activation_validity.policy_version} · "
+                f"Control effectiveness status "
+                f"{activation_validity.control_effectiveness_status}"
+            )
 
             st.markdown(
                 "#### Activation Execution History"
