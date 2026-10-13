@@ -11,6 +11,16 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Alembic defaults version_num to VARCHAR(32). Revision IDs from
+    # 0010 onward exceed that length, so widen the column on PostgreSQL
+    # before Alembic records this revision.
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            "ALTER TABLE alembic_version "
+            "ALTER COLUMN version_num TYPE VARCHAR(255)"
+        )
+
     op.create_table(
         "residual_risk_activation_records",
         sa.Column(
