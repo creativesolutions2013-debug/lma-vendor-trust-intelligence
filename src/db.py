@@ -233,6 +233,12 @@ class Vendor(Base):
         cascade="all, delete-orphan",
     )
 
+    revalidation_cases = relationship(
+        "RevalidationCaseRecord",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+    )
+
 class Engagement(Base):
     __tablename__ = "engagements"
 
@@ -1258,6 +1264,118 @@ class ResidualRiskActivationExecution(Base):
 
     review = relationship(
         "ResidualRiskActivationRecord"
+    )
+
+
+class RevalidationCaseRecord(Base):
+    __tablename__ = "revalidation_case_records"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    vendor_id = Column(
+        Integer,
+        ForeignKey("vendors.id"),
+        nullable=False,
+    )
+
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.id"),
+        nullable=False,
+    )
+
+    activation_execution_id = Column(
+        Integer,
+        ForeignKey(
+            "residual_risk_activation_executions.id"
+        ),
+        nullable=False,
+        unique=True,
+    )
+
+    status = Column(
+        String(40),
+        nullable=False,
+    )
+
+    trigger_status = Column(
+        String(80),
+        nullable=False,
+    )
+
+    trigger_reasons_json = Column(
+        Text,
+        nullable=False,
+    )
+
+    activated_residual_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    current_authoritative_risk = Column(
+        Float,
+        nullable=False,
+    )
+
+    decision_coverage_percent = Column(
+        Integer,
+        nullable=False,
+    )
+
+    control_effectiveness_status = Column(
+        String(80),
+        nullable=False,
+    )
+
+    rav_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    revalidation_policy_version = Column(
+        String(40),
+        nullable=False,
+    )
+
+    opened_by_subject = Column(
+        String(255),
+        nullable=False,
+    )
+
+    opened_by_name = Column(
+        String(255),
+    )
+
+    opened_by_email = Column(
+        String(255),
+    )
+
+    opened_by_role = Column(
+        String(80),
+    )
+
+    opening_rationale = Column(
+        Text,
+        nullable=False,
+    )
+
+    opened_at = Column(
+        DateTime,
+        default=utc_now,
+        nullable=False,
+    )
+
+    vendor = relationship(
+        "Vendor",
+        back_populates="revalidation_cases",
+    )
+
+    activation_execution = relationship(
+        "ResidualRiskActivationExecution"
     )
 
 
