@@ -16,6 +16,7 @@ from src.db import (
     EvidenceRequestPackage,
     Finding,
     MonitoringEvent,
+    RevalidationCaseRecord,
     ResidualRiskActivationExecution,
     ResidualRiskActivationRecord,
     Vendor,
@@ -61,6 +62,14 @@ from src.residual_risk_activation_execution_service import (
 
 from src.residual_risk_activation_validity import (
     evaluate_residual_risk_activation_validity,
+)
+
+from src.revalidation_case import (
+    build_revalidation_case_snapshot,
+)
+
+from src.revalidation_case_service import (
+    open_revalidation_case,
 )
 
 from src.control_disposition import (
@@ -3110,6 +3119,179 @@ def render_vendors():
                 f"Control effectiveness status "
                 f"{activation_validity.control_effectiveness_status}"
             )
+
+            st.markdown(
+                "### Revalidation Case"
+            )
+
+            existing_revalidation_case = None
+
+            if latest_activation_execution is not None:
+                existing_revalidation_case = (
+                    session.query(
+                        RevalidationCaseRecord
+                    )
+                    .filter_by(
+                        activation_execution_id=(
+                            latest_activation_execution.id
+                        )
+                    )
+                    .one_or_none()
+                )
+
+            if existing_revalidation_case is not None:
+                rc1, rc2, rc3 = st.columns(3)
+
+                rc1.metric(
+                    "Case Status",
+                    existing_revalidation_case.status,
+                )
+
+                rc2.metric(
+                    "Coverage at Open",
+                    (
+                        f"{existing_revalidation_case.decision_coverage_percent}%"
+                    ),
+                )
+
+                rc3.metric(
+                    "Authoritative Risk at Open",
+                    (
+                        f"{existing_revalidation_case.current_authoritative_risk:.1f}"
+                    ),
+                )
+
+                case_reasons = json.loads(
+                    existing_revalidation_case.trigger_reasons_json
+                    or "[]"
+                )
+
+                st.info(
+                    "A governed revalidation case is already open "
+                    "for this activation execution."
+                )
+
+                st.write(
+                    "**Trigger status:**",
+                    existing_revalidation_case.trigger_status,
+                )
+
+                st.write(
+                    "**Trigger reasons:**",
+                    (
+                        ", ".join(case_reasons)
+                        if case_reasons
+                        else "None"
+                    ),
+                )
+
+                st.write(
+                    "**Opened by:**",
+                    (
+                        existing_revalidation_case.opened_by_name
+                        or existing_revalidation_case.opened_by_subject
+                    ),
+                )
+
+                st.write(
+                    "**Opening rationale:**",
+                    existing_revalidation_case.opening_rationale,
+                )
+
+                st.caption(
+                    "Policy lineage "
+                    f"{existing_revalidation_case.revalidation_policy_version} "
+                    "← "
+                    f"{existing_revalidation_case.rav_policy_version}"
+                )
+
+            elif activation_validity.revalidation_required:
+                st.warning(
+                    "RAV requires governed revalidation. "
+                    "Open a case to preserve the trigger state, "
+                    "activation lineage, and analyst rationale."
+                )
+
+                revalidation_rationale = st.text_area(
+                    "Revalidation opening rationale",
+                    key=(
+                        f"revalidation_open_rationale_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}"
+                    ),
+                )
+
+                can_open_revalidation = can(
+                    CURRENT_USER,
+                    PERMISSION_ASSESSMENT_MANAGE,
+                )
+
+                open_case = st.button(
+                    "Open Revalidation Case",
+                    key=(
+                        f"open_revalidation_case_"
+                        f"{selected.id}_"
+                        f"{selected_assessment.id}"
+                    ),
+                    disabled=(
+                        not can_open_revalidation
+                        or latest_activation_execution is None
+                    ),
+                )
+
+                if open_case:
+                    try:
+                        snapshot = (
+                            build_revalidation_case_snapshot(
+                                validity=activation_validity,
+                                latest_execution=(
+                                    latest_activation_execution
+                                ),
+                            )
+                        )
+
+                        opened_case = (
+                            open_revalidation_case(
+                                session,
+                                vendor_id=selected.id,
+                                assessment_id=(
+                                    selected_assessment.id
+                                ),
+                                snapshot=snapshot,
+                                principal=CURRENT_USER,
+                                rationale=(
+                                    revalidation_rationale
+                                ),
+                            )
+                        )
+
+                        session.commit()
+
+                        st.success(
+                            "Revalidation case "
+                            f"{opened_case.id} opened successfully."
+                        )
+
+                        st.rerun()
+
+                    except Exception as exc:
+                        session.rollback()
+
+                        st.error(
+                            f"Unable to open revalidation case: {exc}"
+                        )
+
+            elif activation_validity.status == "Valid":
+                st.success(
+                    "No revalidation case is required. "
+                    "The activated risk remains supported."
+                )
+
+            else:
+                st.info(
+                    "No revalidation case is required for "
+                    "the current activation state."
+                )
 
             st.markdown(
                 "#### Activation Execution History"
