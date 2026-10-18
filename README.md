@@ -6,6 +6,31 @@
 
 LMA Vendor Trust Intelligence is a working TPRM platform that combines vendor intake, inherent-risk tiering, security evidence analysis, findings management, remediation, residual-risk decisioning, continuous monitoring, evidence-to-finding traceability, and event-driven reassessment in a single workflow.
 
+## Product Blueprint — Evidence-First Assessment
+
+LMA Vendor Trust Intelligence is evolving into an AI-enabled, evidence-first third-party risk assessment platform.
+
+Our goal is to help organizations complete vendor assessments faster by analyzing the security evidence vendors already maintain, determining whether that evidence meets organizational security requirements, identifying material risks and gaps, and generating explainable assessment results for analyst review.
+
+**Our guiding principle: Assess the evidence before asking the questions.**
+
+### Official End-to-End Product Workflow
+
+[View the LMA End-to-End Product Blueprint](docs/LMA_Vendor_Trust_Intelligence_End_to_End_Workflow.md)
+
+This blueprint defines the product's future direction, including:
+
+- Business intake and inherent-risk assessment
+- Vendor trust-center connections and document submissions
+- AI-powered evidence analysis and standards validation
+- Context-aware control evaluation and risk identification
+- Targeted vendor follow-up questions
+- Analyst review and residual-risk assessment
+- Analyst and executive dashboards
+- Continuous monitoring and reassessment
+
+**Future development should align with this blueprint while keeping the platform simple, explainable, and focused on reducing assessment time.**
+
 ---
 
 ## Why this matters
