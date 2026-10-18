@@ -2,592 +2,376 @@
 
 [![Run tests](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/workflows/tests.yml)
 
-**A continuous third-party risk intelligence platform designed to identify which vendors need attention now, why their risk changed, and what action should happen next.**
+**Assess the evidence before you ask the questions.**
 
-LMA Vendor Trust Intelligence is a working TPRM platform that combines vendor intake, inherent-risk tiering, security evidence analysis, findings management, remediation, residual-risk decisioning, continuous monitoring, evidence-to-finding traceability, and event-driven reassessment in a single workflow.
+LMA Vendor Trust Intelligence is an **evidence-first third-party risk assessment platform in development**.
 
-## Product Blueprint — Evidence-First Assessment
+Our goal is to reduce assessment time by analyzing security evidence vendors already maintain, evaluating it against organizational requirements, identifying material risks and gaps, and producing explainable results for analyst review.
 
-LMA Vendor Trust Intelligence is evolving into an AI-enabled, evidence-first third-party risk assessment platform.
+The existing application provides a working foundation for vendor risk management. The complete AI-powered assessment experience described below is the product direction, not a claim that every capability is currently implemented.
 
-Our goal is to help organizations complete vendor assessments faster by analyzing the security evidence vendors already maintain, determining whether that evidence meets organizational security requirements, identifying material risks and gaps, and generating explainable assessment results for analyst review.
+## Official Product Blueprint
 
-**Our guiding principle: Assess the evidence before asking the questions.**
+[View the LMA End-to-End Product Workflow](docs/LMA_Vendor_Trust_Intelligence_End_to_End_Workflow.md)
 
-### Official End-to-End Product Workflow
+This document is the project's primary product guide.
 
-[View the LMA End-to-End Product Blueprint](docs/LMA_Vendor_Trust_Intelligence_End_to_End_Workflow.md)
+### Guiding Principles
 
-This blueprint defines the product's future direction, including:
+- Evidence first, questions second.
+- Evidence availability does not equal evidence sufficiency.
+- Missing evidence is not proof of control failure.
+- Evaluate evidence against organizational requirements and technical standards.
+- Consider the vendor's actual business use case and risk exposure.
+- Explain every material conclusion with traceable evidence.
+- AI recommends; authorized humans make final decisions.
+- Prioritize reducing assessment effort without sacrificing accuracy.
 
-- Business intake and inherent-risk assessment
-- Vendor trust-center connections and document submissions
-- AI-powered evidence analysis and standards validation
-- Context-aware control evaluation and risk identification
-- Targeted vendor follow-up questions
-- Analyst review and residual-risk assessment
-- Analyst and executive dashboards
-- Continuous monitoring and reassessment
-
-**Future development should align with this blueprint while keeping the platform simple, explainable, and focused on reducing assessment time.**
-
----
-
-## Why this matters
-
-Traditional third-party risk management is often calendar-driven:
-
-> Questionnaire → Annual Assessment → Approval → Repeat Next Year
-
-That model creates unnecessary reassessment work while still leaving organizations exposed to material risk changes that occur between scheduled reviews.
-
-LMA Vendor Trust Intelligence is designed around a different operating model:
-
-> Vendor Intake → Risk Tiering → Requirements → Due Diligence → Evidence Validation → Findings → Residual Risk → Risk Decision → Remediation → Continuous Monitoring → Triggered Reassessment
-
-The core principle is simple:
-
-**Do not reassess every vendor simply because twelve months have passed. Reassess when the risk changes.**
-
-The platform is built around one operational question:
-
-**Which vendors need attention right now, why, and what should happen next?**
-
----
-
-## Target operating model
-
-The platform is evolving toward a policy-driven third-party risk decision engine.
+## End-to-End Product Vision
 
 ```text
-Vendor Intake
+Business requests vendor assessment
     ↓
-Inherent Risk Evaluation
+LMA evaluates inherent risk
     ↓
-Calculated Tier
+Applicable assessment requirements selected
     ↓
-Applicability & Requirements
+Vendor receives secure invitation
     ↓
-Required Controls
+Vendor grants trust-center access
+OR uploads supporting documents
     ↓
-Required Evidence
+LMA reads and classifies evidence
     ↓
-Assessment
+Evidence evaluated against requirements
     ↓
-Evidence Validation
+Standards, freshness, scope and context checked
     ↓
-Control Disposition
+Relevant external intelligence considered
     ↓
-Findings / Remediation
+AI generates evidence-backed conclusions
     ↓
-Residual Risk
+Targeted questions address remaining gaps
     ↓
-Decision Guardrails
+Analyst reviews and confirms results
     ↓
-Approval / Escalation
+Findings and residual risk evaluated
     ↓
-Continuous Monitoring
+Final assessment and reporting
     ↓
-Targeted Reassessment
+Analyst and Executive Dashboards
     ↓
-Offboarding
+Monitoring and targeted reassessment
+```
 
-Each major decision stage is intended to follow a consistent pattern:
-INPUT
-  ↓
-EVALUATE
-  ↓
-CHECKS / GUARDRAILS
-  ↓
-DECISION
-  ↓
-OUTPUT
-  ↓
-STATE TRANSITION
-  ↓
-AUDIT RECORD
+## What Is Implemented Today
 
-AI Evidence Analyst
-The AI Evidence Analyst helps reduce manual security-document review by extracting structured information from vendor evidence such as SOC 2 reports.
-Current capabilities include:
-- Auditor and report-date extraction
-- Audit-period identification
-- Opinion detection
-- Control-exception detection
-- Exception-to-control association
-- Evidence confidence and analyst review
-- Persistent evidence provenance and extraction rationale
-- Persistent source exceptions independent from remediation findings
-- Evidence-to-finding traceability by Evidence ID, control ID, and exception number
-- Automatic creation of findings from detected exceptions
-- Human confirmation before evidence is saved
-The current public MVP supports deterministic local parsing so the demonstration can operate without paid AI API usage.
-The architecture also supports an optional AI-assisted extraction path for future production use.
-Continuous risk model
-The platform separates three important dimensions of vendor risk:
-- Inherent Risk — risk created by the nature of the vendor relationship, service, data, access, business criticality, regulatory exposure, geography, fourth parties, and AI usage.
-- Control Effectiveness — the degree to which validated security controls reduce the underlying exposure.
-- External Risk — observable changes in security posture such as incidents, vulnerabilities, security ratings, breach indicators, material service changes, or other monitoring signals.
-The objective is not simply to produce a risk score.
-The objective is to create an evidence-driven operating system for deciding:
-Where should the security team spend its time next?
-What makes this different
-- Event-driven reassessment instead of relying only on annual review cycles
-- Evidence-driven risk decisions instead of questionnaire responses alone
-- Vendor + engagement modeling so one supplier can support multiple services with different risk profiles
-- Risk-based vendor tiering
-- Human-in-the-loop evidence analysis
-- Explainable residual-risk scoring
-- Policy guardrails that can override mathematical scoring
-- Source-to-remediation traceability
-- Targeted reassessment when specific risk conditions change
-- Prioritized attention queues showing which vendors need intervention
-- Audit-oriented decisioning designed to preserve rationale and provenance
-MVP capabilities
-Current platform capabilities include:
-- Vendor inventory
-- Vendor/service engagement model
-- New vendor intake workflow
-- Inherent-risk scoring
-- Vendor tiering
-- Risk-based assessments
-- Evidence Center
-- SOC 2 evidence parsing
-- Explainable extraction confidence
-- Evidence provenance tracking
-- Source exception persistence
-- Evidence-to-finding traceability
-- Evidence response reconciliation
-- Findings management
-- Remediation tracking
-- Continuous monitoring event ingestion
-- Dynamic external-risk adjustment
-- Event-driven reassessment
-- Targeted evidence work plans
-- Controlled evidence-request orchestration
-- Approval decision support
-- Audit logging
-- Role-based authorization components
-- Control Tower attention queue
-- Risk register export
-- Durable evidence storage abstraction
-- Alembic database migrations
-- Configurable database connection through DATABASE_URL
-- Database startup health and schema validation
-- SQLite development support
-- PostgreSQL compatibility validation
-- Automated regression testing with GitHub Actions
-Risk Engine
-Inherent risk
-Inherent risk represents exposure before considering vendor controls.
-Maximum score: 100 points
-Risk factor	Maximum
-Data sensitivity	25
-System access	20
-Business criticality	20
-Data volume	10
-Regulatory exposure	10
-Fourth-party dependency	5
-Geographic risk	5
-AI / autonomy	5
+The repository currently includes working application and backend components for:
 
+- Vendor inventory and engagement management
+- New vendor intake
+- Inherent-risk scoring and vendor tiering
+- Assessment creation and control applicability
+- Risk-based assessment requirements
+- Evidence uploads and storage abstraction
+- SOC 2 document text extraction and metadata analysis
+- Evidence confidence, provenance, and exception detection
+- Evidence-to-control claim candidates and human confirmation
+- Control sufficiency and analyst dispositions
+- Findings and remediation tracking
+- Evidence request and response reconciliation
+- Residual-risk calculation and decision guardrails
+- Governed residual-risk review and activation controls
+- Post-activation validity and revalidation case foundations
+- Monitoring events and targeted reassessment logic
+- Audit logging and role-based authorization components
+- SQLAlchemy database models and Alembic migrations
+- SQLite development and PostgreSQL CI compatibility
+- Automated regression tests using pytest and GitHub Actions
 
-Inherent-risk tiers
-Score	Tier
-0–24	Tier 4 — Low
-25–49	Tier 3 — Moderate
-50–74	Tier 2 — High
-75–100	Tier 1 — Critical
+**Current limitation:** The existing document-analysis capability is primarily deterministic SOC 2 extraction with governed analyst review. It is not yet a production-ready AI agent capable of evaluating arbitrary trust-center evidence and completing assessments autonomously.
 
+## Planned Industry-Pilot Capabilities
 
-Tiering determines the level of due diligence and is intended to drive future control, evidence, assessment, approval, and reassessment requirements.
-Residual Risk Policy RR-2.0
-The platform uses residual-risk policy RR-2.0.
-The model intentionally separates:
-1. underlying exposure,
-2. control weakness,
-3. external risk changes,
-4. policy guardrails.
-Step 1 — Control deficiency
-Control Deficiency =
-100 - Control Effectiveness
+### 1. Business Assessment Intake
 
-Example:
-Control Effectiveness = 80
+Business requesters will provide vendor information, business purpose, service details, data classification, access requirements, criticality, and vendor contact information.
 
-Control Deficiency =
-100 - 80
-= 20
+LMA will evaluate inherent risk and determine applicable assessment requirements.
 
-Step 2 — Base residual risk
+### 2. Vendor Evidence Portal
+
+Vendors will receive secure assessment invitations.
+
+They will be able to:
+
+- Provide authorized access to their trust center
+- Upload security documents and artifacts
+- Submit supporting information
+- Respond to targeted follow-up questions
+
+A full security questionnaire should not be required when available evidence already answers the requirements.
+
+### 3. AI Evidence Intelligence
+
+LMA will analyze vendor evidence such as:
+
+- SOC 2 Type II reports
+- ISO 27001 certificates
+- Penetration-test reports
+- Security and privacy policies
+- Identity and access management documentation
+- Architecture diagrams
+- Incident-response plans
+- Business continuity and disaster recovery evidence
+- Subprocessor information
+- Other relevant security artifacts
+
+For each requirement, LMA should identify relevant evidence, explain its meaning, assess sufficiency, and identify unresolved information.
+
+### 4. Standards and Context Evaluation
+
+LMA should not mark a requirement as met merely because a document mentions the relevant control.
+
+The engine should evaluate:
+
+- Evidence relevance
+- Service and environment scope
+- Document freshness
+- Control implementation and testing
+- Technical standards and customer policy thresholds
+- Business criticality and use-case exposure
+- Material findings and control weaknesses
+
+For example, evidence describing TLS 1.0 support must be evaluated against the organization's minimum TLS requirements.
+
+A penetration-test finding rated Low by the testing firm may require additional attention when the affected system provides privileged production access.
+
+### 5. Explainable Assessment Outcomes
+
+Proposed user-facing outcomes:
+
+| Result | Meaning |
+|---|---|
+| Met | Sufficient current evidence supports the requirement |
+| Partially Met | Some requirement elements remain unresolved |
+| Needs Review | Analyst judgment is required |
+| Evidence Missing | Available evidence cannot establish the requirement |
+| Risk Identified | Evidence demonstrates a material weakness |
+
+Each AI recommendation should identify the requirement, source evidence, document location, relevant facts, reasoning, uncertainty, and recommended next action.
+
+### 6. Targeted Vendor Follow-Up
+
+LMA will generate additional vendor questions only when necessary to address evidence gaps or conflicting information.
+
+New responses and documents will pass through the same evidence evaluation process.
+
+### 7. Analyst Review
+
+Analysts will be able to:
+
+- Accept an evidence-backed recommendation
+- Challenge an AI conclusion
+- Request additional evidence
+- Create a finding
+- Document judgment and rationale
+- Finalize assessment results
+
+Material decisions will remain human-controlled and auditable.
+
+### 8. External Intelligence
+
+Planned enrichment includes relevant public vendor security information, disclosed incidents, regulatory actions, service disruptions, and licensed cyber-risk signals.
+
+Future integrations may include BitSight, Black Kite, and other security-rating providers.
+
+External intelligence will inform the analyst's evaluation rather than automatically determine vendor risk.
+
+### 9. Analyst Dashboard
+
+The Analyst Dashboard will emphasize daily assessment work.
+
+Important information includes:
+
+- Assigned and active assessments
+- Assessment status and aging
+- Upcoming due dates
+- Vendor responses pending
+- Evidence analysis progress
+- AI reviews awaiting confirmation
+- Gaps and unresolved findings
+- High-priority actions
+
+### 10. Executive Dashboard
+
+The Executive Dashboard will present the organization's third-party risk landscape.
+
+Important information includes:
+
+- Total active vendors
+- Critical business relationships
+- High and Critical residual-risk vendors
+- Inherent versus residual risk
+- Persistent high-risk vendors
+- Effectively mitigated critical relationships
+- Vendors with deteriorating risk
+- Common security weaknesses
+- Risk concentration
+- Open critical findings
+- Overdue assessments
+- Assessment efficiency and program performance
+
+Both inherent and residual risk should be visible so executives can understand the exposure created by a vendor relationship and the remaining exposure after evaluating controls.
+
+## Current Risk Model
+
+### Inherent Risk
+
+Maximum score: 100.
+
+| Score | Risk Tier |
+|---|---|
+| 0–24 | Tier 4 — Low |
+| 25–49 | Tier 3 — Moderate |
+| 50–74 | Tier 2 — High |
+| 75–100 | Tier 1 — Critical |
+
+Inherent-risk factors include data sensitivity, system access, business criticality, data volume, regulatory exposure, fourth-party dependency, geography, and AI autonomy.
+
+### Residual Risk — RR-2.0
+
+The implemented numeric model is:
+
+```text
+Control Deficiency = 100 - Control Effectiveness
+
 Base Residual Risk =
 (Inherent Risk × 0.60)
 +
 (Control Deficiency × 0.40)
 
-This keeps inherent exposure as the dominant factor while allowing validated security controls to reduce the resulting risk.
-Step 3 — External-risk adjustment
-External risk is treated as a bounded adjustment rather than as an independent weighted risk component.
-External risk score	Adjustment
-0–19	-5
-20–49	0
-50–64	+5
-65–79	+10
-80–100	+20
+Numeric Residual Risk =
+Base Residual Risk + External Risk Adjustment
+```
 
+The bounded external-risk adjustment ranges from -5 to +20 depending on the external-risk score band.
 
-Final Numeric Residual Risk =
-Base Residual Risk
-+
-External Risk Adjustment
+Separate policy guardrails may raise the final risk rating, block approval, or require escalation.
 
-The final numeric score is capped between 0 and 100.
-Example
-Inherent Risk = 80
+A numeric risk score alone does not establish approval.
 
-Control Effectiveness = 70
+## Run the Application
 
-Control Deficiency =
-100 - 70
-= 30
+### GitHub Codespaces
 
-Base Residual Risk =
-(80 × 0.60)
-+
-(30 × 0.40)
+Activate the existing virtual environment:
 
-= 48 + 12
-= 60
+```bash
+source .venv/bin/activate
+```
 
-External Risk = 70
-External Adjustment = +10
+Install dependencies if needed:
 
-Final Residual Risk = 70
+```bash
+python -m pip install -r requirements.txt
+```
 
-Residual-risk ratings
-Score	Rating
-0–24	Low
-25–49	Moderate
-50–74	High
-75–100	Critical
+Apply database migrations:
 
+```bash
+python -m alembic upgrade head
+```
 
-Policy guardrails
-The platform intentionally separates the calculated score from the final decision.
-A weighted score must not allow a severe control failure or security event to disappear mathematically.
-Examples of guardrails include:
-Active critical security incident
-Condition:
-Active critical security incident
+Start Streamlit:
 
-Outcome:
-Final rating = Critical
-Approval blocked = Yes
-Escalation required = Yes
+```bash
+python -m streamlit run app.py \
+  --server.address 0.0.0.0 \
+  --server.port 8501
+```
 
-Unresolved critical finding
-Condition:
-Unresolved critical finding
+Open the forwarded application URL from the Codespaces Ports tab.
 
-Outcome:
-Minimum final rating = High
-Approval blocked = Yes
-Escalation required = Yes
+### Local Development
 
-Privileged access without MFA
-Condition:
-Privileged production access without MFA
-
-Outcome:
-Minimum final rating = High
-Approval blocked = Yes
-Escalation required = Yes
-
-Expired required evidence
-Condition:
-Required evidence expired
-
-Outcome:
-Approval blocked = Yes
-
-Incomplete assessment
-Condition:
-Assessment incomplete
-
-Outcome:
-Approval blocked = Yes
-
-Expired risk acceptance
-Condition:
-Previously approved risk acceptance expired
-
-Outcome:
-Approval blocked = Yes
-Escalation required = Yes
-
-This design allows the platform to distinguish:
-Calculated Score
-Calculated Rating
-Final Rating
-Triggered Guardrails
-Approval Status
-Escalation Requirement
-Policy Version
-
-Example decision:
-Residual Risk Score: 42
-Calculated Rating: Moderate
-
-Guardrail:
-Privileged production access without MFA
-
-Final Rating: High
-Approval Blocked: Yes
-Escalation Required: Yes
-
-Policy Version: RR-2.0
-
-Risk-engine design principle
-The platform follows this operating principle:
-Facts create risk. Risk determines requirements. Evidence validates requirements. Gaps create findings. Findings influence residual risk. Residual risk and guardrails drive decisions. Material changes restart only the affected parts of the lifecycle.
-
-Demo and local setup
-The public MVP is built with Streamlit and uses synthetic data for demonstration purposes.
-Run in GitHub Codespaces
-pip install -r requirements.txt
-alembic upgrade head
-python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
-
-Codespaces will expose port 8501 and provide a browser preview URL.
-Run locally
-Clone the repository:
+```bash
 git clone https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence.git
 cd lma-vendor-trust-intelligence
 
-Create a virtual environment:
 python -m venv .venv
-
-macOS / Linux
 source .venv/bin/activate
 
-Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-
-Install dependencies:
-pip install -r requirements.txt
-
-Apply database migrations:
-alembic upgrade head
-
-Start the application:
+python -m pip install -r requirements.txt
+python -m alembic upgrade head
 python -m streamlit run app.py
+```
 
-Run the test suite
+On Windows, activate the virtual environment using:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### Run Tests
+
+```bash
+python -m py_compile app.py
 pytest -q
-
-The regression suite covers capabilities including:
-- Risk scoring
-- Vendor tiering
-- Evidence validation
-- Evidence reconciliation
-- Findings and escalation
-- Reassessment
-- Decision gates
-- Approval decisions
-- Audit logging
-- Authorization
-- Database configuration
-- Database health
-- Storage
-- PostgreSQL compatibility
-Database configuration
-The application uses SQLite by default for local MVP development.
-sqlite:////tmp/vendor_trust.db
-
-A different database can be selected through the DATABASE_URL environment variable.
-Example PostgreSQL configuration:
-export DATABASE_URL="postgresql+psycopg://USER:PASSWORD@HOST:5432/vendor_trust"
-
-alembic upgrade head
-
-python -m streamlit run app.py
-
-Do not commit production database credentials to the repository.
-Use environment variables or a managed secret store.
-Database startup health check
-Before the application opens a database session or seeds demo data, it validates:
-- Database connectivity
-- Presence of expected application tables
-- Presence of the Alembic version table
-If connectivity succeeds but the schema is incomplete, the application stops with guidance to run:
-alembic upgrade head
-
-This prevents late SQLAlchemy failures after the application UI has started.
-The health-check output intentionally excludes database connection strings and credentials.
-Alembic migrations
-Database schema creation and evolution are managed with Alembic.
-The application does not rely on Base.metadata.create_all() to mutate the persistent production schema.
-Check current migration version
-alembic current
-
-Apply migrations
-alembic upgrade head
-
-Create a migration
-alembic revision --autogenerate -m "Describe schema change"
-
-Review the generated migration before applying it.
-Then run:
-alembic upgrade head
-pytest -q
-
-Roll back one migration
-alembic downgrade -1
-
-Important
-alembic stamp head records a migration revision only.
-It does not create tables or execute migration scripts.
-For a new database, use:
-alembic upgrade head
+python -m alembic current
 ```
 
-Use `alembic stamp ...` only when the physical database schema already matches the revision being stamped.
+GitHub Actions runs automated tests and PostgreSQL compatibility checks.
 
-### Current baseline
+## Database and Security
 
-The repository currently uses:
+SQLite is used by default for local development.
 
-```text
-0001_baseline (head)
-```
+Database connectivity can be configured using the `DATABASE_URL` environment variable.
 
-Future schema changes should be added as new migration revisions rather than by deleting `/tmp/vendor_trust.db`.
+Alembic manages persistent schema evolution.
 
-## PostgreSQL CI validation
+The current public demonstration is intended for synthetic or explicitly approved test data.
 
-GitHub Actions runs two independent jobs on pushes and pull requests to `main`.
+**Do not upload confidential vendor evidence to an unsecured public demonstration.**
 
-### Unit tests
+Production deployment requires appropriate authentication, tenant isolation, encrypted storage, malware scanning, secure vendor invitation links, access control, retention policies, and authorized trust-center connectivity.
 
-The standard job runs the regression suite with the default application configuration.
+Production authentication is not yet configured.
 
-### PostgreSQL compatibility
+Never commit production credentials, access tokens, or confidential vendor documents to the repository.
 
-The PostgreSQL job starts an ephemeral PostgreSQL 16 service and then:
+## MVP Priorities
 
-1. Installs the application dependencies.
-2. Sets `DATABASE_URL` to the CI PostgreSQL service.
-3. Applies the Alembic migration chain with `alembic upgrade head`.
-4. Verifies that the expected tables exist.
-5. Runs the complete pytest suite against the PostgreSQL configuration.
-6. Executes a PostgreSQL-specific seed/query smoke test that writes demo records, reads them back, verifies expected relationships and risk values, and cleans the records afterward.
+The immediate priority is completing one functional assessment journey:
 
-This provides automated validation that the application models, Alembic schema, seed logic, and basic read/write behavior work with PostgreSQL rather than only SQLite.
+1. Business intake and assessment setup
+2. Secure vendor evidence collection
+3. AI-assisted document parsing
+4. Evidence-to-requirement mapping
+5. Standards and contextual validation
+6. Explainable conclusions and citations
+7. Targeted vendor follow-up
+8. Analyst review
+9. Final assessment and risk reporting
+10. Analyst and executive dashboards
+11. Authorized trust-center ingestion
 
-## Demo data and security note
+Advanced workflow orchestration, extensive rating integrations, sophisticated remediation management, and complex revalidation interfaces can follow after industry pilot validation.
 
-The current public deployment uses synthetic vendor and evidence data only.
+## Project Documentation
 
-SQLite and locally uploaded evidence files are used for MVP demonstration purposes and may be ephemeral in hosted Streamlit environments. Real or confidential vendor evidence should not be uploaded to the public demo.
+- [Product Blueprint](docs/LMA_Vendor_Trust_Intelligence_End_to_End_Workflow.md)
+- [Technical Architecture](ARCHITECTURE.md)
+- [Development Backlog](BACKLOG.md)
+- [GitHub Actions](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions)
 
-A production deployment should use persistent PostgreSQL storage, secure object storage, authentication, role-based access control, audit logging, encryption, and malware scanning for uploaded evidence.
+## License
 
-## Current scoring model
-
-### Inherent risk
-
-Maximum 100 points:
-
-- Data sensitivity: 25
-- System access: 20
-- Business criticality: 20
-- Data volume: 10
-- Regulatory exposure: 10
-- Fourth-party dependency: 5
-- Geographic risk: 5
-- AI/autonomy: 5
-
-Risk tiers:
-
-- 0–24: Tier 4 — Low
-- 25–49: Tier 3 — Moderate
-- 50–74: Tier 2 — High
-- 75–100: Tier 1 — Critical
-
-### Residual risk
-
-```text
-Residual Risk =
-(Inherent Risk × 0.40)
-+ ((100 - Control Effectiveness) × 0.35)
-+ (External Risk × 0.25)
-```
-
-This is intentionally transparent and should become configurable in later versions.
-
-## Suggested production architecture
-
-For the production version:
-
-- Frontend: Next.js / React
-- API: FastAPI
-- Database: PostgreSQL
-- Object storage: S3-compatible storage
-- Vector search: pgvector
-- Identity: Entra ID / Auth0 / Clerk
-- AI assurance: optional production AI service
-- Workflow: Temporal or Celery / Redis
-- Monitoring integrations: BitSight, Black Kite, SecurityScorecard
-- Security intelligence: CISA KEV, NVD
-- Enterprise workflow integrations: ServiceNow, Jira
-Product roadmap
-Priority engine capabilities include:
-1. Tier-to-control requirement mapping
-2. Tier-to-evidence requirement mapping
-3. Dynamic applicability engine
-4. Assessment-template orchestration
-5. Formal control disposition workflow
-6. Risk-acceptance and exception management
-7. Approval-authority workflow
-8. Expanded evidence parsing beyond SOC 2
-9. Cross-document contradiction detection
-10. Continuous external-security intelligence integrations
-11. Trigger-specific reassessment
-12. Full offboarding lifecycle
-13. Production authentication and tenant isolation
-14. Production evidence-storage hardening
-15. Policy-version and decision traceability
-Current development status
-The project currently includes a substantial automated regression suite and is actively evolving from a TPRM assessment application into a policy-driven vendor-risk decision and orchestration engine.
-The current architectural direction is:
-Vendor Intake
-    ↓
-Calculated Tier
-    ↓
-Applicable Requirements
-    ↓
-Control & Evidence Requirements
-    ↓
-Assessment
-    ↓
-Evidence Validation
-    ↓
-Findings
-    ↓
-Residual Risk
-    ↓
-Decision Guardrails
-    ↓
-Approval / Escalation
-    ↓
-Continuous Monitoring
-    ↓
-Targeted Reassessment
-
-Important
-All sample vendor data is synthetic and exists only to demonstrate the user experience.
-License
 Copyright © 2026 LMA Creative Solutions LLC.
+
 All rights reserved.
+
 This repository is provided for demonstration, evaluation, educational, and portfolio purposes.
-See LICENSE for permitted uses.
+
+See [LICENSE](LICENSE) for permitted uses.
