@@ -121,6 +121,9 @@ from src.authz import (
 from src.decision_gate import evaluate_vendor_decision
 from src.db_health import check_database_health
 from src.evidence_ai import extract_soc2_metadata
+from src.evidence_intelligence_mvp import (
+    read_evidence_document, evaluate_pilot_requirements,
+)
 from src.evidence_state import (
     extraction_matches_file,
     file_changed,
@@ -6716,6 +6719,60 @@ def render_evidence():
         format_func=lambda item: item.display_name,
         key="evidence_vendor",
     )
+
+    with st.expander("Evidence Intelligence — pilot preview", expanded=False):
+        st.caption(
+            "Read-only screening: PDF, DOCX or TXT evidence. "
+            "Pilot thresholds: TLS 1.2+ and SOC 2 coverage within 365 days. "
+            "Results are NOT approved control decisions or risk scores. "
+            "Use synthetic or authorized nonconfidential test evidence."
+        )
+        pilot_files = st.file_uploader(
+            "Select up to six evidence files",
+            type=["pdf", "docx", "txt"],
+            accept_multiple_files=True,
+            key="ei_pilot_files",
+        )
+        import hashlib
+        fingerprint = tuple(
+            (f.name, hashlib.sha256(f.getvalue()).hexdigest())
+            for f in pilot_files
+        )
+        if st.button("Analyze evidence against requirements", key="ei_pilot_run"):
+            if not pilot_files or len(pilot_files) > 6:
+                st.warning("Select 1 to 6 readable evidence files.")
+            else:
+                try:
+                    parsed = [
+                        read_evidence_document(f.name, f.getvalue())
+                        for f in pilot_files
+                    ]
+                    privileged_context = any(
+                        e.privileged_access and e.production_access
+                        for e in session.query(Engagement).filter_by(vendor_id=vendor.id).all()
+                    )
+                    results = evaluate_pilot_requirements(
+                        parsed,
+                        privileged_access=privileged_context,
+                    )
+                    st.session_state["ei_pilot_preview"] = (
+                        vendor.id, fingerprint, results
+                    )
+                except ValueError as exc:
+                    st.session_state.pop("ei_pilot_preview", None)
+                    st.error(str(exc))
+        preview = st.session_state.get("ei_pilot_preview")
+        if preview and preview[:2] == (vendor.id, fingerprint):
+            st.info("Draft screening only. Every conclusion requires analyst verification.")
+            for decision in preview[2]:
+                st.markdown(f"**{decision.requirement_id} — {decision.requirement}**")
+                st.write(f"**Proposed result:** {decision.outcome}")
+                st.write(decision.reason)
+                for source in decision.citations:
+                    st.caption(f"Source: {source.filename} · {source.location}")
+                    st.code(source.excerpt, language=None)
+                st.write(f"**Next action:** {decision.follow_up}")
+                st.divider()
 
     vendor_assessments = (
         session.query(Assessment)
