@@ -124,6 +124,9 @@ from src.evidence_ai import extract_soc2_metadata
 from src.evidence_intelligence_mvp import (
     read_evidence_document, evaluate_pilot_requirements,
 )
+from src.evidence_intelligence_m2 import (
+    PILOT_REQUIREMENTS, evaluate_ai_requirements,
+)
 from src.evidence_state import (
     extraction_matches_file,
     file_changed,
@@ -6772,6 +6775,71 @@ def render_evidence():
                     st.caption(f"Source: {source.filename} · {source.location}")
                     st.code(source.excerpt, language=None)
                 st.write(f"**Next action:** {decision.follow_up}")
+                st.divider()
+
+    with st.expander("AI Requirement Review — M2 pilot (opt-in)", expanded=False):
+        st.caption(
+            "Draft analyst review only. No risk scores, claims or control decisions "
+            "are changed. Select authorized nonconfidential documents only. "
+            "Documents will be sent to the configured AI service if you consent."
+        )
+        choices = {item.requirement_id: item for item in PILOT_REQUIREMENTS}
+        selected_ids = st.multiselect(
+            "Requirements for AI review",
+            list(choices),
+            default=list(choices),
+            format_func=lambda key: f"{key} — {choices[key].requirement}",
+            key="ei_m2_requirements",
+        )
+        for key in selected_ids:
+            st.caption(f"{key}: {choices[key].guidance}")
+        permitted = st.checkbox(
+            "I confirm these files may be sent to the configured AI provider for analysis.",
+            value=False,
+            key="ei_m2_consent",
+        )
+        api_key = get_openai_api_key()
+        if not api_key:
+            st.info("Configure an OpenAI API key to enable optional AI review.")
+        if st.button("Generate AI draft reviews", key="ei_m2_run"):
+            if not permitted:
+                st.warning("Explicit permission to process these documents is required.")
+            elif not api_key:
+                st.warning("No configured OpenAI API key was found.")
+            elif not pilot_files or len(pilot_files) > 6:
+                st.warning("Select 1 to 6 evidence files above first.")
+            elif not selected_ids:
+                st.warning("Select at least one requirement.")
+            else:
+                try:
+                    with st.spinner("Preparing source-verified AI drafts..."):
+                        parsed = [read_evidence_document(f.name, f.getvalue()) for f in pilot_files]
+                        ai_reviews = evaluate_ai_requirements(
+                            parsed,
+                            api_key=api_key,
+                            requirements=tuple(choices[key] for key in selected_ids),
+                            model=os.getenv("LMA_EVIDENCE_MODEL", "gpt-4.1-mini"),
+                        )
+                    st.session_state["ei_m2_preview"] = (
+                        vendor.id, fingerprint, tuple(selected_ids), ai_reviews
+                    )
+                except ValueError as exc:
+                    st.session_state.pop("ei_m2_preview", None)
+                    st.error(str(exc))
+                except Exception as exc:
+                    st.session_state.pop("ei_m2_preview", None)
+                    st.error(f"AI review could not finish ({type(exc).__name__}). Check API configuration.")
+        ai_preview = st.session_state.get("ei_m2_preview")
+        if ai_preview and ai_preview[:3] == (vendor.id, fingerprint, tuple(selected_ids)):
+            st.warning("AI-generated proposals: verified quotations are not verified control operation.")
+            for decision in ai_preview[3]:
+                st.markdown(f"**{decision.requirement_id} — {decision.requirement}**")
+                st.write(f"**Draft outcome:** {decision.outcome} — Analyst confirmation required")
+                st.write(decision.reason)
+                for quote in decision.citations:
+                    st.caption(f"Source: {quote.filename} · {quote.location}")
+                    st.code(quote.excerpt, language=None)
+                st.write(f"**Recommended follow-up:** {decision.follow_up}")
                 st.divider()
 
     vendor_assessments = (
