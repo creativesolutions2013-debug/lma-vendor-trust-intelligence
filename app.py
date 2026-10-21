@@ -128,6 +128,7 @@ from src.evidence_intelligence_m2 import (
     PILOT_REQUIREMENTS, evaluate_ai_requirements,
 )
 from src.control_assurance_ui import render_control_assurance_pilot
+from src.assessment_worklist_ui import render_assessment_worklist_preview
 from src.evidence_state import (
     extraction_matches_file,
     file_changed,
@@ -5090,6 +5091,7 @@ def render_assessments():
     st.caption(
         "Launch, assign, and track risk-based vendor security assessments."
     )
+    render_assessment_worklist_preview()
 
     vendors = (
         session.query(Vendor)

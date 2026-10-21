@@ -1,6 +1,6 @@
 # M4A-1 — Evidence-First Assessment Worklist
 
-**Status: implementation handoff only.** This document does not claim M4A code exists. The source of truth for this slice's acceptance criteria is [GitHub Issue #7](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/7). M3D remains the merged, synthetic evidence-to-control assurance foundation.
+**Status: implemented synthetic prototype on draft PR #8; independent review required.** The source of truth for acceptance is [GitHub Issue #7](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/7). This slice adds no production authorization or governed decisions.
 
 ## Product objective
 
@@ -50,3 +50,93 @@ Exercise an explicit ID/scope mapping conflict, missing citations, and evidence 
 - Stop for independent TPRM, product, architecture, security and UX review; do not merge.
 
 **Not production-ready:** source authenticity, actual end-user permissions, customer/standards mapping verification, semantic accuracy, real vendor document processing, and measured analyst effort remain separate future milestones.
+
+## Implementation and contract
+
+`src/assessment_worklist.py` is a pure adapter, not a second evaluator. It calls
+`build_assessment_work_plan` once for the supplied applicability, retains that
+legacy result separately, and freshly inspects explicitly linked M3D cases.
+`ApplicabilityResult.controls` defines the row set, including unknown IDs; the
+question library is never an eligibility gate. Multiple explicitly mapped
+requirements can appear under one control. A control without a definition or
+link stays visible as Needs Review; an unlinked result cannot add a guessed row.
+
+`AssessmentScope`, `RequirementMapping` and `AssuranceLink` bind engagement,
+service/environment, full versioned customer requirement, threshold and assessment
+date. Duplicate applicable IDs/mappings or assurance identities are rejected
+before any result is displayed, preventing a positive duplicate from hiding a
+failure. Other mismatches get a visible Needs Review row without reusing source
+content. Legacy inventory also needs an exact relationship wrapper; its evidence
+sufficiency is informational and retains the existing orchestrator policy/clock.
+
+The adapter preserves source-bound facts, review fingerprints, exceptions,
+freshness and uncertainty. Its citation presentation filters out unmatched quotes;
+source context still shows actual parser text, origin, version, dates and original
+content hash. Confirmed current technical failures sort first, then unresolved
+conflicts/potential exceptions, missing artifacts, analyst validation and fully
+reviewed provisional support. Raw exception signals can include false positives;
+they still require separate human triage rather than automatic dismissal.
+
+`EvidenceNeed` supplies a precise fact, acceptable artifact/kinds, period and
+question for its exact requirement. Existing `analyze_targeted_evidence_gaps` is
+used only after source identity, relevance/context, kind and freshness screening.
+Request freshness hints cannot relax the customer's requirement age limit.
+Current candidates, including sources needing relevance/meaning review, defer
+requests in favor of analyst work. An absent, stale or out-of-scope required
+artifact can produce a preview; neither legacy UNSUPPORTED nor unconfirmed M3D
+missing checks alone do so. Dimensions describe analyst work, **not** automatic
+fact-level gap resolution. An artifact may be present yet insufficient after
+review. Requests deduplicate within exact relationship/control/requirement/threshold
+and fact/question context, ignoring duplicate request labels; different thresholds
+are not merged. Rows reference only their own requests and pending missing facts.
+
+`src/assessment_worklist_pilot.py` reuses existing M3D synthetic cases. The
+read-only `src/assessment_worklist_ui.py` renders inside existing Assessments:
+one priority-sorted table, selected requirement detail, expandable source context,
+and not-sent follow-up previews. No upload, send, confirm or approval control is
+introduced. Opening/selecting a package cannot create fact, signal or bundle
+reviews. All built-in fixtures start with empty review state; tests explicitly
+call the existing review API to model a previously reviewed case when testing
+provisional Met/reuse and confirmed failure priority.
+
+## Synthetic results and limitations
+
+Each package has **4 applicable requirements across 4 families**: explicit
+ENC-01 → ENC-02.TLS, BCP-01 → BCP-01.DR, CUSTOM-GOV-42 → GOV-01.POLICY, and
+CUSTOM-VM-42 → VM-01.REMEDIATION. The last two have no specialist evaluator.
+
+| Package | Distinct vendor-request previews | Ask-everything baseline | Meaning |
+| --- | ---: | ---: | --- |
+| Initial: recovery plan but no completed exercise | 1 | 4 | Ask only for the scoped completed exercise with achieved RTO/RPO |
+| Completed recovery exercise added | 0 | 4 | Only the recovery row/request changes; meanings still need analyst review |
+| Additional active alternate-listener TLS exception | 1 | 4 | Retain adverse evidence/triage; unrelated recovery request remains |
+| Exact control-ID mapping conflict | 1 | 4 | Surface TLS linkage gap, exclude its unlinked source, retain other rows |
+
+The baseline is one question per applicable requirement, not the legacy question
+library's generated count. These four deterministic packages are related examples,
+not independent vendor samples. Counts demonstrate request minimization from
+candidate inventory, not measured analyst effort, semantic accuracy, technical
+compliance, or cycle-time savings. The UI does not invent prior analyst reviews.
+Separate tests use explicit review actions to demonstrate provisional support
+and a current confirmed failure sorting above support, while governance stays
+outside this slice. Closing an artifact request does not prove its facts true.
+
+Regression coverage includes arbitrary/unmapped IDs, exact relationship and
+policy/threshold/date mismatches, duplicate positive/adverse inputs, unrelated
+results, legacy SUPPORTED, stale/wrong-scope/asserted operating records, invented
+citations, review invalidation, precise pending facts, request deduplication and
+cross-row isolation. Streamlit AppTest exercises source detail, request changes,
+exception-first order, fallback visibility, invalid packages, and inspection with
+database/write/network/AI/review calls blocked. This does not validate real app
+permissions, external custody, standards mappings, arbitrary document semantics
+or the adequacy of customer-supplied definitions/needs. Existing MFA compatibility
+and all domain-specific technical rules remain unchanged.
+
+Validation for this implementation: compilation of `app.py`, all three added
+modules and their three test modules passed **before** the complete isolated
+pytest run: **850 passed, 1 skipped** (PostgreSQL-only smoke test). This adds 51
+synthetic backend/integration/UI cases to the 799-test merged baseline. Diff and
+security review covered linkage, request/citation isolation, exception priority,
+review invalidation and the absence of outbound or governed writes. GitHub
+Actions results on the final commit are recorded in draft PR #8; both unit and
+PostgreSQL compatibility jobs are required for independent review.
