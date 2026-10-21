@@ -2,7 +2,7 @@
 from dataclasses import replace
 
 from src.assessment_orchestrator import QUESTION_LIBRARY
-from src.assessment_worklist import build_assessment_worklist
+from src.assessment_worklist import build_assessment_worklist, record_need_review
 from src.assessment_worklist_pilot import worklist_scenarios
 from src.control_assurance import inspect_control, record_control_review
 
@@ -114,7 +114,20 @@ def test_explicit_existing_review_can_reuse_evidence_without_approving_risk():
         state = _review(link.case, state, "signal", signal_id=signal.signal_id, material=False)
     state = _review(link.case, state, "bundle", confirms=True)
     assert inspect_control(link.case, state).outcome == "Met"
-    changed = replace(item, assurance_links=tuple(replace(row, state=state) if row.control_id == "ENC-01" else row
+    mapping = next(m for m in item.requirements if m.control_id == link.control_id)
+    reviewed = inspect_control(link.case, state)
+    need_reviews = []
+    for need in mapping.needs:
+        sources = tuple(b.fingerprint for b in reviewed.evidence if b.source.evidence_kind in need.accepted_kinds)
+        facts = tuple(f.fingerprint for f in reviewed.facts if f.proposal.source_fingerprint in sources
+                      and f.proposal.dimension in need.dimensions)
+        need_reviews.append(record_need_review(
+            item.scope, mapping, link.case, state, need, decision="supported", confirms=True,
+            source_fingerprints=sources, fact_fingerprints=facts,
+            analyst="Synthetic integration test reviewer", reviewed_on=link.case.as_of,
+            rationale="Confirmed these exact facts address the specific need under the customer threshold.",
+        ))
+    changed = replace(item, assurance_links=tuple(replace(row, state=state, need_reviews=tuple(need_reviews)) if row.control_id == "ENC-01" else row
                                                  for row in item.assurance_links))
     result = build(changed)
     row = rows_by_control(result)["ENC-01"]
@@ -127,4 +140,9 @@ def test_synthetic_request_counts_are_reproducible_and_not_cycle_time_claims():
     counts = [(item.scenario_id, len(build(item).requests), build(item).baseline_questions)
               for item in worklist_scenarios()]
     assert counts[:3] == [("initial", 1, 4), ("gap-closed", 0, 4), ("adverse", 1, 4)]
+    for key, awaiting, missing in (("initial", 4, 1), ("gap-closed", 5, 0)):
+        matches = [match for row in build(scenario(key)).rows for match in row.need_matches]
+        assert sum(m.status == "Supported by reviewed evidence" for m in matches) == 0
+        assert sum(m.status == "Analyst validation required" for m in matches) == awaiting
+        assert sum(m.status == "Missing or insufficient" for m in matches) == missing
     print("M4A synthetic distinct vendor-request previews / ask-everything baseline:", counts)

@@ -4,7 +4,7 @@ from dataclasses import replace
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from src.assessment_worklist import build_assessment_worklist
+from src.assessment_worklist import EvidenceNeed, build_assessment_worklist, record_need_review
 from src.assessment_worklist_pilot import worklist_scenarios
 from src.control_assurance import inspect_control, record_control_review
 
@@ -176,6 +176,20 @@ def test_provisional_met_still_requires_governance_and_sorts_last(monkeypatch):
     s = scenario()
     link = next(link for link in s.assurance_links if link.control_id == "ENC-01")
     updated = replace(link, state=explicit_review(link.case, link.state))
+    mapping = next(m for m in s.requirements if m.control_id == updated.control_id)
+    view = inspect_control(updated.case, updated.state)
+    reviews = []
+    for need in mapping.needs:
+        sources = tuple(b.fingerprint for b in view.evidence if b.source.evidence_kind in need.accepted_kinds)
+        reviews.append(record_need_review(
+            s.scope, mapping, updated.case, updated.state, need, decision="supported", confirms=True,
+            source_fingerprints=sources,
+            fact_fingerprints=tuple(f.fingerprint for f in view.facts if f.proposal.source_fingerprint in sources
+                                    and f.proposal.dimension in need.dimensions),
+            analyst="Synthetic independent reviewer", reviewed_on=updated.case.as_of,
+            rationale="Checked these confirmed facts against this exact need and customer threshold.",
+        ))
+    updated = replace(updated, need_reviews=tuple(reviews))
     supplied = replace(s, assurance_links=tuple(updated if l is link else l for l in s.assurance_links))
     monkeypatch.setattr(ui, "worklist_scenarios", lambda: (supplied,))
     at = app()
@@ -242,3 +256,94 @@ def test_existing_assessments_page_renders_preview_before_inventory_queries():
                    and node.func.id == "render_assessment_worklist_preview")
     inventory = next(node for node in calls if isinstance(node.func, ast.Attribute) and node.func.attr == "query")
     assert preview.lineno < inventory.lineno
+
+
+def partial_recovery_package(*, reviewed=False):
+    """RTO-only source; explicit test review distinguishes support from absent RPO."""
+    from src.control_assurance_pilot import document, proposal
+
+    s = scenario("gap-closed")
+    link = next(l for l in s.assurance_links if l.control_id == "BCP-01")
+    report = document("ui-time-only-exercise", "SYNTHETIC witnessed production exercise: achieved RTO was 120 minutes. This record addresses recovery time only.",
+                      link.case.requirement.scope)
+    case = replace(link.case, documents=(report,), proposals=(proposal(report, "achieved_rto_minutes", 1, 120),))
+    rto = EvidenceNeed("achieved-rto", "Achieved full-service RTO", "Dated complete-service recovery time record",
+                       "Provide the dated complete-service achieved RTO record.", ("test",), ("achieved_rto_minutes",), 365)
+    rpo = EvidenceNeed("achieved-rpo", "Achieved full-service RPO", "Dated complete-service recovery point record",
+                       "Provide the dated complete-service achieved RPO record.", ("test",), ("achieved_rpo_minutes",), 365)
+    mapping = replace(next(m for m in s.requirements if m.control_id == link.control_id), needs=(rto, rpo))
+    updated = replace(link, case=case)
+    if reviewed:
+        state = explicit_review(case, updated.state)
+        view = inspect_control(case, state)
+        common = dict(source_fingerprints=(view.evidence[0].fingerprint,), confirms=True,
+                      analyst="Synthetic independent reviewer", reviewed_on=case.as_of)
+        support = record_need_review(
+            s.scope, mapping, case, state, rto, decision="supported",
+            fact_fingerprints=(view.facts[0].fingerprint,),
+            rationale="Checked the confirmed recovery-time result against this specific need.", **common,
+        )
+        insufficient = record_need_review(
+            s.scope, mapping, case, state, rpo, decision="insufficient",
+            rationale="The time-only exercise record does not document the required recovery point result.", **common,
+        )
+        updated = replace(updated, state=state, need_reviews=(support, insufficient))
+    return replace(s, requirements=tuple(mapping if m.control_id == updated.control_id else m for m in s.requirements),
+                   assurance_links=tuple(updated if l.control_id == updated.control_id else l for l in s.assurance_links)), rto, rpo
+
+
+@pytest.mark.parametrize("reviewed", [False, True])
+def test_ui_distinguishes_exact_need_support_validation_and_reviewed_insufficiency(monkeypatch, reviewed):
+    import src.assessment_worklist_ui as ui
+
+    s, rto, rpo = partial_recovery_package(reviewed=reviewed)
+    monkeypatch.setattr(ui, "worklist_scenarios", lambda: (s,))
+    at = app()
+    row = next(r for r in built(s).rows if r.control_id == "BCP-01")
+    select_detail(at, row)
+    shown = text(at)
+    assert rto.missing_fact in shown and rpo.missing_fact in shown
+    assert "A request deferred for analyst review is not a resolved evidence need" in shown
+    if reviewed:
+        assert rto.need_id + " · Supported by reviewed evidence" in shown
+        assert rpo.need_id + " · Missing or insufficient" in shown
+        assert rpo.question in shown and rto.question not in shown
+        assert widget(at.metric, "Draft vendor requests").value == "1"
+        assert "1 reviewed support" in shown
+        assert row.outcome != "Met"
+        assert any("achieved RTO was 120 minutes" in item.value for item in at.code)
+    else:
+        assert rto.need_id + " · Analyst validation required" in shown
+        assert rpo.need_id + " · Analyst validation required" in shown
+        assert "Supported by reviewed evidence" not in shown
+        assert rpo.question not in shown
+        assert widget(at.metric, "Draft vendor requests").value == "0"
+        assert row.intent == "Analyst validate"
+    assert not at.button and not at.checkbox and not at.text_input
+
+
+@pytest.mark.parametrize("change", ["source", "threshold", "scope"])
+def test_ui_cannot_reuse_need_review_after_source_threshold_or_scope_changes(monkeypatch, change):
+    import src.assessment_worklist_ui as ui
+    from src.dr_assurance import DrThreshold
+
+    s, _, _ = partial_recovery_package(reviewed=True)
+    original = next(l for l in s.assurance_links if l.control_id == "BCP-01")
+    if change == "source":
+        case = replace(original.case, documents=(replace(original.case.documents[0], content=b"SYNTHETIC revised recovery exercise record; interpretation requires review."),))
+    elif change == "threshold":
+        case = replace(original.case, threshold=DrThreshold(365, 60, 60))
+    else:
+        case = replace(original.case, requirement=replace(original.case.requirement, scope="additional production recovery dependencies"))
+    changed = replace(original, case=case)
+    supplied = replace(s, assurance_links=tuple(changed if l is original else l for l in s.assurance_links),
+                       requirements=tuple(replace(m, requirement=case.requirement, threshold=case.threshold)
+                                          if m.control_id == "BCP-01" else m for m in s.requirements))
+    monkeypatch.setattr(ui, "worklist_scenarios", lambda: (supplied,))
+    at = app()
+    row = next(r for r in built(supplied).rows if r.control_id == "BCP-01")
+    select_detail(at, row)
+    assert "Supported by reviewed evidence" not in text(at)
+    assert all(m.status != "Supported by reviewed evidence" for m in row.need_matches)
+    assert row.outcome != "Met" and not any(f.confirmed for f in row.review.facts)
+    assert original.need_reviews == changed.need_reviews  # Inspection never replaces decisions.

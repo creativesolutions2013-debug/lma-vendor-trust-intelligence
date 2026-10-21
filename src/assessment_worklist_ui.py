@@ -42,6 +42,13 @@ def render_assessment_worklist_preview():
         )
         st.metric("Draft vendor requests", len(worklist.requests))
         st.metric("Ask-everything baseline", worklist.baseline_questions)
+        matches = [match for row in worklist.rows for match in row.need_matches]
+        st.caption(
+            f"Evidence needs: {sum(m.status == 'Supported by reviewed evidence' for m in matches)} reviewed support · "
+            f"{sum(m.status == 'Analyst validation required' for m in matches)} awaiting analyst validation · "
+            f"{sum(m.status == 'Missing or insufficient' for m in matches)} missing or insufficient. "
+            "A request deferred for analyst review is not a resolved evidence need."
+        )
         st.caption(
             "Counts describe these synthetic requirement sets, not analyst time or vendor accuracy. "
             "Legacy evidence support means document sufficiency under its own policy; it is not "
@@ -87,6 +94,19 @@ def render_assessment_worklist_preview():
                 st.write("**Recommended next action:** " + row.next_action)
             if row.missing_fact:
                 st.write("**Specific fact or evidence needed:** " + row.missing_fact)
+            for match in row.need_matches:
+                st.write(f"**{match.need_id} · {match.status}**")
+                st.write("Specific need: " + match.missing_fact)
+                st.caption("Acceptable evidence: " + match.acceptable_evidence)
+                st.caption(match.rationale)
+                if row.review:
+                    for bound in row.review.evidence:
+                        if bound.fingerprint in match.source_fingerprints:
+                            st.caption("Source for need review: " + bound.document.filename + " · " + bound.fingerprint)
+                    for fact in row.review.facts:
+                        if fact.fingerprint in match.fact_fingerprints:
+                            st.caption(f"{fact.filename} · {fact.proposal.location} · {fact.fingerprint}")
+                            st.code(fact.proposal.quote, language=None)
             for limitation in row.limitations:
                 st.warning(limitation)
             with st.expander("Source context and assessment limits", expanded=False):

@@ -8,6 +8,7 @@ from src.applicability import ApplicabilityResult
 from src.assessment_worklist import (
     AssessmentScope, AssuranceLink, EvidenceNeed, RequirementMapping,
     ScopedLegacyEvidence, build_assessment_worklist,
+    record_need_review,
 )
 from src.control_assurance import ControlReviewState, inspect_control, record_control_review
 from src.control_assurance_pilot import control_pilot_cases, fallback_pilot_cases
@@ -251,7 +252,18 @@ def test_fully_reviewed_met_reuses_evidence_but_preserves_governance_boundary():
     case = CASES["tls-strong"]
     state = current_review(case)
     before = state
-    result = build(case, state=state, needs=(scan_need(),))
+    need = scan_need()
+    requirement = mapping(case, needs=(need,))
+    view = inspect_control(case, state)
+    source = next(b for b in view.evidence if b.source.evidence_kind == "test")
+    facts = tuple(f.fingerprint for f in view.facts if f.proposal.source_fingerprint == source.fingerprint)
+    review = record_need_review(
+        scope(case), requirement, case, state, need, decision="supported", confirms=True,
+        source_fingerprints=(source.fingerprint,), fact_fingerprints=facts,
+        analyst="Synthetic independent analyst", reviewed_on=case.as_of,
+        rationale="Verified the confirmed scan facts answer this exact complete-endpoint need.",
+    )
+    result = build(case, state=state, needs=(need,), links=(replace(link(case, state=state), need_reviews=(review,)),))
     row = result.rows[0]
     assert row.outcome == "Met" and not result.requests
     assert row.priority == 4 and "reuse" in row.intent.casefold()

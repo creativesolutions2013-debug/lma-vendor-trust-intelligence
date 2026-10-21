@@ -156,10 +156,14 @@ provisional technical assurance. Targeted follow-ups are previews only.
 
 Four-requirement synthetic packages propose one vendor request initially and zero
 after a completed recovery record is supplied, against an ask-everything baseline
-of four questions per package. Artifact availability only redirects work to analyst
-validation; it cannot confirm technical facts. Pilot states start unreviewed, and
-inspection records no review or governed decision. These counts do not measure
-real analyst time, vendor accuracy or production readiness.
+of four questions per package. These are **deferred-request counts**, not resolved
+facts: both packages have zero reviewed supporting needs, and respectively four
+and five needs awaiting analyst validation. Need-specific review binds exact
+sources and confirmed M3D facts to the customer threshold; kind or general
+relevance cannot establish support. A reviewed insufficient fact produces a
+targeted follow-up even when a same-kind document is present. Pilot states start
+unreviewed, and inspection records no review or governed decision. These counts
+do not measure real analyst time, vendor accuracy or production readiness.
 
 ## Planned Industry-Pilot Capabilities
 
