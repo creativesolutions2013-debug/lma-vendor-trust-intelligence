@@ -1,3 +1,10 @@
+from src.auth_context import get_startup_context
+
+# Authenticate before even importing database/storage/UI dependencies: src.db
+# creates its directory and engine at import time. Production remains disabled.
+STARTUP_CONTEXT = get_startup_context()
+CURRENT_USER = STARTUP_CONTEXT.principal
+
 import json
 import os
 from datetime import date, datetime, timezone
@@ -106,7 +113,6 @@ from src.control_sufficiency import (
 )
 from src.attention import calculate_vendor_attention
 from src.audit import record_audit_event
-from src.auth_context import get_current_principal
 from src.authz import (
     PERMISSION_ASSESSMENT_MANAGE,
     PERMISSION_AUDIT_READ,
@@ -192,10 +198,10 @@ if not database_health["healthy"]:
     st.stop()
 
 session = get_session()
-seed_demo_data(session)
+if STARTUP_CONTEXT.development_demo_seed_allowed:
+    seed_demo_data(session)
 
 EVIDENCE_STORAGE = get_evidence_storage()
-CURRENT_USER = get_current_principal()
 
 PAGE_PERMISSIONS = {
     "Control Tower": PERMISSION_VENDOR_READ,

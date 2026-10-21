@@ -413,6 +413,15 @@ Production deployment requires appropriate authentication, tenant isolation, enc
 
 Production authentication is not yet configured.
 
+The [M4B-1 security boundary](docs/M4B1_Secure_Assessment_Boundary.md) rejects
+production/invalid authentication modes before database, storage or UI imports;
+demo seeding remains development-only. Local evidence operations enforce canonical
+vendor-scoped keys and POSIX no-follow path confinement. A separate read-only
+evidence-access preflight requires server-verified identity and exact relationship
+authorization plus RBAC; with no configured authority it denies. It is not wired
+to live evidence. M4A remains synthetic and read-only. These protections do not
+provide an IdP, tenant isolation, encrypted custody or production readiness.
+
 Never commit production credentials, access tokens, or confidential vendor documents to the repository.
 
 ## MVP Priorities

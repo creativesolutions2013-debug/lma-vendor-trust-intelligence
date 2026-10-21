@@ -1,11 +1,29 @@
 import os
 import re
+import stat
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
 
 DEFAULT_LOCAL_STORAGE_DIR = "uploaded_evidence"
+
+
+def validate_evidence_key(key: str, *, vendor_id: Optional[int] = None) -> str:
+    """Validate an opaque vendor-scoped object key, without filesystem access.
+
+    Keys are never decoded or normalized: URL encodings, alternate separators,
+    absolute paths and noncanonical IDs cannot acquire a different meaning later.
+    A vendor prefix is an association check, not relationship authorization.
+    """
+    if (not isinstance(key, str) or not re.fullmatch(
+            r"vendors/([1-9][0-9]*)/evidence/[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}", key)):
+        raise ValueError("Invalid vendor-scoped evidence key.")
+    if vendor_id is not None:
+        if type(vendor_id) is not int or vendor_id < 1 or key.split("/")[1] != str(vendor_id):
+            raise ValueError("Evidence key does not match the expected vendor.")
+    return key
 
 
 def _safe_filename(filename: str) -> str:
@@ -26,10 +44,14 @@ def build_evidence_key(
 
     Uploaded filenames are sanitized and scoped to the vendor.
     """
-    token = unique_id or uuid.uuid4().hex
+    if type(vendor_id) is not int or vendor_id < 1:
+        raise ValueError("A positive integer vendor ID is required.")
+    token = uuid.uuid4().hex if unique_id is None else unique_id
+    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", token):
+        raise ValueError("A safe opaque evidence ID is required.")
     safe_name = _safe_filename(filename)
 
-    return (
+    return validate_evidence_key(
         f"vendors/{vendor_id}/evidence/"
         f"{token}_{safe_name}"
     )
@@ -47,37 +69,103 @@ class LocalEvidenceStorage:
         self,
         base_dir: str = DEFAULT_LOCAL_STORAGE_DIR,
     ):
-        self.base_dir = Path(base_dir)
+        # Pin relative configuration to this working directory without following
+        # links. Initialization itself never creates or reads the storage tree.
+        self.base_dir = Path(os.path.abspath(base_dir))
+        if self.base_dir == Path(self.base_dir.anchor):
+            raise ValueError("Use a dedicated evidence-storage directory.")
+
+    @contextmanager
+    def _parent(self, key: str, *, create: bool, vendor_id: Optional[int]):
+        """Walk from / using directory descriptors; never follow any symlink.
+
+        POSIX no-follow/dir_fd support is required rather than an unsafe fallback.
+        An open parent stays anchored if a symlink is substituted after checking.
+        The configured tree must still be private to the application OS account;
+        this is not isolation from a hostile process with the same filesystem rights.
+        """
+        validate_evidence_key(key, vendor_id=vendor_id)
+        if (not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")
+                or any(fn not in os.supports_dir_fd for fn in (os.open, os.mkdir, os.stat, os.unlink))):
+            raise RuntimeError("Secure local storage requires directory-relative no-follow support.")
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptor = os.open(self.base_dir.anchor, flags)
+        try:
+            for part in self.base_dir.parts[1:] + tuple(key.split("/")[:-1]):
+                try:
+                    child = os.open(part, flags, dir_fd=descriptor)
+                except FileNotFoundError:
+                    if not create:
+                        yield None, key.split("/")[-1]
+                        return
+                    try:
+                        os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                    except FileExistsError:
+                        pass  # Reopen with O_NOFOLLOW even after a concurrent create.
+                    child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+            yield descriptor, key.split("/")[-1]
+        except OSError as exc:
+            # Do not turn unsafe paths into an innocuous "not present" result.
+            raise ValueError("Unsafe or inaccessible local evidence path.") from exc
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
+    def _regular_file(metadata):
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise ValueError("Evidence must be a regular file without links.")
+
+    def _leaf(self, parent, leaf):
+        try:
+            metadata = os.stat(leaf, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        self._regular_file(metadata)
+        return True
 
     def save(
         self,
         key: str,
         content: bytes,
+        *,
+        vendor_id: Optional[int] = None,
     ) -> str:
-        destination = self.base_dir / key
-        destination.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        destination.write_bytes(content)
-
-        return str(destination)
+        validate_evidence_key(key, vendor_id=vendor_id)
+        if not isinstance(content, bytes):
+            raise ValueError("Evidence content must be bytes.")
+        with self._parent(key, create=True, vendor_id=vendor_id) as (parent, leaf):
+            self._leaf(parent, leaf)
+            descriptor = os.open(leaf, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                 mode=0o600, dir_fd=parent)
+            with os.fdopen(descriptor, "wb") as target:
+                self._regular_file(os.fstat(target.fileno()))
+                target.truncate(0)
+                target.write(content)
+        return str(self.base_dir / key)
 
     def exists(
         self,
         key: str,
+        *,
+        vendor_id: Optional[int] = None,
     ) -> bool:
-        return (self.base_dir / key).exists()
+        with self._parent(key, create=False, vendor_id=vendor_id) as (parent, leaf):
+            return parent is not None and self._leaf(parent, leaf)
 
     def delete(
         self,
         key: str,
+        *,
+        vendor_id: Optional[int] = None,
     ) -> None:
-        path = self.base_dir / key
-
-        if path.exists():
-            path.unlink()
+        with self._parent(key, create=False, vendor_id=vendor_id) as (parent, leaf):
+            if parent is not None and self._leaf(parent, leaf):
+                try:
+                    os.unlink(leaf, dir_fd=parent)
+                except FileNotFoundError:
+                    pass
 
 
 class S3EvidenceStorage:

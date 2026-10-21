@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 from src.authz import Principal, ROLE_ADMIN, VALID_ROLES
 
@@ -7,30 +8,38 @@ AUTH_MODE_DEVELOPMENT = "development"
 AUTH_MODE_PRODUCTION = "production"
 
 
-def get_current_principal() -> Principal:
-    """
-    Resolve the current application principal.
+@dataclass(frozen=True)
+class StartupContext:
+    """Startup configuration and demo principal, not verified production identity."""
 
-    Development mode uses environment variables so RBAC can be tested without
-    pretending that the MVP has production authentication.
+    mode: str
+    principal: Principal
 
-    Production mode intentionally fails closed until a real identity provider
-    is configured.
-    """
+    @property
+    def development_demo_seed_allowed(self) -> bool:
+        # Keep this mode check even when a future trusted IdP is implemented.
+        return self.mode == AUTH_MODE_DEVELOPMENT
+
+
+def get_auth_mode() -> str:
+    """Resolve an explicit mode decision without touching storage or a database."""
     mode = os.getenv(
         "AUTH_MODE",
         AUTH_MODE_DEVELOPMENT,
     ).strip().lower()
 
+    if mode not in {AUTH_MODE_DEVELOPMENT, AUTH_MODE_PRODUCTION}:
+        raise ValueError(
+            "Unsupported AUTH_MODE. Expected 'development' or 'production'."
+        )
+    return mode
+
+
+def _principal_for_mode(mode: str) -> Principal:
     if mode == AUTH_MODE_PRODUCTION:
         raise RuntimeError(
             "Production authentication is not configured. "
             "Connect a real identity provider before using AUTH_MODE=production."
-        )
-
-    if mode != AUTH_MODE_DEVELOPMENT:
-        raise ValueError(
-            "Unsupported AUTH_MODE. Expected 'development' or 'production'."
         )
 
     role = os.getenv(
@@ -59,3 +68,18 @@ def get_current_principal() -> Principal:
         ),
         role=role,
     )
+
+
+def get_current_principal() -> Principal:
+    """Development env roles are demo inputs; production deliberately fails closed."""
+    return _principal_for_mode(get_auth_mode())
+
+
+def get_startup_context() -> StartupContext:
+    """Fail closed before importing side-effectful application dependencies.
+
+    Resolve mode once so the identity decision and demo-seeding boundary use the
+    same configuration snapshot. No production identity provider is implemented.
+    """
+    mode = get_auth_mode()
+    return StartupContext(mode, _principal_for_mode(mode))
