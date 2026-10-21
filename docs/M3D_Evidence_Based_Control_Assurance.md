@@ -83,12 +83,36 @@ separate exception/signal/bundle actions remain available.
 
 The conservative fallback explicitly displays **Specialist evaluation unavailable;
 analyst review required.** It returns provisional **Needs Review** when a current,
-in-scope, provenance-complete non-policy source needs expert evaluation, or
-**Evidence Missing** when no usable pertinent evidence exists. A policy alone,
-stale/out-of-scope report or deficient source inventory cannot establish usable
-operating evidence. A valid source can still be reviewed directly when it has no
+in-scope, provenance-complete source matches the requirement's explicit review
+expectations and relevance binding, or **Evidence Missing** when none does. A
+stale/out-of-scope report or deficient source inventory cannot establish eligibility.
+A suitably bound source can still be reviewed directly when it has no
 candidate facts, or when an individual candidate's citation/meaning is invalid;
 that invalid candidate remains unconfirmed and challengeable.
+
+`EvidenceExpectation` carries the customer's accepted source kinds and an explicit
+version. `RelevanceBinding` snapshots the supplied relevance rationale against the
+source fingerprint and the complete requirement/threshold fingerprint. Exactly one
+current, nonempty binding is required per eligible source. Missing, stale or
+duplicate bindings create a visible gap. These records are also included in the
+bundle fingerprint, so changing expectations, relevance, policy or thresholds
+invalidates active review. Missing metadata never defaults to inferred relevance.
+
+This is eligibility for specialist review, not semantic or operational proof.
+A policy can be relevant to a documented-governance requirement that explicitly
+accepts policies. The operational remediation example accepts configuration,
+test and assertion records for review; a related policy alone still leaves the
+required operational evidence missing. A current configuration file without a
+relevance binding also stays Evidence Missing. Kind, matching words, candidate
+presence and scope alone never determine relevance. Customer-supplied declarations
+can still be wrong and require human judgment; they cannot establish a passing or
+failed control. Specialist technical evaluators retain their existing rules.
+
+Additional synthetic packages demonstrate an approved service-specific security
+policy for a documented-governance criterion (`gov-policy`), its absence
+(`gov-missing`), policy intent for operational remediation (`vm-policy-only`) and
+unrelated configuration (`vm-unrelated`). The UI retains every source and quotation
+and distinguishes declared review eligibility from sources retained for context.
 
 Fallback evidence is cited as material **for specialist review**, never as support
 for meeting the requirement. Individual explicit meaning confirmation records only
@@ -227,3 +251,10 @@ The correction adds 35 backend and 13 Streamlit regressions, including arbitrary
 family registration and the typed evaluator extension. The remaining local skip is
 the PostgreSQL-only smoke check. Both GitHub Actions job results on the final head
 are recorded on draft PR #6 for independent re-review.
+
+Requirement-specific suitability amendment: compilation preceded the full isolated
+suite, which completed with **799 passed, 1 skipped**. Thirty backend and thirteen
+Streamlit regressions cover policy-documentation requirements, operational
+policy-only and unrelated-source gaps, malformed metadata, retained citations and
+review invalidation. Existing specialist and human-review regressions remain green.
+The skip still requires PostgreSQL; final-head CI results are recorded on PR #6.

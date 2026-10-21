@@ -26,6 +26,9 @@ Families are registered from applicable review cases, never a platform whitelist
 Without specialist rules, retain the requirement, citations, concerns and review
 history; disclose the limitation and return provisional Needs Review with usable
 evidence or Evidence Missing without it. Never infer passing, failure or compliance.
+Fallback suitability requires versioned requirement-specific evidence expectations
+and explicit source relevance. A policy may serve documented governance; it never
+proves technical operating effectiveness merely by being accepted for review.
 The synthetic proof and its limits are documented in
 docs/M3D_Evidence_Based_Control_Assurance.md. Workflow coverage is extensible;
 automated technical coverage remains limited to tested domain evaluators.

@@ -80,10 +80,16 @@ def present_control(case, view):
         context += f" Required assurance: {r.assurance_type}."
     if r.required_evidence:
         context += " Required evidence: " + "; ".join(r.required_evidence) + "."
+    if r.evidence_expectation:
+        context += (" Accepted evidence kinds for review: " + ", ".join(r.evidence_expectation.accepted_kinds)
+                    + f" (expectation v{r.evidence_expectation.version}).")
     review_evidence = tuple(
         CitedInterpretation(
             f"Supplied {b.source.evidence_kind} evidence; {b.source.service} · {b.source.environment} · "
-            f"{b.source.account_scope}; observed {b.source.observed_on}; sufficiency not evaluated",
+            f"{b.source.account_scope}; observed {b.source.observed_on}; "
+            + ("matches supplied review eligibility" if b.fingerprint in view.eligible_source_fingerprints
+               else "review eligibility not established; retained for context")
+            + "; sufficiency not evaluated",
             b.document.filename, segment.location, segment.text, b.fingerprint, False,
         ) for b in view.evidence for segment in b.document.segments
     ) if not view.specialist_available else ()
@@ -138,7 +144,7 @@ def render_assurance_summary(presentation):
     elif p.specialist_available:
         st.write("No complete supporting interpretation is available for grouped confirmation.")
     if p.evidence_for_review:
-        st.markdown("**Cited evidence for specialist review — sufficiency not evaluated**")
+        st.markdown("**Supplied evidence — review suitability shown per source**")
         for item in p.evidence_for_review[:2]:
             st.caption(f"{item.filename} · {item.location} · {item.statement}")
             st.code(item.quote, language=None)

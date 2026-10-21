@@ -9,7 +9,8 @@ import pytest
 
 from src.control_assurance import (
     Check, ControlCase, ControlReviewState, CustomerThreshold, DomainEvaluator,
-    RequirementContext, TechnicalResult, inspect_control, record_control_review,
+    EvidenceExpectation, RequirementContext, TechnicalResult, bind_relevance,
+    inspect_control, record_control_review,
 )
 from src.control_assurance_pilot import (
     document, fallback_pilot_cases, proposal,
@@ -32,23 +33,28 @@ def arbitrary_case(*, adverse=False):
         business_use_case="Keep processing records only for the agreed business period",
         required_evidence=("Current retention inventory and executed deletion records",),
         assurance_type="Implemented retention and operating deletion proof",
+        evidence_expectation=EvidenceExpectation("2026.1", ("configuration", "test", "assertion")),
     )
     policy = document("retention-policy", "SYNTHETIC customer policy: delete customer records within 30 days of the approved retention deadline.",
                       scope, kind="policy")
     inventory = document("retention-inventory", "SYNTHETIC inventory export: the vendor reports deletion after 28 days for the complete production store inventory.",
                          scope, kind="configuration")
     p = proposal(inventory, "reported_deletion_days", 1, 28)
+    threshold = CustomerThreshold("Delete customer records within 30 days of the approved retention deadline.")
+    relevance = (bind_relevance(requirement, threshold, inventory,
+                               rationale="The inventory reports deletion timing for the customer records governed by this retention requirement."),)
     docs, ps = (policy, inventory), (p,)
     if adverse:
         exception = document("retention-exception", "SYNTHETIC vendor response: an exception leaves archived customer records overdue and excluded from deletion.",
                              scope, kind="assertion")
         ep = replace(proposal(exception, "archived_records_retained", 1, True), concern="potential_exception")
         docs, ps = docs + (exception,), ps + (ep,)
+        relevance += (bind_relevance(requirement, threshold, exception,
+                                     rationale="The response reports an archived-record exception to the same customer deletion criterion."),)
     return ControlCase(
         case_id="customer-retention-case", title="Unrelated retention requirement",
         family="Customer-defined retention", requirement=requirement,
-        threshold=CustomerThreshold("Delete customer records within 30 days of the approved retention deadline."),
-        documents=docs, proposals=ps, as_of=AS_OF,
+        threshold=threshold, documents=docs, proposals=ps, as_of=AS_OF, relevance=relevance,
     )
 
 

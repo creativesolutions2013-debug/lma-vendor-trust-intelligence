@@ -2,7 +2,7 @@
 import streamlit as st
 
 from src.control_assurance import ControlReviewState, inspect_control, record_control_review
-from src.control_assurance_pilot import control_pilot_cases, fallback_pilot_cases
+from src.control_assurance_pilot import control_pilot_cases, fallback_pilot_cases, suitability_pilot_cases
 from src.control_assurance_presentation import present_control, render_assurance_summary
 from src.control_assurance_registry import registered_review_families
 from src.mfa_assurance_adapter import mfa_review_family
@@ -15,7 +15,7 @@ def render_control_assurance_pilot(*, actor_label="Pilot analyst"):
                "Session-only, provisional results; separate governed confirmation is required. "
                "This pilot does not provide production authorization.")
     registrations = registered_review_families(
-        control_pilot_cases() + fallback_pilot_cases(), adapters=(mfa_review_family(),),
+        control_pilot_cases() + fallback_pilot_cases() + suitability_pilot_cases(), adapters=(mfa_review_family(),),
     )
     if not registrations:
         st.info("No applicable customer requirements are registered for review.")
@@ -54,6 +54,12 @@ def render_control_assurance_pilot(*, actor_label="Pilot analyst"):
                 st.caption(f"{s.evidence_kind} · {s.service} · {s.environment} · {s.account_scope} · "
                            f"observed {s.observed_on} · captured {s.captured_on} · version {s.version} · {s.origin}")
                 st.code("\n".join(f"{p.location} | {p.text}" for p in b.document.segments), language=None)
+                if not view.specialist_available:
+                    st.caption("Review eligibility: " + ("matches supplied expectations and relevance binding; sufficiency not evaluated"
+                               if b.fingerprint in view.eligible_source_fingerprints else "not established; source retained for context"))
+                    for binding in case.relevance:
+                        if binding.source_fingerprint == b.fingerprint:
+                            st.caption(f"Supplied relevance rationale: {binding.rationale or 'not supplied'}")
                 st.caption("Original-content SHA-256: " + b.content_sha256)
             for f in view.facts:
                 st.write(f"{f.proposal.fact_id}: " + ("; ".join(f.reasons) if f.reasons else "Source binding consistent; meaning requires analyst review."))

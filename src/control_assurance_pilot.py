@@ -3,7 +3,8 @@ from dataclasses import replace
 from datetime import date
 
 from src.control_assurance import (
-    ControlCase, CustomerThreshold, DomainEvaluator, Observation, RequirementContext,
+    ControlCase, CustomerThreshold, DomainEvaluator, EvidenceExpectation, Observation,
+    RequirementContext, bind_relevance,
 )
 from src.evidence_source_validation import EvidenceInput, bind_evidence, segment_id
 from src.tls_assurance import TLS_SIGNALS, TlsThreshold, evaluate_tls, tls_direction
@@ -120,6 +121,7 @@ def fallback_pilot_cases():
         business_use_case="Customer production data processing on vendor-managed assets",
         required_evidence=("dated critical-vulnerability remediation tickets and independent closure retests for all in-scope assets",),
         assurance_type="Implementation records and independently verified operating closure",
+        evidence_expectation=EvidenceExpectation("2026.1", ("configuration", "test", "assertion")),
     )
     threshold = CustomerThreshold(
         "Remediate critical vulnerabilities within 30 calendar days of discovery "
@@ -140,7 +142,49 @@ def fallback_pilot_cases():
     )
     present = ControlCase("vm-present", "Remediation records and a reported unresolved exception",
                           "Vulnerability remediation", requirement, threshold,
-                          (tickets, exception), candidates, AS_OF)
+                          (tickets, exception), candidates, AS_OF,
+                          relevance=(
+                              bind_relevance(requirement, threshold, tickets,
+                                             rationale="Remediation ticket records address the customer's production critical-vulnerability timeline; closure retests remain missing."),
+                              bind_relevance(requirement, threshold, exception,
+                                             rationale="The response reports a critical production vulnerability remaining open under the same customer remediation criterion."),
+                          ))
     missing = replace(present, case_id="vm-missing", title="No remediation evidence supplied",
-                      documents=(), proposals=())
+                      documents=(), proposals=(), relevance=())
     return present, missing
+
+
+def suitability_pilot_cases():
+    """Requirement-specific documentation versus operational review eligibility."""
+    operational = fallback_pilot_cases()[0]
+    requirement = replace(
+        operational.requirement, requirement_id="GOV-01.POLICY", customer_policy_id="synthetic-customer-governance",
+        required_evidence=("current approved information-security policy covering the assessed service",),
+        assurance_type="Documented governance; operating effectiveness is not asserted",
+        evidence_expectation=EvidenceExpectation("2026.1", ("policy",)),
+    )
+    threshold = CustomerThreshold("Maintain an approved information-security policy for the assessed service, with an assigned owner and review within the last 90 days.")
+    policy = document("approved-security-policy", (
+        "SYNTHETIC information-security policy: approved by the Acme Analytics Security Committee on 2026-10-14, "
+        "covering Acme Analytics production assets; owner: Security Governance. Review completed 2026-10-14. "
+        "This document states governance responsibilities and does not assert technical operating effectiveness."
+    ), requirement.scope, kind="policy")
+    governance = ControlCase(
+        "gov-policy", "Current approved policy for documented governance", "Documented security governance",
+        requirement, threshold, (policy,), (proposal(policy, "documented_policy", 1, True),), AS_OF,
+        relevance=(bind_relevance(requirement, threshold, policy,
+                                 rationale="The document names the assessed production service, owner, approval and review dates required by the documentation criterion."),),
+    )
+    missing = replace(governance, case_id="gov-missing", title="No governance policy supplied",
+                      documents=(), proposals=(), relevance=())
+    intent = document("remediation-intent-policy", "SYNTHETIC vulnerability policy requires critical-issue remediation within 30 days and independent closure retests; no executed tickets or retests are supplied.", operational.requirement.scope, kind="policy")
+    policy_only = replace(
+        operational, case_id="vm-policy-only", title="Related policy intent without operational remediation records",
+        documents=(intent,), proposals=(proposal(intent, "documented_remediation_intent", 1, True),),
+        relevance=(bind_relevance(operational.requirement, operational.threshold, intent,
+                                 rationale="The policy addresses the remediation topic but provides design intent only, not the required operational records."),),
+    )
+    unrelated = document("clock-configuration", "SYNTHETIC production configuration export: servers use the designated network time source. No vulnerability remediation records are included.", operational.requirement.scope, kind="configuration")
+    irrelevant = replace(operational, case_id="vm-unrelated", title="Current configuration unrelated to remediation",
+                         documents=(unrelated,), proposals=(), relevance=())
+    return governance, missing, policy_only, irrelevant

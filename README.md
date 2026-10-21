@@ -126,6 +126,13 @@ limitation and focused follow-up. Human semantic confirmation cannot turn either
 fallback result into passing or proven failure. This is workflow coverage for
 arbitrary applicable requirements, not automated technical coverage of all controls.
 
+Fallback evidence suitability is explicit for each customer requirement: versioned
+accepted evidence kinds and a relevance binding to the source, requirement and
+threshold. A current approved policy can enter review for a documented-governance
+requirement; policy intent cannot substitute for operational remediation records.
+Unrelated or unbound sources remain visible with an evidence/relevance gap.
+These declarations enable specialist review, not automatic assurance.
+
 Every interpretation still requires explicit human semantic confirmation, separate
 exception triage and complete-bundle review. Customer policy, threshold, context,
 document and interpretation changes invalidate active review. Results remain

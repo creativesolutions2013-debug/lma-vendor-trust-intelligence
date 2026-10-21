@@ -15,7 +15,7 @@ from src.evidence_source_validation import (
     SignalDisposition, _digest, _review_valid, bind_evidence, segment_id, source_issues,
 )
 
-CONTRACT_VERSION = "M3D-1.1"
+CONTRACT_VERSION = "M3D-1.2"
 SPECIALIST_LIMITATION = "Specialist evaluation unavailable; analyst review required."
 # Triage only, not a domain rule, entailment engine or proof of failure.
 GENERAL_SIGNALS = re.compile(r"\b(?:except\w*|fail\w*|excluded|overdue|untested|conflict\w*|unresolved)\b", re.I)
@@ -42,6 +42,22 @@ class CustomerThreshold:
 
 
 @dataclass(frozen=True)
+class EvidenceExpectation:
+    """Supplied review inputs, not rules proving control effectiveness."""
+
+    version: str
+    accepted_kinds: tuple[str, ...]
+
+    def __post_init__(self):
+        if (not isinstance(self.version, str) or not self.version.strip()
+                or type(self.accepted_kinds) is not tuple or not self.accepted_kinds
+                or any(not isinstance(kind, str) or kind not in {"policy", "assertion", "configuration", "test"}
+                       for kind in self.accepted_kinds)
+                or len(set(self.accepted_kinds)) != len(self.accepted_kinds)):
+            raise ValueError("Supply a version and distinct accepted evidence kinds for this requirement.")
+
+
+@dataclass(frozen=True)
 class RequirementContext:
     requirement_id: str
     customer_policy_id: str
@@ -58,6 +74,26 @@ class RequirementContext:
     assurance_type: str = ""
     standard_source: str = ""
     standard_edition: str = ""
+    evidence_expectation: EvidenceExpectation | None = None
+
+
+@dataclass(frozen=True)
+class RelevanceBinding:
+    source_fingerprint: str
+    requirement_fingerprint: str
+    rationale: str
+
+
+def requirement_fingerprint(requirement: RequirementContext, threshold: ControlThreshold):
+    return _digest({"requirement": asdict(requirement), "threshold": asdict(threshold)})
+
+
+def bind_relevance(requirement, threshold, document: EvidenceInput, *, rationale: str):
+    """Snapshot a supplied relevance judgment, never infer it from source text."""
+    if not isinstance(rationale, str) or not rationale.strip():
+        raise ValueError("Supply the source-to-requirement relevance rationale.")
+    return RelevanceBinding(bind_evidence(document).fingerprint,
+                            requirement_fingerprint(requirement, threshold), rationale)
 
 
 @dataclass(frozen=True)
@@ -110,6 +146,7 @@ class ControlCase:
     proposals: tuple[Observation, ...]
     as_of: date
     evaluator: DomainEvaluator | None = field(default=None, repr=False)
+    relevance: tuple[RelevanceBinding, ...] = ()
 
     @property
     def threshold_summary(self):
@@ -161,6 +198,7 @@ class ControlReview:
     bundle_fingerprint: str
     bundle_review_valid: bool
     specialist_available: bool = True
+    eligible_source_fingerprints: tuple[str, ...] = ()
     provisional: bool = field(default=True, init=False)
     review_required: bool = field(default=True, init=False)
 
@@ -178,9 +216,13 @@ def inspect_control(case: ControlCase, state: ControlReviewState = ControlReview
                 r.service, r.environment, r.scope))):
         raise ValueError("A versioned, customer-approved requirement, scope and assessment date are required.")
     specialist = case.evaluator
+    if r.evidence_expectation is not None and not isinstance(r.evidence_expectation, EvidenceExpectation):
+        raise ValueError("Supply typed requirement-specific evidence expectations.")
     if specialist is not None and (not isinstance(specialist, DomainEvaluator)
             or not isinstance(specialist.version, str) or not specialist.version.strip()):
         raise ValueError("A versioned typed domain evaluator is required when specialist rules are supplied.")
+    if any(not isinstance(binding, RelevanceBinding) for binding in case.relevance):
+        raise ValueError("Supply typed source-to-requirement relevance bindings.")
     evidence = tuple(bind_evidence(d) for d in case.documents)
     if len({d.source.document_id for d in evidence}) != len(evidence):
         raise ValueError("Duplicate document IDs are not allowed.")
@@ -191,7 +233,8 @@ def inspect_control(case: ControlCase, state: ControlReviewState = ControlReview
                       "family": case.family, "requirement": asdict(r),
                       "threshold": asdict(case.threshold), "as_of": case.as_of,
                       "documents": sorted(d.fingerprint for d in evidence),
-                      "facts": sorted(observation_fingerprint(p) for p in case.proposals)})
+                      "facts": sorted(observation_fingerprint(p) for p in case.proposals),
+                      "relevance": sorted(_digest(asdict(binding)) for binding in case.relevance)})
     # Policy, context, document and proposal changes invalidate *all* active review.
     # Prior events remain in the caller's state for inspection; never transfer approval.
     active = state if state.bundle_fingerprint == bundle else ControlReviewState()
@@ -254,18 +297,38 @@ def inspect_control(case: ControlCase, state: ControlReviewState = ControlReview
     bundle_valid = bool(active.bundle_review and active.bundle_review.bundle_fingerprint == bundle
                         and _review_valid(active.bundle_review, case.as_of, latest_capture)
                         and active.bundle_review.signal_dispositions == active.signal_dispositions)
+    eligible = []
     if specialist:
         technical = specialist.evaluate(case.threshold, tuple(accepted), case.as_of)
     else:
-        # Evidence inventory can remain useful even without candidate extraction.
-        # Policy intent alone is not pertinent implementation/operating evidence.
-        usable = any(not source_limits[b.fingerprint] and b.source.evidence_kind != "policy" for b in evidence)
-        requested = "; ".join(r.required_evidence) or "current in-scope implementation or operating evidence"
+        # Suitability is explicitly supplied for this requirement. Neither kind,
+        # matching words, candidate presence nor source inventory implies relevance.
+        expectation = r.evidence_expectation
+        if expectation is None:
+            limitations.append("Requirement-specific evidence expectations are missing; supply accepted kinds and their version.")
+        target = requirement_fingerprint(r, case.threshold)
+        for b in evidence:
+            gaps = []
+            if expectation is None or b.source.evidence_kind not in expectation.accepted_kinds:
+                gaps.append("Evidence kind is not accepted for this requirement's declared review expectations.")
+            bindings = [x for x in case.relevance if x.source_fingerprint == b.fingerprint]
+            if (len(bindings) != 1 or bindings[0].requirement_fingerprint != target
+                    or not isinstance(bindings[0].rationale, str) or not bindings[0].rationale.strip()):
+                gaps.append("Source-to-requirement relevance is missing, stale or ambiguous; supply a current explicit rationale.")
+            if not gaps and not source_limits[b.fingerprint]:
+                eligible.append(b.fingerprint)
+            limitations.extend(f"{b.document.filename}: {gap}" for gap in gaps)
+        requested = "; ".join(r.required_evidence) or "current evidence matching the requirement's declared expectations"
+        next_step = "Request " + requested + "; then arrange specialist evaluation."
+        if expectation is None:
+            next_step = "Specify the customer's accepted evidence kinds and expectation version before judging suitability."
+        elif any(not source_limits[b.fingerprint] and b.source.evidence_kind in expectation.accepted_kinds for b in evidence):
+            next_step = "Review how the supplied source relates to this requirement; record or correct its relevance rationale."
         technical = TechnicalResult(
-            "Needs Review" if usable else "Evidence Missing",
+            "Needs Review" if eligible else "Evidence Missing",
             (Check("specialist_evaluation", "uncertain", SPECIALIST_LIMITATION),),
             "Arrange specialist review of the cited evidence against the supplied customer acceptance criteria."
-            if usable else "Request " + requested + "; then arrange specialist evaluation.",
+            if eligible else next_step,
         )
         limitations.append(SPECIALIST_LIMITATION)
     if any(not f.confirmed for f in facts):
@@ -295,7 +358,7 @@ def inspect_control(case: ControlCase, state: ControlReviewState = ControlReview
             next_action = limitations[0]
     return ControlReview(r, case.threshold_summary, case.as_of, outcome, technical.checks,
                          tuple(facts), evidence, tuple(signals), tuple(dict.fromkeys(limitations)),
-                         next_action, bundle, bundle_valid, specialist is not None)
+                         next_action, bundle, bundle_valid, specialist is not None, tuple(eligible))
 
 
 def record_control_review(case, state, *, action, expected_bundle, analyst, reviewed_on,
