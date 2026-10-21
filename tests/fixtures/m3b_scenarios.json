@@ -1,0 +1,450 @@
+{
+  "as_of": "2026-10-20",
+  "max_age_days": 90,
+  "fixture_notice": "Entirely synthetic English documents and independently authored expectations for a narrow privileged-human-administrator MFA regression set. Metadata is a declared inventory and is not independently authenticated.",
+  "scenarios": [
+    {
+      "id": "strong_fido2_full_population",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "production-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production.\nThe export covers all 24 human administrators, including the two emergency administrators, and the complete enabled authentication path inventory.\nMFA is enabled and enforced for all 24 human administrators; no administrator can obtain an administrative session without the enforced factors.\nThe sole enabled authentication path is primary-admin, using deployed FIDO2 security keys plus each key's local PIN; possession and PIN verification are both required.\nFor this deployed primary-admin path, the client validates the Acme Analytics origin and the verifier validates the relying-party binding before issuing a session.\nFallback authentication paths are disabled for the entire administrator population.\nRecovery requires two custodians to authorize registration of a replacement FIDO2 key with a PIN; no administrative session can be issued until the same origin-bound, verifier-bound multifactor challenge succeeds.\nThe complete administrator and authentication-path inventories contain no exemptions or weaker alternate paths.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "operating-test",
+          "filename": "administrator-authentication-tests.txt",
+          "text": "SYNTHETIC operating test executed 2026-10-14 for Acme Analytics production human administrators.\nThe tester reconciled the current directory inventory and exercised every one of the 24 administrator accounts, including emergency administrators.\nAll 24 administrative login attempts required the deployed FIDO2 key plus PIN; wrong-origin and wrong-relying-party challenges were rejected, and attempts without either factor failed.\nThe tester exercised every documented fallback and recovery workflow; fallback login failed, and replacement-key recovery issued no session before the replacement key plus PIN satisfied the same origin and verifier checks.\nNo administrator exemptions, MFA bypasses, weaker active authentication paths or operating-test exceptions were found in the complete tested inventory.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-14",
+          "evidence_kind": "test"
+        }
+      ],
+      "expected_positive": true,
+      "material_exceptions": [],
+      "review_notes": "Positive control only after independent analyst review confirms each typed fact against full context. FIDO2 branding alone supplies none of the implementation properties. The test covers the entire stated human administrator population and complete alternate-path inventory."
+    },
+    {
+      "id": "sms_active_administrative_path",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "sms-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production human administrators.\nAll 24 human administrator accounts require a password and an additional factor on the primary-admin path.\nThe active primary-admin method is SMS: a one-time code sent to an enrolled telephone number is required with the password.\nThe SMS method is enabled for all 24 human administrators; FIDO2 is available in the product catalog but is not deployed on this path.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [
+        {
+          "document_id": "configuration",
+          "location": "Line 3",
+          "description": "An active administrator path uses SMS rather than a permitted phishing-resistant method."
+        }
+      ],
+      "corroborating_material_locations": [
+        {
+          "document_id": "configuration",
+          "location": "Line 4",
+          "description": "Confirms that the same active SMS path covers all 24 administrators and that FIDO2 is not deployed; corroborates the distinct SMS exception identified at Line 3."
+        }
+      ],
+      "review_notes": "A password plus SMS is MFA but does not meet this scenario's phishing-resistant FIDO2/WebAuthn threshold. The policy and product catalog must not override deployed configuration."
+    },
+    {
+      "id": "totp_active_administrative_path",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "totp-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production human administrators.\nThe active primary-admin path applies to all 24 human administrator accounts.\nEach administrator signs in with a password plus a TOTP authenticator code; TOTP remains enabled and required on the active production path.\nThe migration plan proposes FIDO2 keys for next quarter; no FIDO2 method is deployed today.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [
+        {
+          "document_id": "configuration",
+          "location": "Line 3",
+          "description": "The active administrator authentication method is TOTP, below the phishing-resistant threshold."
+        }
+      ],
+      "review_notes": "A planned FIDO2 deployment is not current implementation evidence. TOTP is a known MFA method but not evidence of phishing resistance."
+    },
+    {
+      "id": "unknown_method",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "vendor-response",
+          "filename": "unclassified-method-response.txt",
+          "text": "SYNTHETIC vendor response dated 2026-10-12 for Acme Analytics production human administrators.\nWe use our proprietary Secure Challenge method for administrative login.\nThe response provides no description of required factors, origin binding, verifier binding, administrator coverage or alternate authentication paths.\nOur product team calls this method next-generation authentication.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "assertion"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "Unknown method and marketing language require clarification. Missing implementation details are uncertainty, not proof that the control fails; do not classify the proprietary name as an approved equivalent."
+    },
+    {
+      "id": "fido2_mention_only",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "overview",
+          "filename": "authentication-overview.txt",
+          "text": "SYNTHETIC service overview dated 2026-10-12 for Acme Analytics production human administrators.\nAcme Analytics supports FIDO2 and MFA for customers who choose those options.\nThe overview describes available product features and contains no current administrator configuration, deployed factor details, complete account inventory or authentication-path inventory.\nNo operating tests are included in this service overview.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "assertion"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "The quotation about FIDO2 is exact but does not entail deployment, phishing resistance, complete administrator coverage, enforcement, safe recovery or successful operating tests. This is deliberately an unsupported positive interpretation trap."
+    },
+    {
+      "id": "omitted_break_glass_bypass",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "production-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production.\nThe export covers all 24 human administrators, including the two emergency administrators, and the complete enabled authentication path inventory.\nMFA is enabled and enforced for all 24 human administrators; no administrator can obtain an administrative session without the enforced factors.\nThe sole enabled authentication path is primary-admin, using deployed FIDO2 security keys plus each key's local PIN; possession and PIN verification are both required.\nFor this deployed primary-admin path, the client validates the Acme Analytics origin and the verifier validates the relying-party binding before issuing a session.\nFallback authentication paths are disabled for the entire administrator population.\nRecovery requires two custodians to authorize registration of a replacement FIDO2 key with a PIN; no administrative session can be issued until the same origin-bound, verifier-bound multifactor challenge succeeds.\nThe complete administrator and authentication-path inventories contain no exemptions or weaker alternate paths.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "emergency-runbook",
+          "filename": "emergency-access-runbook.txt",
+          "text": "SYNTHETIC emergency runbook captured 2026-10-13 for Acme Analytics production human administrators.\nRoutine administrator access follows the primary FIDO2 workflow.\nTwo emergency human administrator accounts bypass MFA and can obtain production administrative sessions with a vaulted password only.\nThe emergency accounts remain enabled and are omitted from the routine IdP export because they use the local management endpoint.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-13",
+          "evidence_kind": "configuration"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [
+        {
+          "document_id": "emergency-runbook",
+          "location": "Line 3",
+          "description": "Two enabled emergency administrator accounts bypass MFA with password-only access."
+        }
+      ],
+      "review_notes": "The adverse document intentionally contradicts the apparently complete IdP export and may be omitted from proposed facts. Review the whole bundle; a rejected or absent positive extraction must not hide the emergency exception."
+    },
+    {
+      "id": "contradictory_policy_configuration_and_test",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "operating-test",
+          "filename": "administrator-authentication-tests.txt",
+          "text": "SYNTHETIC operating test executed 2026-10-14 for Acme Analytics production human administrators.\nThe tester reconciled the current directory inventory and exercised every one of the 24 administrator accounts, including emergency administrators.\nAll 24 administrative login attempts required the deployed FIDO2 key plus PIN; wrong-origin and wrong-relying-party challenges were rejected, and attempts without either factor failed.\nThe tester exercised every documented fallback and recovery workflow; fallback login failed, and replacement-key recovery issued no session before the replacement key plus PIN satisfied the same origin and verifier checks.\nNo administrator exemptions, MFA bypasses, weaker active authentication paths or operating-test exceptions were found in the complete tested inventory.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-14",
+          "evidence_kind": "test"
+        },
+        {
+          "id": "configuration",
+          "filename": "local-admin-configuration.txt",
+          "text": "SYNTHETIC configuration review captured 2026-10-15 for Acme Analytics production human administrators.\nThe central IdP group contains 21 human administrators and requires FIDO2 keys plus PIN.\nThree additional local human administrator accounts are exempt from MFA and can sign in with passwords without MFA on the production management endpoint.\nThe operating-test report dated 2026-10-14 listed only IdP accounts and did not enumerate the local management endpoint.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-15",
+          "evidence_kind": "configuration"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [
+        {
+          "document_id": "configuration",
+          "location": "Line 3",
+          "description": "Three local administrator accounts are exempt and use passwords without MFA."
+        }
+      ],
+      "review_notes": "Policy intent and an apparently complete earlier operating test conflict with later configuration evidence. Preserve the conflict and citations; do not resolve it by document ordering or by counting positive statements."
+    },
+    {
+      "id": "outdated_operating_evidence",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "production-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production.\nThe export covers all 24 human administrators, including the two emergency administrators, and the complete enabled authentication path inventory.\nMFA is enabled and enforced for all 24 human administrators; no administrator can obtain an administrative session without the enforced factors.\nThe sole enabled authentication path is primary-admin, using deployed FIDO2 security keys plus each key's local PIN; possession and PIN verification are both required.\nFor this deployed primary-admin path, the client validates the Acme Analytics origin and the verifier validates the relying-party binding before issuing a session.\nFallback authentication paths are disabled for the entire administrator population.\nRecovery requires two custodians to authorize registration of a replacement FIDO2 key with a PIN; no administrative session can be issued until the same origin-bound, verifier-bound multifactor challenge succeeds.\nThe complete administrator and authentication-path inventories contain no exemptions or weaker alternate paths.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "operating-test",
+          "filename": "prior-year-authentication-tests.txt",
+          "text": "SYNTHETIC operating test executed 2025-09-15 for Acme Analytics production human administrators.\nThe tester exercised every one of the 18 administrator accounts present in the directory on that historical test date.\nAll tested accounts required a FIDO2 key plus PIN with origin and relying-party checks; no exceptions were found during the historical test.\nThis report contains no testing after 2025-09-15 and does not claim to cover the current 24-account administrator inventory.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2025-09-15",
+          "evidence_kind": "test"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "The operating test is outside the 90-day window as of 2026-10-20. Recent configuration does not refresh historical tests or establish operation for the current population. Staleness is an assurance limitation, not a confirmed control failure."
+    },
+    {
+      "id": "similarly_named_service_scope_mismatch",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "acme-analytics-labs-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics Labs production human administrators.\nAcme Analytics Labs is a separate service with its own identity directory; this export does not cover Acme Analytics.\nAll six Acme Analytics Labs human administrators use enforced FIDO2 keys plus PIN, with origin and relying-party validation.\nNo fallback paths exist in Acme Analytics Labs, and its complete recovery flow requires the same factors before access.\n",
+          "service": "Acme Analytics Labs",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "operating-test",
+          "filename": "acme-analytics-labs-tests.txt",
+          "text": "SYNTHETIC operating test executed 2026-10-14 for Acme Analytics Labs production human administrators.\nAll six Acme Analytics Labs administrator accounts and all recovery paths were tested with no exceptions.\nThe test excludes the separate Acme Analytics service and its administrator population.\n",
+          "service": "Acme Analytics Labs",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-14",
+          "evidence_kind": "test"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "The similarly named service is expressly different. Do not normalize the name into the assessed service or let an extracted target-service label overwrite the source inventory scope."
+    },
+    {
+      "id": "sms_recovery_bypasses_primary_method",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "production-idp-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production.\nThe export covers all 24 human administrators, including the two emergency administrators, and the complete enabled authentication path inventory.\nMFA is enabled and enforced for all 24 human administrators; no administrator can obtain an administrative session without the enforced factors.\nThe sole enabled authentication path is primary-admin, using deployed FIDO2 security keys plus each key's local PIN; possession and PIN verification are both required.\nFor this deployed primary-admin path, the client validates the Acme Analytics origin and the verifier validates the relying-party binding before issuing a session.\nFallback authentication paths are disabled for the entire administrator population.\nRecovery requires two custodians to authorize registration of a replacement FIDO2 key with a PIN; no administrative session can be issued until the same origin-bound, verifier-bound multifactor challenge succeeds.\nThe complete administrator and authentication-path inventories contain no exemptions or weaker alternate paths.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "recovery-runbook",
+          "filename": "administrator-recovery-runbook.txt",
+          "text": "SYNTHETIC recovery runbook captured 2026-10-13 for Acme Analytics production human administrators.\nNormal primary-admin login requires a FIDO2 security key plus PIN.\nThe enabled recovery path accepts an SMS code and a help-desk reset link, then issues an administrator session without the FIDO2 key or PIN.\nThis recovery path is available to every human administrator and remains active while replacement keys are shipped.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-13",
+          "evidence_kind": "configuration"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [
+        {
+          "document_id": "recovery-runbook",
+          "location": "Line 3",
+          "description": "Enabled SMS recovery issues an administrator session without the required FIDO2 factors."
+        }
+      ],
+      "review_notes": "A strong primary method does not establish safe recovery. The recovery workflow contradicts the claimed complete configuration inventory and must remain visible independently of the extracted primary method."
+    },
+    {
+      "id": "sampled_test_not_complete_coverage",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "configuration",
+          "filename": "administrator-group-export.txt",
+          "text": "SYNTHETIC configuration export captured 2026-10-12 for Acme Analytics production human administrators.\nThe directory lists 24 human administrators, and the policy-assigned group contains 24 members.\nThe export lists FIDO2 as an available method but does not show per-account enforcement, alternate local accounts or recovery settings.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "configuration"
+        },
+        {
+          "id": "operating-test",
+          "filename": "sampled-administrator-test.txt",
+          "text": "SYNTHETIC operating test executed 2026-10-14 for Acme Analytics production human administrators.\nThe tester selected three routine administrator accounts from a directory containing 24 human administrators.\nThe three sampled accounts required a FIDO2 key plus PIN, and their tested challenges rejected wrong origins and wrong relying-party identifiers.\nThe tester did not test the remaining 21 administrators, emergency accounts, fallback paths or recovery workflows.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-14",
+          "evidence_kind": "test"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "Passing sample results do not prove complete administrator coverage or safe alternate paths. This is incomplete evidence rather than an affirmative MFA exception."
+    },
+    {
+      "id": "policy_and_assertion_only",
+      "documents": [
+        {
+          "id": "policy",
+          "filename": "administrator-access-policy.txt",
+          "text": "SYNTHETIC Acme Analytics administrator access policy, approved 2026-10-01.\nScope: Acme Analytics production; all human administrators, including emergency administrators.\nEvery human administrator must use enforced phishing-resistant MFA for production administrative access.\nOnly FIDO2 or WebAuthn implementations with verified origin binding, verifier binding and multiple factors are permitted.\nFallback, account recovery and emergency access must meet the same authentication requirement.\nThis policy states required behavior; it is not a configuration export or evidence of operating tests.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-01",
+          "evidence_kind": "policy"
+        },
+        {
+          "id": "vendor-response",
+          "filename": "security-questionnaire-response.txt",
+          "text": "SYNTHETIC vendor response dated 2026-10-12 for Acme Analytics production human administrators.\nOur policy requires all administrators to use phishing-resistant MFA, and our team says that it complies.\nWe have not supplied configuration exports, the complete administrator account inventory, recovery-path documentation or an operating-test report with this response.\nThe response is a management assertion and does not independently demonstrate implementation or operation.\n",
+          "service": "Acme Analytics",
+          "environment": "production",
+          "account_scope": "human administrators",
+          "observed_on": "2026-10-12",
+          "evidence_kind": "assertion"
+        }
+      ],
+      "expected_positive": false,
+      "material_exceptions": [],
+      "review_notes": "A policy and matching management assertion cannot be relabeled as configuration or operating tests. An exact quotation is not proof of compliance, and lack of supplied evidence is not a confirmed failed control."
+    }
+  ]
+}

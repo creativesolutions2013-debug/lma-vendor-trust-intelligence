@@ -91,6 +91,11 @@ The repository currently includes working application and backend components for
 
 **Current limitation:** The existing document-analysis capability is primarily deterministic SOC 2 extraction with governed analyst review. It is not yet a production-ready AI agent capable of evaluating arbitrary trust-center evidence and completing assessments autonomously.
 
+The [M3B evidence-to-fact validation proof](docs/M3B_Evidence_to_Fact_Validation.md)
+adds a backend source/provenance check and explicit analyst semantic-review gate
+before the provisional M3A privileged-MFA evaluator. It uses synthetic regressions
+and has no automatic approval, scoring, persistence or new application screens.
+
 ## Planned Industry-Pilot Capabilities
 
 ### 1. Business Assessment Intake
