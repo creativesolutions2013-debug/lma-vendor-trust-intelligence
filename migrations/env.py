@@ -9,7 +9,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 database_url = os.getenv("DATABASE_URL", DATABASE_URL)
-config.set_main_option("sqlalchemy.url", database_url)
+# ConfigParser treats '%' as interpolation syntax, while database URLs may
+# legitimately contain percent-encoded credentials or connection options.
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 def run_migrations_offline():

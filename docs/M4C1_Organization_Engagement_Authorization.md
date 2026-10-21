@@ -106,6 +106,10 @@ uniqueness, nonempty issuer/subject, valid-role/status and date-window checks ar
 tested. Cross-row vendor consistency is also checked in the resolver because
 individual FKs cannot prove that chain.
 
+Alembic configuration escapes percent characters before ConfigParser processes
+database URLs, preserving encoded connection options. The local migration fixture
+also uses a percent-bearing temporary filename to exercise that path.
+
 New membership/entitlement windows are explicit and nonnull; stored timestamps
 are UTC. PostgreSQL preserves timezone metadata; SQLite's naive values are
 interpreted as UTC. Existing SQLite connection FK configuration is unchanged;
@@ -175,7 +179,7 @@ configured those protections.
 
 Compilation of `app.py`, all touched source modules, the migration and both new
 test modules passed before full isolated pytest: **1,217 passed, 24 skipped** in
-29.15s. The skips are 23 PostgreSQL migration variants and the existing PostgreSQL
+28.17s. The skips are 23 PostgreSQL migration variants and the existing PostgreSQL
 smoke test; Actions executes them against its synthetic PostgreSQL service. Local
 coverage adds 56 authorization cases and 23 SQLite migration cases, with the
 migration cases also parameterized for PostgreSQL. The existing Alembic config

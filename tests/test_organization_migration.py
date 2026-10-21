@@ -51,7 +51,9 @@ def migrated(request, tmp_path_factory):
         url = sa.engine.make_url(source).update_query_dict({"options": "-csearch_path=" + schema})
         url_string = url.render_as_string(hide_password=False)
     else:
-        file = tmp_path_factory.mktemp("m4c_migration") / "synthetic.db"
+        # Exercise ConfigParser URL escaping locally as well as PostgreSQL's
+        # percent-encoded isolated-schema connection options in CI.
+        file = tmp_path_factory.mktemp("m4c_migration") / "synthetic%isolated.db"
         url_string = "sqlite:///" + str(file)
     environment = pytest.MonkeyPatch()
     environment.setenv("DATABASE_URL", url_string)
