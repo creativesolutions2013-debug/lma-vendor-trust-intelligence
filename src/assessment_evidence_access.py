@@ -3,7 +3,8 @@
 Only a server-configured authority may supply authenticated identity and verified
 relationship snapshots. These DTOs and Python protocol conformance do not verify
 credentials or membership. No production authority is implemented or registered.
-The current schema cannot establish the required organization/engagement links.
+An adapter must resolve explicit organization/engagement links; this contract
+never derives them from caller selectors or vendor IDs alone.
 This module returns bounded metadata only: no bytes, storage I/O or governance.
 """
 from dataclasses import dataclass
@@ -153,8 +154,8 @@ def preflight_evidence_read(request: EvidenceReadRequest, *, authority: Evidence
         return deny("Invalid evidence relationship request.")
     # Resolver failures fail closed without exposing provider errors or secrets.
     try:
-        now = _utc_now()
         identity = authority.authenticated_identity()
+        now = _utc_now()
         if (type(identity) is not AuthenticatedIdentity or type(identity.principal) is not Principal
                 or not all(_text(x) for x in (identity.principal.subject, identity.issuer, identity.audience, identity.session_id))
                 or not _positive_id(identity.organization_id)
@@ -164,7 +165,9 @@ def preflight_evidence_read(request: EvidenceReadRequest, *, authority: Evidence
         if not can(identity.principal, PERMISSION_EVIDENCE_READ):
             return deny("Evidence read permission is required in addition to relationship authorization.")
         grant = authority.authorize_evidence_read(identity, request)
-        if (type(grant) is not EvidenceReadGrant or not _text(grant.decision_id)
+        now = _utc_now()
+        if (not _current(identity.issued_at, identity.expires_at, now)
+                or type(grant) is not EvidenceReadGrant or not _text(grant.decision_id)
                 or (grant.subject, grant.issuer, grant.audience, grant.session_id)
                 != (identity.principal.subject, identity.issuer, identity.audience, identity.session_id)
                 or not all(_positive_id(x) for x in (grant.organization_id, grant.engagement_id, grant.vendor_id,

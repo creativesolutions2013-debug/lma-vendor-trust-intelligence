@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import (
@@ -94,6 +96,62 @@ def utc_now():
     )
 
 
+class Organization(Base):
+    """Server-managed organization identity; names never authorize access."""
+
+    __tablename__ = "organizations"
+    __table_args__ = (
+        UniqueConstraint("external_key", name="uq_organization_external_key"),
+        CheckConstraint("length(trim(external_key)) > 0", name="ck_organization_key_nonempty"),
+        CheckConstraint("length(trim(name)) > 0", name="ck_organization_name_nonempty"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    external_key = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
+
+
+class OrganizationMembership(Base):
+    """Explicit issuer/subject membership; never inferred from email or role."""
+
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "issuer", "subject", name="uq_membership_identity"),
+        CheckConstraint("length(trim(issuer)) > 0", name="ck_membership_issuer_nonempty"),
+        CheckConstraint("length(trim(subject)) > 0", name="ck_membership_subject_nonempty"),
+        CheckConstraint("role IN ('Admin', 'Risk Manager', 'Analyst', 'Viewer')", name="ck_membership_role"),
+        CheckConstraint("status IN ('active', 'revoked')", name="ck_membership_status"),
+        CheckConstraint("expires_at > valid_from", name="ck_membership_window"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
+    issuer = Column(String(500), nullable=False)
+    subject = Column(String(255), nullable=False)
+    role = Column(String(80), nullable=False)
+    status = Column(String(20), nullable=False)
+    valid_from = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class EngagementAccessGrant(Base):
+    """Revocable membership entitlement to one explicit service engagement."""
+
+    __tablename__ = "engagement_access_grants"
+    __table_args__ = (
+        UniqueConstraint("membership_id", "engagement_id", name="uq_membership_engagement_grant"),
+        CheckConstraint("status IN ('active', 'revoked')", name="ck_engagement_grant_status"),
+        CheckConstraint("expires_at > valid_from", name="ck_engagement_grant_window"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    membership_id = Column(Integer, ForeignKey("organization_memberships.id", ondelete="RESTRICT"), nullable=False)
+    engagement_id = Column(Integer, ForeignKey("engagements.id", ondelete="RESTRICT"), nullable=False, index=True)
+    status = Column(String(20), nullable=False)
+    valid_from = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class Vendor(Base):
     __tablename__ = "vendors"
 
@@ -101,6 +159,9 @@ class Vendor(Base):
         Integer,
         primary_key=True,
     )
+
+    # Legacy rows remain unassigned; null is never secure authorization.
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
 
     legal_name = Column(
         String(255),
@@ -318,6 +379,9 @@ class Assessment(Base):
         Integer,
         primary_key=True,
     )
+
+    # Explicit service scope is additive; no vendor-based engagement inference.
+    engagement_id = Column(Integer, ForeignKey("engagements.id", ondelete="RESTRICT"), nullable=True, index=True)
 
     vendor_id = Column(
         Integer,

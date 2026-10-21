@@ -102,6 +102,15 @@ engagement membership. No authority or live evidence retrieval is registered in
 the app. M4A continues to use synthetic fixtures. See [threat model and remaining
 prerequisites](docs/M4B1_Secure_Assessment_Boundary.md).
 
+M4C-1 adds explicit `Organization`, `OrganizationMembership` and
+`EngagementAccessGrant` rows, nullable vendor ownership and assessment engagement
+links. `database_evidence_authority.py` resolves a trusted upstream session to a
+current organization role and one exact entitled evidence hierarchy for the M4B
+metadata preflight. It never derives entitlement from a vendor ID, email or global
+role. Legacy nulls deny; no backfill or live adapter registration is provided.
+This is not whole-application row isolation: legacy global queries/uploads remain
+blocked production prerequisites. See [migration safety and trust boundaries](docs/M4C1_Organization_Engagement_Authorization.md).
+
 - Multi-tenant organization scoping
 - Role-based access control
 - Immutable audit logs

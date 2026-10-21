@@ -422,6 +422,16 @@ authorization plus RBAC; with no configured authority it denies. It is not wired
 to live evidence. M4A remains synthetic and read-only. These protections do not
 provide an IdP, tenant isolation, encrypted custody or production readiness.
 
+The [M4C-1 database authorization prototype](docs/M4C1_Organization_Engagement_Authorization.md)
+adds explicit organizations, issuer/subject memberships, per-engagement entitlements
+and nullable legacy ownership/assessment links. A read-only M4B-compatible resolver
+derives roles and relationship metadata from current database rows; missing legacy
+links, revoked grants and sibling/cross-organization access deny. Its identity
+source remains unconfigured, production login is disabled, and no evidence bytes
+are retrieved. Legacy global queries and uploads remain production blockers.
+The additive migration performs no backfill; automatic destructive downgrade is
+refused pending a separate reviewed rollback/retention plan.
+
 Never commit production credentials, access tokens, or confidential vendor documents to the repository.
 
 ## MVP Priorities
