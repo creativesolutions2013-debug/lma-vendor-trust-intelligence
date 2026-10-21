@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Iterable, Mapping
 
-EVALUATOR_VERSION = "MFA-1.0"
+EVALUATOR_VERSION = "MFA-1.1"
 REQUIREMENT_ID = "PAM-01.MFA"
 PARENT_CONTROL_ID = "PAM-01"
 BOOLEAN_DIMENSIONS = ("existence", "enforcement", "operating", "fallback_safe",
@@ -85,19 +85,22 @@ class MfaFact:
     origin_bound: bool | None = None
     verifier_bound: bool | None = None
     multifactor: bool | None = None
+    # Only configuration/test evidence can establish an active authentication path.
+    authentication_path: str | None = None
+    active: bool | None = None
 
 
 @dataclass(frozen=True)
 class FactAssessment:
     fact: MfaFact
-    status: str  # supports, adverse, unknown, excluded
+    status: str  # supports, adverse, reported_exception, unknown, excluded
     reason: str
 
 
 @dataclass(frozen=True)
 class DimensionAssessment:
     dimension: str
-    status: str  # supported, adverse, conflict, unknown, not_required
+    status: str  # supported, adverse, conflict, reported_exception, unknown, not_required
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,10 @@ class MfaEvaluation:
 
 def _assess(fact: MfaFact, policy: MfaRequirement, as_of: date) -> FactAssessment:
     def result(status, reason):
+        if (status == "unknown" and fact.evidence_kind == "assertion"
+                and fact.dimension in BOOLEAN_DIMENSIONS and fact.value is False):
+            return FactAssessment(fact, "reported_exception",
+                                  "Unverified reported exception; priority investigation required. " + reason)
         return FactAssessment(fact, status, reason)
 
     scope = (fact.service, fact.environment, fact.account_scope)
@@ -136,6 +143,8 @@ def _assess(fact: MfaFact, policy: MfaRequirement, as_of: date) -> FactAssessmen
         return result("supports" if fact.value else "adverse",
                       "Cited fact supports the threshold." if fact.value else
                       "Cited fact affirmatively contradicts the threshold.")
+    if fact.active is False:
+        return result("unknown", "Disabled method does not establish an active authentication path.")
     method = fact.value
     if method not in KNOWN_METHODS | set(policy.approved_equivalents):
         return result("unknown", "Authentication method is unknown or unclassified.")
@@ -170,6 +179,8 @@ def evaluate_privileged_mfa(
     Boolean facts refer to the entire stated population/path inventory: e.g.
     enforcement=True means all accounts in account_scope, fallback_safe=True means
     all fallback paths meet this same policy (including explicitly no such paths).
+    Method facts with distinct authentication_path IDs and active=True describe
+    simultaneously enabled paths; opposed claims for one path remain conflicts.
     Separate populations must be evaluated separately. Machine accounts must not
     silently inherit interactive-human MFA requirements.
 
@@ -191,7 +202,14 @@ def evaluate_privileged_mfa(
                 raise ValueError("Boolean dimension requires bool or None.")
         elif fact.value is not None and (not isinstance(fact.value, str) or not fact.value.strip()):
             raise ValueError("Method requires a nonempty string or None.")
-        for value in (fact.implementation_evidenced, fact.origin_bound, fact.verifier_bound, fact.multifactor):
+        if fact.authentication_path is not None and (
+            fact.dimension != "method" or not isinstance(fact.authentication_path, str)
+            or not fact.authentication_path.strip()
+        ):
+            raise ValueError("Authentication path requires a nonempty method path identifier.")
+        if fact.active is not None and (fact.dimension != "method" or not fact.authentication_path):
+            raise ValueError("Active method facts require an authentication path identifier.")
+        for value in (fact.implementation_evidenced, fact.origin_bound, fact.verifier_bound, fact.multifactor, fact.active):
             if value is not None and type(value) is not bool:
                 raise ValueError("Implementation properties require bool or None.")
         source = sources.get(fact.citation.source_id)
@@ -208,6 +226,8 @@ def evaluate_privileged_mfa(
             status = "conflict"
         elif "adverse" in states:
             status = "adverse"
+        elif "reported_exception" in states:
+            status = "reported_exception"
         elif "unknown" in states:
             status = "unknown"  # A strong source cannot erase unresolved evidence.
         elif "supports" in states:
@@ -218,10 +238,23 @@ def evaluate_privileged_mfa(
             status = "not_required"
         dimensions.append(DimensionAssessment(dimension, status))
     states = {item.status for item in dimensions}
-    if "conflict" in states:
-        outcome = "Needs Review"
-    elif "adverse" in states:
+    # Distinct tested/configured active paths may coexist: a strong method does
+    # not negate a weaker enabled path. Opposed claims about the same path remain
+    # a conflict. Unidentified paths do not establish simultaneous enablement.
+    active_weak_path = any(
+        item.status == "adverse" and item.fact.dimension == "method"
+        and item.fact.active is True
+        and not any(
+            other.status == "supports" and other.fact.dimension == "method"
+            and other.fact.authentication_path == item.fact.authentication_path
+            for other in assessed
+        )
+        for item in assessed
+    )
+    if "adverse" in states or active_weak_path:
         outcome = "Risk Identified"
+    elif "conflict" in states or "reported_exception" in states:
+        outcome = "Needs Review"
     elif not facts or all(item.status == "excluded" for item in assessed):
         outcome = "Evidence Missing"
     elif states <= {"supported", "not_required"}:
@@ -230,7 +263,13 @@ def evaluate_privileged_mfa(
         outcome = "Partially Met"
     else:
         outcome = "Needs Review"
-    follow_up = tuple(
+    reported_follow_up = tuple(
+        f"Priority: investigate reported {item.fact.dimension} exception from "
+        f"{item.fact.citation.source_id}; verify affected accounts, scope, currency "
+        "and bypass/remediation status with configuration and operating tests."
+        for item in assessed if item.status == "reported_exception"
+    )
+    follow_up = reported_follow_up + tuple(
         f"Verify {item.dimension} against customer policy: {item.status}."
         for item in dimensions if item.status not in {"supported", "not_required"}
     ) + ("Analyst must confirm interpretations, source context and the provisional result.",)

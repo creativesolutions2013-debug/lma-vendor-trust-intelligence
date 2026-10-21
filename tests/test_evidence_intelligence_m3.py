@@ -64,7 +64,7 @@ def test_basic_mfa_is_provisional_and_carries_policy_and_original_sources():
     assert result.requirement.requirement_id == "PAM-01.MFA"
     assert result.requirement.parent_control_id == "PAM-01"
     assert result.requirement == POLICY and result.as_of == TODAY
-    assert result.evaluator_version == "MFA-1.0"
+    assert result.evaluator_version == "MFA-1.1"
     assert dict(result.sources)["method"].text == QUOTES["method"]
     with pytest.raises(FrozenInstanceError):
         result.review_required = False
@@ -279,3 +279,93 @@ def test_m3_has_no_governed_or_network_dependencies():
     imports = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
     assert imports <= {"dataclasses", "datetime", "typing"}
     assert not any(isinstance(node, ast.Import) for node in ast.walk(tree))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_confirmed_bypass_survives_unrelated_method_conflict(reverse):
+    facts, sources = method_package("fido2", origin_bound=True, verifier_bound=True)
+    quote = "Tested TOTP authentication remains configured for the scoped service."
+    sources["weak"] = SourceSegment("config.txt", "Line 2", quote)
+    facts.append(replace(facts[1], value="totp", citation=Citation("weak", quote)))
+    bypass = "Recovery testing confirmed password-only fallback for production administrators."
+    sources["bypass"] = SourceSegment("test.txt", "Line 3", bypass)
+    facts = change(facts, "fallback_safe", value=False, citation=Citation("bypass", bypass))
+    result = evaluate(list(reversed(facts)) if reverse else facts, sources,
+                      replace(POLICY, phishing_resistant=True))
+    assert result.outcome == "Risk Identified"
+    assert dict((d.dimension, d.status) for d in result.dimensions)["method"] == "conflict"
+    assert any(a.status == "adverse" and a.fact.citation.quote == bypass for a in result.facts)
+
+
+@pytest.mark.parametrize("separate_paths,outcome", [(True, "Risk Identified"), (False, "Needs Review")])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_enabled_weak_path_is_distinct_from_contradictory_method_claims(separate_paths, outcome, reverse):
+    facts, sources = method_package("fido2", origin_bound=True, verifier_bound=True)
+    facts = change(facts, "method", authentication_path="primary", active=True)
+    quote = "Configuration test: SMS plus password is enabled on the recovery login path."
+    sources["sms"] = SourceSegment("config.txt", "Line 4", quote)
+    facts.append(replace(facts[1], value="sms", citation=Citation("sms", quote),
+                         authentication_path="recovery" if separate_paths else "primary"))
+    result = evaluate(list(reversed(facts)) if reverse else facts, sources,
+                      replace(POLICY, phishing_resistant=True))
+    assert result.outcome == outcome
+    assert any(a.status == "adverse" and a.fact.value == "sms" for a in result.facts)
+    assert any(d.status == "conflict" for d in result.dimensions)
+
+
+@pytest.mark.parametrize("dimension", ["fallback_safe", "recovery_safe", "exceptions_absent", "enforcement"])
+@pytest.mark.parametrize("stale", [False, True])
+def test_vendor_admission_is_priority_reported_exception_not_verified_failure(dimension, stale):
+    facts, sources = package()
+    quote = "Vendor response: four production administrator accounts can use passwords without MFA."
+    sources["admission"] = SourceSegment("vendor-response.txt", "Answer 2", quote)
+    facts.append(replace(next(f for f in facts if f.dimension == dimension), value=False,
+                         evidence_kind="assertion", citation=Citation("admission", quote),
+                         observed_on=TODAY-timedelta(days=91) if stale else TODAY))
+    result = evaluate(facts, sources)
+    assert result.outcome == "Needs Review"
+    assert result.facts[-1].status == "reported_exception"
+    assert result.facts[-1].fact.citation.quote == quote
+    assert dict((d.dimension, d.status) for d in result.dimensions)[dimension] == "reported_exception"
+    assert result.follow_up[0].startswith("Priority:")
+    assert dimension in result.follow_up[0] and "admission" in result.follow_up[0]
+    assert "scope" in result.follow_up[0] and "operating tests" in result.follow_up[0]
+    assert result.provisional and result.review_required
+
+
+def test_negative_policy_intent_is_not_vendor_admission():
+    facts, sources = package()
+    facts = change(facts, "fallback_safe", value=False, evidence_kind="policy")
+    result = evaluate(facts, sources)
+    assert result.outcome == "Partially Met"
+    assert not any(a.status == "reported_exception" for a in result.facts)
+
+
+@pytest.mark.parametrize("changes", [dict(active=True), dict(active="yes", authentication_path="primary"),
+                                    dict(authentication_path=" ")])
+def test_invalid_active_path_metadata_is_rejected(changes):
+    facts, sources = package()
+    facts = change(facts, "method", **changes)
+    with pytest.raises(ValueError):
+        evaluate(facts, sources)
+
+
+
+def test_disabled_weak_path_is_not_confirmed_active_failure():
+    facts, sources = method_package("sms")
+    facts = change(facts, "method", authentication_path="retired", active=False)
+    result = evaluate(facts, sources, replace(POLICY, phishing_resistant=True))
+    assert result.outcome == "Partially Met"
+    assert next(a for a in result.facts if a.fact.dimension == "method").status == "unknown"
+
+
+def test_out_of_scope_vendor_admission_is_retained_but_not_applied_to_target():
+    facts, sources = package()
+    quote = "Vendor response: password-only access is allowed in the development lab."
+    sources["lab"] = SourceSegment("response.txt", "Answer 3", quote)
+    facts.append(replace(facts[4], value=False, evidence_kind="assertion", environment="dev",
+                         citation=Citation("lab", quote)))
+    result = evaluate(facts, sources)
+    assert result.outcome == "Met"
+    assert result.facts[-1].status == "excluded"
+    assert result.facts[-1].fact.citation.quote == quote
