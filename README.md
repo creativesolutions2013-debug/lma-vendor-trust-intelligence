@@ -101,24 +101,29 @@ adds a synthetic privileged-MFA review in the Evidence Center. One explicit acti
 can confirm displayed supporting interpretations while exception triage and
 complete-bundle review remain separate. Every result stays provisional.
 
-### Evidence-Based Control Assurance — platform direction versus current proof
+### Evidence-Based Control Assurance — implemented proof and platform direction
 
 The intended capability evaluates **every applicable vendor security control**
 against customer-defined requirements, applicable technical/industry standards,
 actual implementation and operation, service scope, evidence freshness, and
 material exceptions. A vendor stating that a control exists, attaching a policy,
 or providing a matching quotation does **not** establish its sufficiency.
-Privileged MFA was chosen as an early **reference scenario**, not a product
-category or boundary. The merged M3A/M3B/M3C pilots do **not** yet provide
-standards-based technical assurance across other control families. The M1 TLS
-and M2 encryption, DR and IR pilots provide earlier screening/draft capabilities,
-not equivalent validated technical assurance.
+Privileged MFA is an early **reference scenario**, not a product boundary.
+The [M3D bounded proof](docs/M3D_Evidence_Based_Control_Assurance.md) adds a
+control-neutral source/review contract and common **Control Assurance Review**
+presentation in the Evidence Center. It demonstrates three synthetic families:
+privileged MFA through the existing M3A/B/C gates; TLS configuration, enabled
+minimum, deprecated-protocol rejection and full-endpoint operating scans; and
+completed disaster-recovery exercises with customer-specific cadence and achieved
+RTO/RPO. TLS and DR use separate typed rules, not MFA substitutions or keywords.
 
-The next engineering correction is a **control-neutral evidence/review contract**
-with genuinely separate domain-specific evaluations, first proven alongside MFA
-for transport encryption and disaster-recovery tests. All results remain
-source-linked, provisional and analyst-governed. See [M3D cross-control assurance
-work item](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/5).
+Every interpretation still requires explicit human semantic confirmation, separate
+exception triage and complete-bundle review. Customer policy, threshold, context,
+document and interpretation changes invalidate active review. Results remain
+source-linked, provisional and session-only; the pilot neither authenticates
+production reviewers nor changes governed decisions. It does **not** evaluate all
+control families or understand arbitrary documents. M1 TLS and M2 encryption/DR/IR
+screening drafts remain earlier, separate capabilities. See [Issue #5](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/5).
 
 ## Planned Industry-Pilot Capabilities
 

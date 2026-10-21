@@ -29,6 +29,12 @@
 
 ## MVP 3 — Assurance intelligence
 
+- [x] M3D bounded Evidence-Based Control Assurance proof: shared source/review
+  contract and synthetic privileged MFA, TLS and disaster-recovery rules
+- [ ] Extend and independently validate domain-specific assurance for other
+  customer requirements (the M3D proof does not automate all controls)
+- [ ] Production-authorized review, authenticated source custody and real analyst
+  timing/accuracy pilot (outside the synthetic/session-only M3D scope)
 - [ ] Common control framework
 - [ ] Framework mappings
 - [x] AI evidence analyst (SOC 2 first iteration)

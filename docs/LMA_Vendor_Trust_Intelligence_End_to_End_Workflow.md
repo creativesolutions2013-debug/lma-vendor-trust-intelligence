@@ -7,6 +7,14 @@
 **Document status:** Target-state workflow and pilot scope; not a claim that every capability has already been implemented.  
 **Version:** 1.0 · October 2026
 
+**Current implementation boundary (M3D):** Evidence-Based Control Assurance is
+the cross-control platform direction. The implemented **Control Assurance Review**
+is a bounded synthetic proof for privileged MFA, transport encryption (TLS), and
+disaster-recovery testing, using shared source/review contracts and separate
+technical evaluators. It does not automate every control or understand arbitrary
+documents. All results are provisional, source-linked and require explicit analyst
+review plus independent governance. See [implementation, measurements and limits](M3D_Evidence_Based_Control_Assurance.md).
+
 ---
 
 ## 1. Product mission
@@ -182,11 +190,15 @@ Each applicable requirement receives one simple proposed result:
 
 **Example requirement card**
 
-> **Privileged MFA — Proposed: Met**  
-> **Requirement:** Administrative access to production must use MFA.  
-> **Sources:** SOC 2 Type II, CC6.x, cited page; IAM policy, cited section.  
-> **Why:** Relevant auditor testing and policy requirements support MFA in the assessed environment during the report period.  
-> **Action:** Accept · Challenge · Ask Vendor
+> **Control Assurance Review — TLS — Provisional: Needs Review**
+>
+> **Requirement:** Customer policy v2026.1 requires enabled TLS ≥ 1.2 on every production endpoint.
+>
+> **Sources:** Exact configuration and dated scan quotations, with genuine locations.
+>
+> **Why:** The primary listeners meet the threshold; an alternate administrative listener is untested. A supported-protocol statement alone cannot establish enabled configuration or operation.
+>
+> **Action:** Request the alternate listener's configuration and protocol-rejection scan, then review the cited interpretations.
 
 Citations and sections shown above are *illustrative placeholders*; real results must point to genuine source locations and must not invent page numbers or quotations.
 

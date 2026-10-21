@@ -20,6 +20,8 @@ exists is never sufficient proof of meeting the requirement. Do not relabel an
 MFA-only pilot as a generalized implementation. Prove shared behavior with
 at least two genuinely non-MFA control families before claiming reusable
 cross-control support. See GitHub issue #5 for M3D acceptance criteria.
+The bounded three-family synthetic implementation and its limits are documented
+in docs/M3D_Evidence_Based_Control_Assurance.md; it does not automate all controls.
 
 - Work on a dedicated feature branch based on current main. Preserve existing work;
   never modify or push directly to main. Merge/publish only when authorized.
