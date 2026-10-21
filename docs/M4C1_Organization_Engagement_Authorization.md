@@ -1,12 +1,12 @@
 # M4C-1 — Authoritative Organization & Engagement Evidence Access
 
-**Status: planned feature-branch implementation, not yet delivered.** This document is the reviewed handoff for [Issue #11](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/11), **not evidence of functional authorization**. No real evidence data or production authentication is enabled.
+**Status: implemented database authorization prototype on draft PR #13; independent review required.** Acceptance is tracked in [Issue #11](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/11). No production authentication, real evidence retrieval or application authority registration is enabled.
 
 ## Reason for this slice
 
-LMA is an evidence-first third-party assurance platform: assess the evidence before asking questions. M4A provides a synthetic assessment worklist; M4B provides deny-first startup, secure local-key syntax/no-follow storage, and a deliberately unwired `EvidenceAccessAuthority`. The current ORM, however, does **not** associate an assessment unambiguously with a service engagement, or establish organization membership and grants. Mere `Vendor.id` and role `Admin` are insufficient to authorize a confidential document read.
+LMA is an evidence-first third-party assurance platform: assess the evidence before asking questions. M4A provides a synthetic worklist; M4B provides deny-first startup, confined local storage and an unwired evidence-read preflight. M4C adds explicit database ownership, membership and engagement entitlements for that contract. Mere `Vendor.id` or role `Admin` remains insufficient; legacy rows are not assigned ownership or access automatically.
 
-The verified baseline is M4B merge `16d48fc9dbe8d5309630ce1df823bdb9108f8341`; main postmerge unit and PostgreSQL jobs passed in [run 39689214521](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/runs/39689214521). The previous last Alembic revision is `0013_revalidation_case_records.py`. `main` branch protections are separately tracked in [Issue #12](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/12), **not currently configured**.
+The baseline is M4B merge `16d48fc9dbe8d5309630ce1df823bdb9108f8341`, with successful postmerge [Unit and PostgreSQL CI](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/runs/39689214521). Revision `0014_organization_engagement_authorization` follows `0013_revalidation_case_records`. Branch protection is tracked separately in [Issue #12](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/12); the permission check is recorded below.
 
 ## Architecture decision
 
@@ -16,7 +16,7 @@ A future upstream *trusted server-only* identity resolver authenticates a sessio
 
 ### Minimal relational design
 
-Prefer a small additive revision `0014_...` after inspecting existing metadata/migration conventions:
+The additive `0014_organization_engagement_authorization` revision implements:
 
 - `Organization` with an immutable identity. `Vendor.organization_id` is nullable for existing legacy records and must be explicitly set/verified for any secure access.
 - `OrganizationMembership` keyed uniquely by `organization_id + issuer + subject` (email/display name do **not** define identity), with active/revoked status and server-governed role.
@@ -51,6 +51,138 @@ Successful synthetic test result is **metadata only**, never evidence bytes, dow
 
 ## Later gates (not claimed here)
 
-M4C-2: select the intended external IdP and implement signed OIDC/JWKS verification, strict issuer/audience/nonce/state, short sessions, rotation/revocation, trusted authorization mapping and secure browser session. Deployment configuration and secrets remain outside repository.
+M4C-2: select the external IdP and implement JWT signature verification against trusted JWKS with an algorithm allowlist, configured issuer/audience checks, nonce/state validation, key rotation, short server-owned sessions, revocation and secure browser-session handling. Reject unsigned/static demo tokens. The future provider adapter supplies only validated identity/session context; organization roles still come from server-managed membership. Deployment configuration and secrets remain outside the repository.
 
 M4D: only after independent verification, implement authorized, audited, controlled evidence-byte custody/read, malware scanning, encryption/retention and provenance. Prove analyst usability with authorized real-world or permissioned test evidence. Until then, all existing analysis previews remain **synthetic only**, and the current application does **not** have general multi-tenant isolation across legacy screens.
+
+## Implemented resolver and trust boundary
+
+`DatabaseEvidenceAccessAuthority(session_factory, identity_source=...)` in
+`src/database_evidence_authority.py` implements the existing M4B authority protocol.
+Both dependencies must be supplied by trusted server wiring. No source is
+configured in `app.py`; omitted identity sources deny. A raw identity DTO, demo
+principal, role string or token is not a source of verified identity.
+
+The upstream adapter must provide an already authenticated issuer/subject,
+audience, session, organization context and valid aware timestamps. M4C checks
+their shape and validity, **not** signatures or credentials. It looks up exactly
+one current membership by organization + issuer + subject, ignoring incoming
+global role claims. The membership supplies the server-managed organization role.
+Membership alone grants no engagement access.
+
+Authorization re-reads the upstream session and current membership, entitlement,
+organization/vendor/engagement/assessment/evidence columns. It verifies every
+vendor equality and the explicit assessment engagement. Null links and missing,
+duplicate, revoked, expired or inconsistent rows deny without hidden metadata.
+Both the early and final role checks use current membership; a role/session change
+between calls cannot reuse a prior effective identity. Fresh dedicated sessions,
+scalar projections and disabled autoflush avoid stale ORM objects and pending
+write flushes. Queries are bounded and scoped to the requested relationship;
+there is no enumeration endpoint or metadata on denial.
+
+The grant contains only the database's canonical vendor-bound object key and
+verified linkage. Its expiry is capped by the session, membership, entitlement
+and a one-minute metadata lifetime. This is a point-in-time authorization result,
+**not** a reusable bearer capability or permission to read bytes later. Future
+reads must reauthenticate/re-authorize and enforce storage custody. M4B now checks
+the clock after provider/database work and rechecks session expiry after grant
+issuance; this accepts a legitimately newly issued grant while denying a session
+that expires during the lookup.
+
+## Migration and operational safety
+
+The revision creates only three constrained authorization tables and adds nullable
+`Vendor.organization_id` and `Assessment.engagement_id` with indexes/FKs. Evidence
+derives engagement/organization through its verified parents; no duplicate scope
+columns are added. The numeric organization identity is the authorization key;
+display names and emails never determine identity or membership.
+
+There are no defaults granting access, data rewrites, automatic assignments,
+production membership seeds or migration-time backfills. PostgreSQL uses additive
+column/FK DDL. SQLite uses native `ADD COLUMN ... REFERENCES` rather than rebuilding
+populated vendor or assessment tables. Tests preserve all original columns/rows
+in six populated legacy tables and verify unchanged SQLite root pages. FK,
+uniqueness, nonempty issuer/subject, valid-role/status and date-window checks are
+tested. Cross-row vendor consistency is also checked in the resolver because
+individual FKs cannot prove that chain.
+
+New membership/entitlement windows are explicit and nonnull; stored timestamps
+are UTC. PostgreSQL preserves timezone metadata; SQLite's naive values are
+interpreted as UTC. Existing SQLite connection FK configuration is unchanged;
+tests enable FK enforcement to validate the definitions, and the resolver does
+not assume potentially inconsistent legacy rows are safe.
+
+`downgrade()` deliberately refuses **before any mutation**. Removing ownership
+and entitlement history requires a separately reviewed backup, retention and
+rollback plan. Do not treat an automatic schema downgrade as a safe production
+rollback. Applying this feature's additive migration to customer databases or
+deploying it remains outside this task's authorization.
+
+## Synthetic validation and limits
+
+Fixtures include two organizations, two owned vendors, two engagements under one
+vendor, separately linked assessments/evidence, plus unassigned and inconsistent
+legacy records. They exercise exact-scope metadata success, cross-organization
+and sibling-engagement denial, server-managed role changes, revocation/expiry,
+issuer/subject/session mismatch, unsafe storage keys, null parents and ambiguous
+rows. A deliberately corrupted isolated schema removes unique constraints to
+prove duplicate results are rejected rather than selecting an arbitrary row.
+Pending session writes and storage byte operations are blocked during the
+read-only checks. These are contract tests, not proof of IdP authenticity or full
+application tenancy.
+
+SQLite migration tests use a temporary populated database. PostgreSQL migration
+and resolver tests run only in the Actions PostgreSQL job's synthetic service,
+using separate UUID-named schemas and cleaning up only those test schemas. Local
+PostgreSQL-only migration variants are skipped; no customer database is inspected
+or migrated. Final compile/full-suite and both CI results are recorded in PR #13.
+M3D/M4A requirement semantics, fact confirmations, citations, exception priority,
+synthetic worklist and governed decision flows are unchanged.
+
+## Legacy production blockers — intentionally not retrofitted
+
+The new resolver does not make every historical route tenant-safe:
+
+- [Evidence Center](../app.py#L6669) globally lists vendors/evidence; [review](../app.py#L7498) repeats global evidence lookup behind role-based navigation.
+- [Assessment selection](../app.py#L6857) uses a selected vendor and allows optional assessment linkage, without engagement entitlement.
+- [Legacy upload](../app.py#L7252) writes through storage directly, without this relationship authorization contract.
+- [Reports](../app.py#L9051) aggregate global vendor/evidence/assessment rows. Existing governance services generally bind assessment to vendor, not organization entitlement.
+
+These paths block a confidential, multi-tenant production pilot. No existing
+stored-path byte retrieval route was found or enabled. A broad historical query/
+upload retrofit, database row-level isolation, provisioning/admin controls,
+byte-access audit, encrypted custody, malware/retention and external IdP/session
+integration require separate reviewed milestones. Production login remains
+fail-closed, and no real vendor data is connected to the new worklist.
+
+## Issue #12 — read-only administration check
+
+The repository API reports account permissions `admin: true` (also maintain/push),
+so the owner has repository-level rights to configure main protection in GitHub
+Settings, subject to applicable platform rules. The `main` branch response still
+reports `protected: false` with required checks off. Available connected tools
+expose repository/PR/file operations but no branch-protection/ruleset mutation;
+repository admin rights alone do not add that tool capability or prove the
+connector has administration-write permission. No credential was inspected,
+settings changed, or direct push to main attempted.
+
+Issue #12 remains open for the owner to configure required PR review, exact
+**Unit tests** and **PostgreSQL compatibility** checks, force-push/deletion blocks
+and minimal bypass rights. This milestone neither bypasses nor claims to have
+configured those protections.
+
+## Validation record
+
+Compilation of `app.py`, all touched source modules, the migration and both new
+test modules passed before full isolated pytest: **1,217 passed, 24 skipped** in
+29.15s. The skips are 23 PostgreSQL migration variants and the existing PostgreSQL
+smoke test; Actions executes them against its synthetic PostgreSQL service. Local
+coverage adds 56 authorization cases and 23 SQLite migration cases, with the
+migration cases also parameterized for PostgreSQL. The existing Alembic config
+emits three non-failing path-separator deprecation warnings.
+
+Migration/diff/security review checked no backfill or destructive upgrade, explicit
+scope joins, fresh role/revocation/session reads, ambiguity rejection, no pending
+write flush, no byte retrieval and continued production-auth refusal. Both CI job
+results on the exact feature head are recorded in PR #13. Independent security,
+product and TPRM review remains required; do not merge automatically.
