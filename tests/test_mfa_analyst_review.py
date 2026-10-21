@@ -12,7 +12,7 @@ import pytest
 from src.evidence_fact_validation import FactReview, ProposedFact, SignalDisposition, bind_evidence, fact_fingerprint
 from src.evidence_intelligence_m3 import Citation
 from src.mfa_analyst_review import (
-    ReviewState, acknowledge_bundle, confirm_exception, confirm_supporting,
+    ReviewEvent, ReviewState, acknowledge_bundle, challenge_supporting, confirm_exception, confirm_supporting,
     inspect_review, triage_signal,
 )
 from src.mfa_review_pilot import pilot_cases
@@ -324,6 +324,194 @@ def test_active_weak_recovery_method_cannot_disappear_behind_fido2_support(cases
     view = inspect_review(changed, state)
     assert any(weak.fact_id in issue.fact_ids and issue.kind == "verified_failure" for issue in view.issues)
     assert view.validation.evaluation.outcome == "Risk Identified"
+
+
+@pytest.mark.parametrize("activation", [None, False, True])
+@pytest.mark.parametrize("weakness", ["sms", "origin_binding", "verifier_binding"])
+def test_current_method_failure_requires_affirmative_path_activation(cases, activation, weakness):
+    case = cases["strong"]
+    original = next(item for item in case.proposals if item.fact.dimension == "method")
+    method = "sms" if weakness == "sms" else "fido2"
+    activation_statement = {
+        None: "The configuration does not establish whether this administrative path is enabled.",
+        False: "The administrative authentication path is disabled and cannot issue sessions.",
+        True: "The administrative authentication path is enabled and currently issues sessions.",
+    }[activation]
+    weakness_statement = {
+        "sms": "The configured method requires SMS plus a password.",
+        "origin_binding": "The deployed FIDO2 key plus PIN implementation does not validate origin binding.",
+        "verifier_binding": "The deployed FIDO2 key plus PIN implementation does not validate verifier binding.",
+    }[weakness]
+    source = replace(case.documents[1], document_id="reviewed-method-path", filename="reviewed-method-path.txt",
+                     content=f"SYNTHETIC configuration: {weakness_statement} {activation_statement}".encode())
+    bound = bind_evidence(source)
+    proposed = replace(original, source_fingerprint=bound.fingerprint, location="Line 1",
+                       fact=replace(original.fact, value=method, active=activation,
+                                    origin_bound=weakness not in {"sms", "origin_binding"},
+                                    verifier_bound=weakness not in {"sms", "verifier_binding"},
+                                    citation=Citation("reviewed-method-path:1", source.content.decode())))
+    changed = replace(case, documents=case.documents + (source,),
+                      proposals=tuple(proposed if row.fact_id == original.fact_id else row for row in case.proposals))
+    state = group(changed)
+    before = inspect_review(changed, state)
+    assert before.validation.evaluation.outcome == "Needs Review"
+    assert not any(issue.kind == "verified_failure" for issue in before.issues)
+    assert any(proposed.fact_id in issue.fact_ids and
+               any(citation.source_id == "reviewed-method-path:1" for citation in issue.citations)
+               for issue in before.issues)
+    if activation is True:
+        state = confirm_exception(changed, state, expected_bundle=before.bundle_fingerprint,
+                                  fact_id=proposed.fact_id, confirms_semantics=True, **actor(changed))
+        result = inspect_review(changed, state)
+        assert result.validation.evaluation.outcome == "Risk Identified"
+        assert any(issue.kind == "verified_failure" and proposed.fact_id in issue.fact_ids for issue in result.issues)
+    else:
+        with pytest.raises(ValueError):
+            confirm_exception(changed, state, expected_bundle=before.bundle_fingerprint,
+                              fact_id=proposed.fact_id, confirms_semantics=True, **actor(changed))
+        for signal in before.validation.signals:
+            state = triage(changed, state, signal, False)
+        result = inspect_review(changed, ack(changed, state))
+        assert result.validation.evaluation.outcome == "Needs Review"
+        assert not any(issue.kind == "verified_failure" for issue in result.issues)
+        assert not any(item.status == "adverse" for item in result.validation.evaluation.facts)
+        if activation is None:
+            assert any(proposed.fact_id in issue.fact_ids and
+                       "activ" in (issue.title + " " + issue.detail).lower()
+                       for issue in result.issues)
+    assert result.validation.provisional and result.validation.review_required
+
+
+def test_restored_pre_fix_method_confirmation_with_unknown_activation_cannot_retain_verified_risk(cases):
+    case = cases["strong"]
+    original = next(item for item in case.proposals if item.fact.dimension == "method")
+    source = replace(case.documents[1], document_id="legacy-method", filename="legacy-method.txt",
+                     content=b"SYNTHETIC configuration lists SMS plus password; whether the administrator path is enabled is undocumented.")
+    bound = bind_evidence(source)
+    proposed = replace(original, source_fingerprint=bound.fingerprint, location="Line 1",
+                       fact=replace(original.fact, value="sms", active=None, origin_bound=False,
+                                    verifier_bound=False, citation=Citation("legacy-method:1", source.content.decode())))
+    changed = replace(case, documents=case.documents + (source,),
+                      proposals=tuple(proposed if row.fact_id == original.fact_id else row for row in case.proposals))
+    state = group(changed)
+    view = inspect_review(changed, state)
+    for signal in view.validation.signals:
+        state = triage(changed, state, signal, False)
+    fingerprint = fact_fingerprint(proposed)
+    previous_review = FactReview(fingerprint, "supported", "explicit_exception", "Synthetic pilot analyst",
+                                case.as_of, "Pre-fix review accepted method noncompliance without checking activation.")
+    previous_event = ReviewEvent("exception_confirmation", view.bundle_fingerprint, (fingerprint,),
+                                 (proposed.fact_id,), previous_review.analyst, previous_review.reviewed_on,
+                                 previous_review.rationale)
+    state = replace(state, fact_reviews=state.fact_reviews + (previous_review,),
+                    events=state.events + (previous_event,))
+    state = ack(changed, state)
+    previous_events = state.events
+    result = inspect_review(changed, state)
+    assert result.validation.evaluation.outcome == "Needs Review"
+    assert not any(item.status == "adverse" for item in result.validation.evaluation.facts)
+    assert not any(issue.kind == "verified_failure" for issue in result.issues)
+    assert any(issue.kind == "method_activation_gap" and proposed.fact_id in issue.fact_ids
+               and any(citation.source_id == "legacy-method:1" for citation in issue.citations)
+               for issue in result.issues)
+    assert previous_review in state.fact_reviews and state.events == previous_events
+    assert previous_event in state.events
+    with pytest.raises(ValueError):
+        confirm_exception(changed, state, expected_bundle=view.bundle_fingerprint,
+                          fact_id=proposed.fact_id, confirms_semantics=True, **actor(changed))
+
+
+@pytest.mark.parametrize("decision", ["unsupported", "ambiguous"])
+def test_challenge_before_grouping_withholds_one_fact_and_preserves_other_review_work(cases, decision):
+    case = cases["strong"]
+    target = next(item for item in case.proposals if item.fact.dimension == "enforcement")
+    fingerprint = fact_fingerprint(target)
+    initial = inspect_review(case)
+    state = challenge_supporting(
+        case, ReviewState(), expected_bundle=initial.bundle_fingerprint,
+        fact_id=target.fact_id, decision=decision,
+        **actor(case, rationale="The source does not establish complete emergency-account enforcement coverage."),
+    )
+    assert len(state.events) == 1
+    assert state.events[0].target_ids == (target.fact_id,)
+    assert state.events[0].fact_fingerprints == (fingerprint,)
+    assert state.fact_reviews[0].decision == decision
+    assert state.fact_reviews[0].classification == "unsupported_interpretation"
+    assert not state.signal_dispositions and state.bundle_review is None
+    challenged = inspect_review(case, state)
+    assert fingerprint not in challenged.supporting_fingerprints
+    assert any(target.fact_id in issue.fact_ids and
+               any(citation.source_id == target.fact.citation.source_id for citation in issue.citations)
+               for issue in challenged.issues)
+    state = group(case, state)
+    assert len(state.fact_reviews) == 7
+    assert sum(review.decision == "supported" for review in state.fact_reviews) == 6
+    for signal in inspect_review(case, state).validation.signals:
+        state = triage(case, state, signal, False)
+    result = inspect_review(case, ack(case, state))
+    assert result.validation.evaluation.outcome == "Needs Review"
+    assert not any(item.fact == target.fact for item in result.validation.evaluation.facts)
+    assert any(row.proposal == target and row.status != "validated" for row in result.validation.facts)
+
+
+@pytest.mark.parametrize("decision", ["unsupported", "ambiguous"])
+def test_challenge_supersedes_grouped_confirmation_after_met_without_erasing_history(cases, decision):
+    case = cases["strong"]
+    state = complete_known_case(case)
+    assert inspect_review(case, state).validation.evaluation.outcome == "Met"
+    target = next(item for item in case.proposals if item.fact.dimension == "enforcement")
+    fingerprint = fact_fingerprint(target)
+    original_events = state.events
+    original_signals = state.signal_dispositions
+    original_others = tuple(review for review in state.fact_reviews if review.fact_fingerprint != fingerprint)
+    corrected = challenge_supporting(
+        case, state, expected_bundle=inspect_review(case, state).bundle_fingerprint,
+        fact_id=target.fact_id, decision=decision,
+        **actor(case, rationale="On re-reading, emergency-account coverage is not established by this export."),
+    )
+    assert corrected.events[:-1] == original_events
+    assert corrected.events[-1].target_ids == (target.fact_id,)
+    assert corrected.events[-1].fact_fingerprints == (fingerprint,)
+    assert corrected.signal_dispositions == original_signals
+    assert corrected.bundle_review is None
+    assert tuple(review for review in corrected.fact_reviews if review.fact_fingerprint != fingerprint) == original_others
+    current = [review for review in corrected.fact_reviews if review.fact_fingerprint == fingerprint]
+    assert len(current) == 1 and current[0].decision == decision
+    result = inspect_review(case, corrected)
+    assert result.validation.evaluation.outcome == "Needs Review"
+    assert not result.validation.bundle_review_valid
+    assert fingerprint not in result.supporting_fingerprints
+    reacknowledged = ack(case, corrected)
+    assert inspect_review(case, reacknowledged).validation.evaluation.outcome == "Needs Review"
+    assert reacknowledged.events[:len(original_events)] == original_events
+
+
+@pytest.mark.parametrize("changes", [
+    {"decision": "supported"}, {"decision": "approved"}, {"fact_id": "missing-fact"},
+    {"expected_bundle": "0" * 64}, {"analyst": ""}, {"rationale": " "},
+])
+def test_challenge_requires_current_fact_binding_negative_disposition_and_reason(cases, changes):
+    case = cases["strong"]
+    fields = dict(expected_bundle=inspect_review(case).bundle_fingerprint,
+                  fact_id="enforcement", decision="unsupported", **actor(case))
+    fields.update(changes)
+    with pytest.raises(ValueError):
+        challenge_supporting(case, ReviewState(), **fields)
+
+
+def test_challenge_cannot_reuse_a_stale_state_or_invalid_review_date(cases):
+    case = cases["strong"]
+    old_state = complete_known_case(case)
+    changed = replace(case, requirement=replace(case.requirement, version="new-version"))
+    with pytest.raises(ValueError):
+        challenge_supporting(changed, old_state,
+                             expected_bundle=inspect_review(changed).bundle_fingerprint,
+                             fact_id="enforcement", decision="unsupported", **actor(changed))
+    for invalid_date in (case.as_of + timedelta(days=1), min(source.captured_on for source in case.documents) - timedelta(days=1)):
+        with pytest.raises(ValueError):
+            challenge_supporting(case, ReviewState(), expected_bundle=inspect_review(case).bundle_fingerprint,
+                                 fact_id="enforcement", decision="ambiguous",
+                                 **actor(case, reviewed_on=invalid_date))
 
 
 def test_uncited_source_provenance_gap_stays_in_the_exception_first_queue(cases):

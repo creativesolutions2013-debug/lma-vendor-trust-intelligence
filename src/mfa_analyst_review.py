@@ -94,9 +94,16 @@ def _base(case):
 
 
 def _evaluate(case, state):
+    # A pre-fix session may contain a confirmed method with unknown activation.
+    # Preserve that history, but never promote it to current assurance/failure.
+    unknown_activation = {fact_fingerprint(p) for p in case.proposals
+                          if p.fact.dimension == "method" and p.fact.active is None}
     return validate_and_evaluate_mfa(
         case.requirement, case.documents, case.proposals, as_of=case.as_of,
-        fact_reviews=state.fact_reviews, bundle_review=state.bundle_review,
+        fact_reviews=tuple(review for review in state.fact_reviews
+                           if not (review.decision == "supported"
+                                   and review.fact_fingerprint in unknown_activation)),
+        bundle_review=state.bundle_review,
     )
 
 
@@ -110,7 +117,7 @@ def _excerpt(proposal, validation):
                          proposal.location, proposal.fact.citation.quote)
 
 
-def _statement(proposal):
+def describe_interpretation(proposal):
     fact = proposal.fact
     labels = {
         "existence": "MFA is implemented for the complete stated administrator population",
@@ -154,7 +161,7 @@ def _adverse_candidate(proposal, policy):
     fact = proposal.fact
     if fact.value is False:
         return True
-    if (fact.dimension != "method" or fact.active is False
+    if (fact.dimension != "method" or fact.active is not True
             or fact.value not in KNOWN_METHODS | set(policy.approved_equivalents)
             or fact.implementation_evidenced is not True):
         return False
@@ -197,12 +204,22 @@ def inspect_review(case: ReviewCase, state: ReviewState = ReviewState()) -> Revi
                 and result.citation_verified and not mechanical and proposal.fact.dimension not in contested
                 and (review is None or review.classification not in {"explicit_exception", "conflicting_statement"})):
             supporting.append(FactPresentation(
-                proposal.fact_id, fingerprint, _statement(proposal), excerpt.source_id,
+                proposal.fact_id, fingerprint, describe_interpretation(proposal), excerpt.source_id,
                 excerpt.filename, excerpt.location, excerpt.quote,
                 result.status == "validated" and interpretation is not None
                 and interpretation.status == "supports",
             ))
         negative = _adverse_candidate(proposal, case.requirement)
+        inactive_method = proposal.fact.dimension == "method" and proposal.fact.active is not True
+        if inactive_method:
+            issues.append(ReviewIssue(
+                "method_activation_gap",
+                "Method path activation is unverified" if proposal.fact.active is None else "Method path is disabled",
+                "Verify whether this authentication path is enabled before judging current noncompliance."
+                if proposal.fact.active is None else
+                "A disabled method does not establish an active authentication path or a current control failure.",
+                2, (proposal.fact_id,), citations=(excerpt,),
+            ))
         if interpretation and interpretation.status == "adverse":
             issues.append(ReviewIssue("verified_failure", "Evidence-backed threshold failure — provisional",
                                       interpretation.reason, 0, (proposal.fact_id,), citations=(excerpt,)))
@@ -214,8 +231,13 @@ def inspect_review(case: ReviewCase, state: ReviewState = ReviewState()) -> Revi
             issues.append(ReviewIssue("potential_exception", "Potential control exception",
                                       "Confirm the statement's meaning and scope separately from supporting facts.",
                                       2, (proposal.fact_id,), citations=(excerpt,)))
+        if (review and proposal.fact_id in case.supporting_fact_ids
+                and review.decision in {"unsupported", "ambiguous"}):
+            issues.append(ReviewIssue("challenged_interpretation", "Supporting interpretation challenged",
+                                      f"{review.decision}: {review.rationale}", 1,
+                                      (proposal.fact_id,), citations=(excerpt,)))
         if review and (review.classification == "conflicting_statement"
-                       or (review.classification == "explicit_exception" and not negative)):
+                       or (review.classification == "explicit_exception" and not negative and not inactive_method)):
             issues.append(ReviewIssue("conflict" if review.classification == "conflicting_statement" else "potential_exception",
                                       "Retained analyst-identified exception or disagreement", review.rationale,
                                       1, (proposal.fact_id,), citations=(excerpt,)))
@@ -305,6 +327,8 @@ def inspect_review(case: ReviewCase, state: ReviewState = ReviewState()) -> Revi
             "potential_exception": "Investigate the highest-priority exception in its full source context before drawing assurance.",
             "stale_evidence": "Request current in-scope operating evidence for the stated administrator and path inventory.",
             "scope_gap": "Request evidence covering this service and the complete administrator, fallback and recovery scope.",
+            "method_activation_gap": "Verify which administrator authentication paths are enabled using current configuration and operating evidence.",
+            "challenged_interpretation": "Resolve the challenged interpretation against its full source context or request the missing evidence.",
             "source_integrity": "Verify the original source identity, provenance and exact citation before relying on the interpretation.",
             "review_changed": "Review the changed evidence and interpretations again.",
         }.get(issues[0].kind, "Request the missing account/path implementation and operating evidence.")
@@ -387,6 +411,22 @@ def confirm_exception(case, state, *, expected_bundle, fact_id, confirms_semanti
     if next(v for v in _evaluate(case, updated).facts if v.proposal.fact_id == fact_id).status != "validated":
         raise ValueError("M3B rejected the exception's source binding, scope, provenance or date; retain it for investigation.")
     return updated
+
+
+def challenge_supporting(case, state, *, expected_bundle, fact_id, decision,
+                         analyst, reviewed_on, rationale):
+    """Supersede one positive interpretation without erasing earlier decisions."""
+    bundle = _context(case, state, expected_bundle, analyst, reviewed_on, rationale)
+    rows = [p for p in case.proposals if p.fact_id == fact_id]
+    if (decision not in ("unsupported", "ambiguous") or len(rows) != 1
+            or fact_id not in case.supporting_fact_ids):
+        raise ValueError("Select a supporting interpretation and an unsupported/ambiguous disposition.")
+    fingerprint = fact_fingerprint(rows[0])
+    review = FactReview(fingerprint, decision, "unsupported_interpretation",
+                        analyst.strip(), reviewed_on, rationale.strip())
+    reviews = tuple(item for item in state.fact_reviews if item.fact_fingerprint != fingerprint) + (review,)
+    return _event(state, bundle, "challenge_" + decision, (fingerprint,), (fact_id,),
+                  analyst, reviewed_on, rationale, fact_reviews=reviews, bundle_review=None)
 
 
 def triage_signal(case, state, *, expected_bundle, signal_id, material,

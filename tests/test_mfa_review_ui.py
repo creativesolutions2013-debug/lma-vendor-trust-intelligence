@@ -7,7 +7,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src.mfa_analyst_review import inspect_review
-from src.evidence_fact_validation import bind_evidence
+from src.evidence_fact_validation import bind_evidence, fact_fingerprint
 from src.evidence_intelligence_m3 import Citation
 from src.mfa_review_pilot import pilot_cases
 
@@ -177,3 +177,133 @@ def test_integration_is_in_evidence_center_and_available_without_real_vendor_dat
                        and node.test.operand.id == "vendors")
     assert pilot.lineno < vendor_gate.lineno
     assert not pilot.args  # It accepts no vendor, uploaded evidence, session or governed assessment.
+
+
+@pytest.mark.parametrize("active", [None, False, True], ids=["unknown", "disabled", "enabled"])
+def test_configuration_method_requires_affirmative_active_use_before_ui_can_confirm_failure(monkeypatch, active):
+    import src.mfa_review_ui as ui
+
+    strong = next(case for case in pilot_cases() if case.case_id == "strong")
+    method = next(item for item in strong.proposals if item.fact.dimension == "method")
+    activation = {None: "The configuration does not establish whether this path is enabled.",
+                  False: "The path is disabled and cannot issue a session.",
+                  True: "The path is enabled and can issue an administrator session."}[active]
+    source = replace(strong.documents[1], document_id="activation-review", filename="activation-review.txt",
+                     content=("SYNTHETIC configuration records an implemented SMS-code-plus-password administrator path. "
+                              + activation).encode())
+    bound = bind_evidence(source)
+    candidate = replace(method, source_fingerprint=bound.fingerprint, location="Line 1",
+                        fact=replace(method.fact, value="sms", active=active,
+                                     citation=Citation("activation-review:1", source.content.decode()),
+                                     origin_bound=False, verifier_bound=False))
+    case = replace(strong, documents=(source,), proposals=(candidate,), supporting_fact_ids=())
+    monkeypatch.setattr(ui, "pilot_cases", lambda: (case,))
+    at = app()
+    assert any("Provisional outcome: Needs Review" in item.value for item in at.info)
+    assert any(item.value == source.content.decode() for item in at.code)
+    if active is True:
+        at.text_area[0].set_value("I checked the cited configuration and its explicitly enabled administrator path.")
+        widget(at.checkbox, "I checked this exception's meaning and affected population in the full source context.").check().run()
+        widget(at.button, "Confirm this exception's meaning").click().run()
+        assert not at.exception
+        assert any("Provisional outcome: Risk Identified" in item.value for item in at.info)
+        assert any("Evidence-backed threshold failure" in item.value for item in at.warning)
+        state = at.session_state["m3c1_current_review"][1]
+        assert inspect_review(case, state).validation.evaluation.provisional
+    else:
+        assert not any(item.label == "Confirm this exception's meaning" for item in at.button)
+        assert not any("Evidence-backed threshold failure" in item.value for item in at.warning)
+        expected_word = "activation" if active is None else "disabled"
+        assert any(expected_word in item.value.casefold() for item in at.warning)
+        at.text_area[0].set_value("The source leaves activation unresolved or explicitly disables the path; no current failure is verified.")
+        widget(at.checkbox, "I reviewed all supplied documents and their disagreements, scope, dates, account and recovery paths.").check().run()
+        widget(at.button, "Record complete-bundle review").click().run()
+        assert not at.exception
+        assert any("Provisional outcome: Needs Review" in item.value for item in at.info)
+        state = at.session_state["m3c1_current_review"][1]
+        assert not state.fact_reviews
+        assert not any(item.status == "adverse" for item in inspect_review(case, state).validation.evaluation.facts)
+
+
+def challenge(at, fact_id, decision):
+    at.text_area[0].set_value("The source does not establish complete emergency-administrator coverage; do not accept this interpretation.")
+    widget(at.selectbox, "Supporting interpretation to challenge").set_value(fact_id).run()
+    widget(at.radio, "Challenge disposition").set_value(decision).run()
+    widget(at.button, "Record supporting interpretation challenge").click().run()
+    assert not at.exception
+    return at
+
+
+def finish_strong_signal_and_bundle_reviews(at, case):
+    # Explicit fixture-specific human dispositions, not automatic semantic triage.
+    for signal in inspect_review(case).validation.signals:
+        widget(at.selectbox, "Source signal").set_value(signal.signal_id).run()
+        widget(at.radio, "After checking the full context").set_value("Not material to this requirement")
+        at.text_area[0].set_value("The cited source expressly reports no exemptions or exceptions in its complete tested inventory.")
+        widget(at.button, "Record this signal triage").click().run()
+        assert not at.exception
+    widget(at.checkbox, "I reviewed all supplied documents and their disagreements, scope, dates, account and recovery paths.").check().run()
+    widget(at.button, "Record complete-bundle review").click().run()
+    assert not at.exception
+    return at
+
+
+@pytest.mark.parametrize("decision", ["Unsupported", "Ambiguous"])
+def test_challenge_before_grouping_excludes_one_fact_without_accepting_it_with_the_remaining_group(decision):
+    case = next(case for case in pilot_cases() if case.case_id == "strong")
+    target = next(item for item in case.proposals if item.fact.dimension == "enforcement")
+    at = challenge(app(), target.fact_id, decision)
+    state = at.session_state["m3c1_current_review"][1]
+    assert len(state.fact_reviews) == len(state.events) == 1
+    assert state.fact_reviews[0].fact_fingerprint == fact_fingerprint(target)
+    assert state.fact_reviews[0].decision == decision.casefold()
+    assert any("challeng" in item.value.casefold() for item in at.warning)
+    assert any(item.value == target.fact.citation.quote for item in at.code)
+    assert fact_fingerprint(target) not in inspect_review(case, state).supporting_fingerprints
+    at = reviewed_support(at)
+    state = at.session_state["m3c1_current_review"][1]
+    assert len(state.fact_reviews) == 7
+    assert len(state.events[-1].fact_fingerprints) == 6
+    assert fact_fingerprint(target) not in state.events[-1].fact_fingerprints
+    at = finish_strong_signal_and_bundle_reviews(at, case)
+    state = at.session_state["m3c1_current_review"][1]
+    assert inspect_review(case, state).validation.evaluation.outcome == "Needs Review"
+    assert any("Provisional outcome: Needs Review" in item.value for item in at.info)
+    assert next(review for review in state.fact_reviews if review.fact_fingerprint == fact_fingerprint(target)).decision == decision.casefold()
+
+
+@pytest.mark.parametrize("decision", ["Unsupported", "Ambiguous"])
+def test_challenge_after_provisional_met_supersedes_the_group_without_erasing_history(decision):
+    case = next(case for case in pilot_cases() if case.case_id == "strong")
+    target = next(item for item in case.proposals if item.fact.dimension == "enforcement")
+    at = finish_strong_signal_and_bundle_reviews(reviewed_support(app()), case)
+    before = at.session_state["m3c1_current_review"][1]
+    assert inspect_review(case, before).validation.evaluation.outcome == "Met"
+    assert len(before.events) == 4
+    at = challenge(at, target.fact_id, decision)
+    state = at.session_state["m3c1_current_review"][1]
+    assert state.events[:-1] == before.events
+    assert len(state.events) == 5
+    assert state.bundle_review is None
+    assert state.signal_dispositions == before.signal_dispositions
+    assert len(state.fact_reviews) == 7
+    assert next(review for review in state.fact_reviews if review.fact_fingerprint == fact_fingerprint(target)).decision == decision.casefold()
+    assert inspect_review(case, state).validation.evaluation.outcome == "Needs Review"
+    assert any("Provisional outcome: Needs Review" in item.value for item in at.info)
+    assert any("challeng" in item.value.casefold() for item in at.warning)
+    widget(at.checkbox, "I reviewed all supplied documents and their disagreements, scope, dates, account and recovery paths.").check().run()
+    widget(at.button, "Record complete-bundle review").click().run()
+    assert not at.exception
+    state = at.session_state["m3c1_current_review"][1]
+    assert inspect_review(case, state).validation.evaluation.outcome == "Needs Review"
+    assert any("Provisional outcome: Needs Review" in item.value for item in at.info)
+
+
+def test_every_grouped_interpretation_exposes_its_exact_quote_alongside_its_source():
+    case = next(case for case in pilot_cases() if case.case_id == "strong")
+    at = app()
+    codes = {item.value for item in at.code}
+    captions = [item.value for item in at.caption]
+    for interpretation in inspect_review(case).supporting:
+        assert interpretation.quote in codes
+        assert any(interpretation.filename in caption and interpretation.location in caption for caption in captions)

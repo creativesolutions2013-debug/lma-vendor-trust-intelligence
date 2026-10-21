@@ -2,8 +2,8 @@
 import streamlit as st
 
 from src.mfa_analyst_review import (
-    ReviewState, acknowledge_bundle, confirm_exception, confirm_supporting,
-    inspect_review, triage_signal,
+    ReviewState, acknowledge_bundle, challenge_supporting, confirm_exception,
+    confirm_supporting, describe_interpretation, inspect_review, triage_signal,
 )
 from src.mfa_review_pilot import pilot_cases
 
@@ -124,14 +124,39 @@ def render_mfa_review_pilot(*, actor_label="Pilot analyst"):
 
             common = dict(expected_bundle=view.bundle_fingerprint, analyst=actor_label,
                           reviewed_on=case.as_of, rationale=note)
+            if case.supporting_fact_ids:
+                st.markdown("**Challenge a supporting interpretation**")
+                proposals = {item.fact_id: item for item in case.proposals}
+                challenge_id = st.selectbox(
+                    "Supporting interpretation to challenge", case.supporting_fact_ids,
+                    format_func=lambda key: proposals[key].fact.dimension.replace("_", " ").title(),
+                    key=prefix + ":challenge",
+                )
+                challenged = proposals[challenge_id]
+                source_name = next((bound.document.filename for bound in view.validation.evidence
+                                    if challenged.fact.citation.source_id.startswith(bound.source.document_id + ":")),
+                                   "Unmatched source")
+                st.write(describe_interpretation(challenged))
+                st.caption(f"{source_name} · {challenged.location}")
+                st.code(challenged.fact.citation.quote, language=None)
+                challenge_disposition = st.radio(
+                    "Challenge disposition", ("Unsupported", "Ambiguous"),
+                    key=prefix + ":challenge_disposition:" + challenge_id,
+                )
+                if st.button("Record supporting interpretation challenge", key=prefix + ":challenge_record",
+                             disabled=not note.strip()):
+                    record(lambda: challenge_supporting(
+                        case, state, fact_id=challenge_id, decision=challenge_disposition.lower(), **common,
+                    ))
             if view.supporting:
                 st.markdown("**Supporting interpretations to confirm together**")
                 for item in view.supporting:
                     st.write(f"• {item.statement}")
                     st.caption(f"{item.filename} · {item.location}")
+                    st.code(item.quote, language=None)
                 agrees = st.checkbox(
                     "I checked every displayed interpretation against its full sources and confirm its meaning, not just its quotation.",
-                    value=False, key=prefix + ":semantics",
+                    value=False, key=prefix + ":semantics:" + ",".join(view.supporting_fingerprints),
                 )
                 if st.button(
                     "Confirm displayed supporting interpretations", key=prefix + ":confirm_support",
@@ -200,6 +225,8 @@ def render_mfa_review_pilot(*, actor_label="Pilot analyst"):
                 "exception_confirmation": "Confirmed exception meaning",
                 "signal_triage": "Recorded source signal triage",
                 "bundle_acknowledgment": "Reviewed the complete source bundle",
+                "challenge_unsupported": "Challenged an interpretation as unsupported",
+                "challenge_ambiguous": "Challenged an interpretation as ambiguous",
             }
             for event in state.events:
                 st.caption(f"{event.reviewed_on} · {event.analyst} · {action_labels[event.kind]}")

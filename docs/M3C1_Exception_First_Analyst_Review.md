@@ -17,15 +17,22 @@ review** to record a reason and explicit decisions:
    properties. It retains a separate M3B fingerprint and `FactReview` for each
    interpretation. It does not confirm omitted, invalid, uncertain, contested or
    adverse facts, triage lexical signals, or acknowledge the complete bundle.
-2. **Confirm this exception's meaning** separately checks an adverse interpretation.
+2. **Challenge a supporting interpretation** selects one fact and records an
+   unsupported/ambiguous disposition with a reason. It can supersede an earlier
+   grouped confirmation, including after provisional `Met`, while retaining all
+   prior decision events. The challenged fact leaves the supporting group and
+   complete-bundle acknowledgment is invalidated. A fresh bundle acknowledgment
+   cannot override the challenge. Exact quotations and source locations are shown
+   alongside each grouped interpretation and the selected challenge target.
+3. **Confirm this exception's meaning** separately checks an adverse interpretation.
    A human-confirmed configuration/test statement can produce a provisional
    evidence-backed failure. A vendor assertion stays an unverified reported
    exception; confirming what the vendor said does not verify its implementation.
-3. **Record this signal triage** separately records material/nonmaterial judgment
+4. **Record this signal triage** separately records material/nonmaterial judgment
    with a reason for each current source signal. The default retains potential
    materiality. Supporting confirmation never dismisses signals. A mistaken
    nonmaterial signal disposition cannot erase a separately proposed adverse fact.
-4. **Record complete-bundle review** explicitly acknowledges all supplied documents,
+5. **Record complete-bundle review** explicitly acknowledges all supplied documents,
    including uncited documents, disagreements, scope, dates and alternate paths.
    Outstanding M3B limitations still block a positive recommendation.
 
@@ -50,6 +57,13 @@ meaning from quotation matches or content hashes. Complete source context remain
 available and account, fallback and recovery coverage must be established
 explicitly. Missing facts, unknown/disabled methods and stale assurance are gaps,
 not affirmative control failures.
+
+Method-based current failures require affirmative evidence that the authentication
+path is active. Unknown activation remains a source-linked activation gap; an
+explicitly disabled path remains disabled, rather than a current failure. The
+adapter also withholds old supported method reviews with unknown activation, so
+restoring a pre-correction session cannot retain a verified-risk conclusion. The
+original source and review history remain available.
 
 Adverse/conflicting statements, unverified vendor admissions, material signals,
 uncited provenance problems, stale evidence and service/population/path scope gaps
@@ -81,6 +95,14 @@ confirmations into one. The two material-exception cases deliberately retain all
 four decisions. One stays a provisional `Risk Identified`; the vendor assertion
 stays `Needs Review`. Both remain visible after supporting confirmation and
 complete-bundle acknowledgment.
+
+Challenges are additional deliberate decisions, not automatic savings. Challenging
+one fact before grouping adds one submission (five for that synthetic path).
+Correcting the strong case after `Met` preserves its four original events and adds
+a fifth challenge event; a fresh bundle acknowledgment is a sixth submission and
+the result still remains `Needs Review`. The unchanged straightforward positive
+case still takes four submissions. These correction paths do not imply a measured
+time reduction.
 
 `tests/test_mfa_analyst_review.py` prints the reproducible count report and checks
 the per-fact records. `tests/test_mfa_review_ui.py` drives the actual Streamlit
