@@ -127,7 +127,7 @@ from src.evidence_intelligence_mvp import (
 from src.evidence_intelligence_m2 import (
     PILOT_REQUIREMENTS, evaluate_ai_requirements,
 )
-from src.mfa_review_ui import render_mfa_review_pilot
+from src.control_assurance_ui import render_control_assurance_pilot
 from src.evidence_state import (
     extraction_matches_file,
     file_changed,
@@ -6711,7 +6711,7 @@ def render_evidence():
     else:
         st.info("No evidence has been registered yet.")
 
-    render_mfa_review_pilot(actor_label=CURRENT_USER.display_name)
+    render_control_assurance_pilot(actor_label=CURRENT_USER.display_name)
 
     st.subheader("Register evidence")
 

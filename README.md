@@ -101,6 +101,49 @@ adds a synthetic privileged-MFA review in the Evidence Center. One explicit acti
 can confirm displayed supporting interpretations while exception triage and
 complete-bundle review remain separate. Every result stays provisional.
 
+### Evidence-Based Control Assurance — implemented proof and platform direction
+
+The intended capability evaluates **every applicable vendor security control**
+against customer-defined requirements, applicable technical/industry standards,
+actual implementation and operation, service scope, evidence freshness, and
+material exceptions. A vendor stating that a control exists, attaching a policy,
+or providing a matching quotation does **not** establish its sufficiency.
+Privileged MFA is an early **reference scenario**, not a product boundary.
+The [M3D bounded proof](docs/M3D_Evidence_Based_Control_Assurance.md) adds a
+control-neutral source/review contract and common **Control Assurance Review**
+presentation in the Evidence Center. Applicable customer requirements are
+represented independently of specialist evaluator availability; registered cases
+determine the available families. Tested technical rules cover three synthetic examples:
+privileged MFA through the existing M3A/B/C gates; TLS configuration, enabled
+minimum, deprecated-protocol rejection and full-endpoint operating scans; and
+completed disaster-recovery exercises with customer-specific cadence and achieved
+RTO/RPO. TLS and DR use separate typed rules, not MFA substitutions or keywords.
+
+A fourth unrelated vulnerability-remediation requirement demonstrates the safe
+fallback without a technical evaluator: usable cited evidence stays **Needs Review**;
+absent or unusable evidence stays **Evidence Missing**, with a visible specialist
+limitation and focused follow-up. Human semantic confirmation cannot turn either
+fallback result into passing or proven failure. This is workflow coverage for
+arbitrary applicable requirements, not automated technical coverage of all controls.
+
+Fallback evidence suitability is explicit for each customer requirement: versioned
+accepted evidence kinds and a relevance binding to the source, requirement and
+threshold. A current approved policy can enter review for a documented-governance
+requirement; policy intent cannot substitute for operational remediation records.
+Unrelated or unbound sources remain visible with an evidence/relevance gap.
+These declarations enable specialist review, not automatic assurance.
+
+Every interpretation still requires explicit human semantic confirmation, separate
+exception triage and complete-bundle review. Customer policy, threshold, context,
+document and interpretation changes invalidate active review. Results remain
+source-linked, provisional and session-only; the pilot neither authenticates
+production reviewers nor changes governed decisions. Customer-supplied standard
+references, editions and mappings are displayed metadata, not independently
+verified normative-compliance proof. MFA retains its original specialized review
+actions behind a compatibility adapter. The pilot does **not** technically evaluate
+all control families or understand arbitrary documents. M1 TLS and M2 encryption/DR/IR
+screening drafts remain earlier, separate capabilities. See [Issue #5](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/5).
+
 ## Planned Industry-Pilot Capabilities
 
 ### 1. Business Assessment Intake

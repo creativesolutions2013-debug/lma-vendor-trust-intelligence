@@ -171,7 +171,7 @@ def test_integration_is_in_evidence_center_and_available_without_real_vendor_dat
     tree = ast.parse((Path(__file__).parents[1] / "app.py").read_text())
     function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "render_evidence")
     calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
-    pilot = next(node for node in calls if isinstance(node.func, ast.Name) and node.func.id == "render_mfa_review_pilot")
+    pilot = next(node for node in calls if isinstance(node.func, ast.Name) and node.func.id == "render_control_assurance_pilot")
     vendor_gate = next(node for node in function.body if isinstance(node, ast.If)
                        and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.operand, ast.Name)
                        and node.test.operand.id == "vendors")

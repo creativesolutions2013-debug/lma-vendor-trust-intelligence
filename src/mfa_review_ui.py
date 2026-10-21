@@ -6,6 +6,8 @@ from src.mfa_analyst_review import (
     confirm_supporting, describe_interpretation, inspect_review, triage_signal,
 )
 from src.mfa_review_pilot import pilot_cases
+from src.mfa_assurance_adapter import present_mfa
+from src.control_assurance_presentation import render_assurance_summary
 
 
 def render_mfa_review_pilot(*, actor_label="Pilot analyst"):
@@ -31,63 +33,9 @@ def render_mfa_review_pilot(*, actor_label="Pilot analyst"):
             st.session_state.pop(state_key, None)
         state = saved[1] if saved and saved[0] == prefix else ReviewState()
         view = inspect_review(case, state)
-        requirement = case.requirement
-        st.markdown(f"**{requirement.requirement_id} · Privileged administrator MFA**")
-        st.write(
-            f"Customer requirement: {requirement.customer_policy_id} v{requirement.version}. "
-            f"{requirement.service} · {requirement.environment} · {requirement.account_scope}."
-        )
-        st.write(
-            "Threshold: enforced MFA for the complete administrator population; "
-            f"allowed methods: {', '.join(requirement.allowed_methods).upper()}; "
-            f"phishing resistance {'required' if requirement.phishing_resistant else 'not required'}; "
-            f"operating tests {'required' if requirement.require_operating else 'not required'}; "
-            f"evidence no older than {requirement.max_age_days} days. "
-            "All fallback and recovery paths must meet the same threshold."
-        )
+        render_assurance_summary(present_mfa(case, view))
         st.caption(f"Synthetic assessment date: {case.as_of.isoformat()} · Demo reviewer: {actor_label}")
-        st.info(f"Provisional outcome: {view.validation.evaluation.outcome}")
-
-        # Every adverse/conflicting issue is shown before positive evidence.
-        # Lower-priority administrative/missing detail remains available below.
-        prominent = [issue for issue in view.issues if issue.priority <= 2]
         secondary = [issue for issue in view.issues if issue.priority > 2]
-        if prominent:
-            st.markdown("**Evidence needing attention first**")
-            shown_citations = set()
-            for issue in prominent:
-                st.warning(f"{issue.title}: {issue.detail}")
-                for citation in issue.citations:
-                    st.caption(f"{citation.filename} · {citation.location}")
-                    identity = (citation.source_id, citation.location, citation.quote)
-                    if identity not in shown_citations:
-                        st.code(citation.quote, language=None)
-                        shown_citations.add(identity)
-        elif secondary:
-            st.warning(f"{secondary[0].title}: {secondary[0].detail}")
-        st.write(f"**Recommended next action:** {view.next_action}")
-        unconfirmed = sum(item.status != "validated" for item in view.validation.facts)
-        unresolved = sum(item.status == "needs_review" for item in view.validation.signals)
-        st.caption(
-            f"Uncertainty: {unconfirmed} interpretation(s) remain unconfirmed or unsupported; "
-            f"{unresolved} source signal(s) remain unresolved in the validated bundle. "
-            "Matching quotations alone do not establish correct meaning or control operation."
-        )
-
-        if view.supporting:
-            st.markdown("**Strongest supporting evidence**")
-            seen = set()
-            for item in view.supporting:
-                citation = (item.filename, item.location, item.quote)
-                if citation in seen:
-                    continue
-                st.caption(f"{item.filename} · {item.location} · {'meaning confirmed' if item.confirmed else 'draft interpretation'}")
-                st.code(item.quote, language=None)
-                seen.add(citation)
-                if len(seen) == 2:
-                    break
-        else:
-            st.write("No complete supporting interpretation is available for grouped confirmation.")
 
         with st.expander("Source context and remaining evidence detail", expanded=False):
             for issue in secondary:
