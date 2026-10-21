@@ -96,6 +96,11 @@ adds a backend source/provenance check and explicit analyst semantic-review gate
 before the provisional M3A privileged-MFA evaluator. It uses synthetic regressions
 and has no automatic approval, scoring, persistence or new application screens.
 
+The [M3C-1 exception-first review pilot](docs/M3C1_Exception_First_Analyst_Review.md)
+adds a synthetic privileged-MFA review in the Evidence Center. One explicit action
+can confirm displayed supporting interpretations while exception triage and
+complete-bundle review remain separate. Every result stays provisional.
+
 ## Planned Industry-Pilot Capabilities
 
 ### 1. Business Assessment Intake
