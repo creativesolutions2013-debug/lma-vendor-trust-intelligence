@@ -9,10 +9,15 @@
 
 **Current implementation boundary (M3D):** Evidence-Based Control Assurance is
 the cross-control platform direction. The implemented **Control Assurance Review**
-is a bounded synthetic proof for privileged MFA, transport encryption (TLS), and
-disaster-recovery testing, using shared source/review contracts and separate
-technical evaluators. It does not automate every control or understand arbitrary
-documents. All results are provisional, source-linked and require explicit analyst
+accepts applicable customer requirements independently of technical evaluator
+availability. Registered synthetic examples include tested rules for privileged
+MFA, transport encryption (TLS), and disaster-recovery testing, plus vulnerability
+remediation without a specialist evaluator. The fallback keeps sources, concerns
+and analyst decisions visible, with Needs Review when usable evidence exists or
+Evidence Missing otherwise; it cannot infer passing or failure. Extensible workflow
+coverage does not mean every control is technically automated or arbitrary documents
+are understood. Standard references/mappings remain supplied metadata, not independently
+verified compliance. All results are provisional, source-linked and require explicit analyst
 review plus independent governance. See [implementation, measurements and limits](M3D_Evidence_Based_Control_Assurance.md).
 
 ---

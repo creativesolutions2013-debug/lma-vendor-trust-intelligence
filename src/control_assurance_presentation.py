@@ -30,6 +30,8 @@ class AssurancePresentation:
     supporting: tuple[CitedInterpretation, ...]
     uncertainty: str
     next_action: str
+    specialist_available: bool = True
+    evidence_for_review: tuple[CitedInterpretation, ...] = ()
 
 
 def present_control(case, view):
@@ -47,7 +49,8 @@ def present_control(case, view):
             kind = source_kinds.get(f.proposal.source_id.split(":")[0])
             failed = any(c.status == "failed" and f.proposal.fact_id in c.fact_ids for c in view.checks)
             reported = any(c.status == "reported" and f.proposal.fact_id in c.fact_ids for c in view.checks)
-            title = ("Vendor-reported or policy exception — unverified" if kind in {"assertion", "policy"}
+            title = ("Reported conflicting interpretation — specialist review required" if f.proposal.concern == "conflict"
+                     else "Vendor-reported or policy exception — unverified" if kind in {"assertion", "policy"}
                      else "Evidence-backed threshold failure" if failed
                      else "Untested exception — unverified" if reported
                      else "Confirmed adverse interpretation" if f.confirmed else "Unconfirmed exception interpretation")
@@ -67,16 +70,35 @@ def present_control(case, view):
         attention.append(Attention("Incomplete operating or implementation evidence",
                                    f"{len(missing)} required check(s) lack confirmed support. " + missing[0].rationale))
     attention.extend(Attention("Evidence limitation", x) for x in view.limitations)
+    mapping = (r.standard_reference or "not supplied")
+    if r.standard_edition:
+        mapping += " · edition " + r.standard_edition
+    if r.standard_source:
+        mapping += " · source " + r.standard_source
+    context = (f" Use case: {r.business_use_case}." if r.business_use_case else "")
+    if r.assurance_type:
+        context += f" Required assurance: {r.assurance_type}."
+    if r.required_evidence:
+        context += " Required evidence: " + "; ".join(r.required_evidence) + "."
+    review_evidence = tuple(
+        CitedInterpretation(
+            f"Supplied {b.source.evidence_kind} evidence; {b.source.service} · {b.source.environment} · "
+            f"{b.source.account_scope}; observed {b.source.observed_on}; sufficiency not evaluated",
+            b.document.filename, segment.location, segment.text, b.fingerprint, False,
+        ) for b in view.evidence for segment in b.document.segments
+    ) if not view.specialist_available else ()
     return AssurancePresentation(
         r.requirement_id, case.family, f"{r.customer_policy_id} v{r.policy_version}. "
         f"{r.service} · {r.environment} · {r.scope}. "
-        f"Approved by {r.approved_by} on {r.approved_on}. Reference: {r.standard_reference}.",
+        f"Approved by {r.approved_by} on {r.approved_on}.{context} "
+        f"Customer-supplied standard reference: {mapping} (not independently verified).",
         case.threshold_summary, view.outcome, tuple(attention),
         tuple(cited(f) for f in view.facts if f.direction == "support" and not f.reasons),
         f"{sum(not f.confirmed for f in view.facts)} interpretation(s) unconfirmed or unsupported; "
         f"{sum(s.status == 'needs_review' for s in view.signals)} unresolved source signal(s). "
         "Matching quotations alone do not establish correct meaning or control operation. "
         "Source hashes establish consistency, not authenticity.", view.next_action,
+        view.specialist_available, review_evidence,
     )
 
 
@@ -89,6 +111,8 @@ def render_assurance_summary(presentation):
     st.write("Customer requirement: " + p.customer_requirement)
     st.write("Threshold: " + p.threshold)
     st.info("Provisional outcome: " + p.outcome)
+    if not p.specialist_available:
+        st.caption("Specialist evaluation unavailable; analyst review required.")
     if p.attention:
         st.markdown("**Evidence needing attention first**")
         for issue in p.attention:
@@ -111,5 +135,10 @@ def render_assurance_summary(presentation):
             seen.add(identity)
             if len(seen) == 2:
                 break
-    else:
+    elif p.specialist_available:
         st.write("No complete supporting interpretation is available for grouped confirmation.")
+    if p.evidence_for_review:
+        st.markdown("**Cited evidence for specialist review — sufficiency not evaluated**")
+        for item in p.evidence_for_review[:2]:
+            st.caption(f"{item.filename} · {item.location} · {item.statement}")
+            st.code(item.quote, language=None)

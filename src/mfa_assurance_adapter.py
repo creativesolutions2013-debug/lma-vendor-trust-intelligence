@@ -2,6 +2,18 @@
 from src.control_assurance_presentation import AssurancePresentation, Attention, CitedInterpretation
 
 
+def mfa_review_family():
+    """Explicit compatibility debt: legacy actions still use their original UI."""
+    from src.control_assurance_registry import ReviewFamily
+    from src.mfa_review_pilot import pilot_cases
+
+    def render(*, actor_label):
+        from src.mfa_review_ui import render_mfa_review_pilot
+        render_mfa_review_pilot(actor_label=actor_label)
+
+    return ReviewFamily("Privileged MFA", pilot_cases(), render, ("m3c1_current_review",))
+
+
 def present_mfa(case, view):
     r = case.requirement
     attention = []

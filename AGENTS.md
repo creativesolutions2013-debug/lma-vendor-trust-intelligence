@@ -20,8 +20,15 @@ exists is never sufficient proof of meeting the requirement. Do not relabel an
 MFA-only pilot as a generalized implementation. Prove shared behavior with
 at least two genuinely non-MFA control families before claiming reusable
 cross-control support. See GitHub issue #5 for M3D acceptance criteria.
-The bounded three-family synthetic implementation and its limits are documented
-in docs/M3D_Evidence_Based_Control_Assurance.md; it does not automate all controls.
+The same evidence and analyst-review lifecycle must accept every applicable
+customer-defined requirement independently of specialist evaluator availability.
+Families are registered from applicable review cases, never a platform whitelist.
+Without specialist rules, retain the requirement, citations, concerns and review
+history; disclose the limitation and return provisional Needs Review with usable
+evidence or Evidence Missing without it. Never infer passing, failure or compliance.
+The synthetic proof and its limits are documented in
+docs/M3D_Evidence_Based_Control_Assurance.md. Workflow coverage is extensible;
+automated technical coverage remains limited to tested domain evaluators.
 
 - Work on a dedicated feature branch based on current main. Preserve existing work;
   never modify or push directly to main. Merge/publish only when authorized.

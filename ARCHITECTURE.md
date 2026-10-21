@@ -21,16 +21,31 @@ observation, provisional result and explicit session-review contract. Typed
 `tls_assurance.py` and `dr_assurance.py` implement separate technical rules;
 they do not import MFA or evaluate policy text. No generic policy DSL is added.
 
+An applicable requirement exists independently of a technical evaluator. The
+optional typed evaluator extension supplies domain rules; a supplied customer
+threshold can instead be retained as non-executable acceptance text. Without
+specialist rules, the common review keeps sources, candidate meanings, concerns,
+individual review/challenge events and separate signal/bundle decisions. It
+returns only provisional Needs Review with usable evidence or Evidence Missing
+without it, with an explicit specialist-review limitation and targeted follow-up.
+
 `control_assurance_presentation.py` supplies one exception-first read-only result
-contract and renderer for all three families. `mfa_assurance_adapter.py` presents
+contract and renderer for registered applicable families. `mfa_assurance_adapter.py` presents
 unchanged M3A/B/C evaluation and review behavior through that contract. The existing
 Evidence Center hosts `control_assurance_ui.py`; MFA retains its specialized safe
-review actions while TLS and DR share the neutral actions. Source checks and review
-records are reused; MFA-only semantics are not a base class for other controls.
+review actions as compatibility debt while evaluator-backed and fallback cases
+share neutral actions. Family selection derives from registered cases rather than
+a three-family whitelist, using `control_assurance_registry.py`. Source checks and review records are reused; MFA-only
+semantics are not a base class for other controls. A fourth vulnerability-remediation
+example proves evidence-present and evidence-missing fallback behavior, not a new
+vulnerability technical evaluator.
 
 The surface accepts only synthetic fixture packages. It has no database handle,
 upload ingestion, AI/network call or governed-write integration. Source consistency
 is not authenticity and session reviewer labels are not production authorization.
+Standard references/editions/mappings are customer-supplied metadata and are not
+independently verified. Workflow applicability is extensible to arbitrary customer
+requirements; automated technical coverage remains limited to tested evaluators.
 See [M3D implementation and limits](docs/M3D_Evidence_Based_Control_Assurance.md).
 
 The product distinguishes a **vendor** from a **service engagement**.

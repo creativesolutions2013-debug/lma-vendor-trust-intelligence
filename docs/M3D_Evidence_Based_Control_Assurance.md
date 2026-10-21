@@ -3,9 +3,17 @@
 This is the bounded architectural correction in [Issue #5](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/5),
 implemented on `feature/m3d-cross-control-assurance` for draft PR #6. Privileged MFA
 is a demanding reference scenario, not the product boundary. The Evidence Center
-now provides a **Control Assurance Review** for MFA, transport encryption (TLS),
-and disaster-recovery testing. This demonstrates reusable contracts for three
-families; it does not automate all customer requirements.
+provides a **Control Assurance Review** whose applicable requirements are
+independent of specialist evaluator availability. MFA, transport encryption (TLS),
+and disaster-recovery testing have technical proof cases. A fourth unrelated
+vulnerability-remediation requirement demonstrates the common analyst-review
+fallback with evidence present and missing. Families come from registered cases,
+not an allowed-domain list. This extends workflow coverage to arbitrary applicable
+customer requirements; technical automation remains limited to tested evaluators.
+
+The fallback correction addresses the [independent architecture review on PR #6](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/pull/6#pullrequestreview-5604185352)
+and the updated Issue #5 universal-scope acceptance criteria. It does not add a
+generic document-understanding engine or automate all customer requirements.
 
 ## Reused boundaries and small shared contracts
 
@@ -19,23 +27,35 @@ The new proof reuses M1 parsing, not those drafts as verified facts.
   API and preserves its fingerprint format and behavior.
 - `control_assurance.py` defines a versioned customer requirement/context,
   source-bound observation, technical result and session review contract. It has
-  no MFA dependency. Thresholds are frozen domain-specific records, not a textual
-  policy engine. A proposal inherits its declared source inventory scope, date
-  and kind; it cannot silently broaden them through a separate fact scope.
+  no MFA dependency. A requirement can retain supplied acceptance text without
+  an evaluator through `CustomerThreshold`. `DomainEvaluator` is the optional
+  typed extension for domain rules, direction and triage signals with a version;
+  their thresholds remain frozen records. Neither supplied acceptance text nor
+  standard references are executable policy. A proposal inherits its declared
+  source inventory scope, date and kind; it cannot silently broaden them through
+  a separate fact scope.
 - `tls_assurance.py` and `dr_assurance.py` apply genuinely different technical
   rules to explicitly reviewed observations. They do not parse prose into truth.
 - `control_assurance_presentation.py` is the common exception-first read-only
   presentation contract and renderer. `mfa_assurance_adapter.py` maps existing
   M3A/B/C results into it without changing their technical semantics or review
-  APIs. MFA's specialized review actions remain; TLS/DR share neutral actions.
+  APIs. MFA's specialized review actions remain separate compatibility debt;
+  evaluator-backed and fallback requirements share neutral actions.
 - `control_assurance_ui.py` occupies the existing Evidence Center pilot location.
-  It adds one family selector, not a dashboard or broad navigation redesign.
+  `control_assurance_registry.py` derives its families from registered applicable
+  review cases. Adding a
+  case in a new family does not require a domain branch in the common renderer.
+  This is not a dashboard or broad navigation redesign.
 
 Requirements carry ID, customer policy ID/version, declared approving owner/date,
 service, environment, population/asset scope, freshness window and standard
-reference. TLS cites RFC 9325's protocol-version guidance; DR cites NIST SP 800-34
+reference, with supplied business-use/evidence expectations and standard source
+and edition where available. TLS cites RFC 9325's protocol-version guidance; DR cites NIST SP 800-34
 Rev.1's testing/exercise guidance. The numerical acceptance bounds are the
 customer's synthetic policy, not a claim that a framework mandates those numbers.
+References, editions and mappings are customer-supplied metadata: this pilot does
+not independently validate authoritative editions, control mappings or normative
+conformance. An omitted mapping stays omitted; no standard is invented.
 Historical `IAM-01`/`PAM-01` and all governed control meanings remain unchanged.
 
 ## Technical proof
@@ -52,6 +72,49 @@ distinct from vendor assertions or plan admissions. Opposed current facts retain
 both accounts and require reconciliation. Missing operation is not a failure;
 stale reports and service/dependency scope gaps remain explicit limitations.
 An active weak alternate TLS endpoint cannot disappear behind good primary scans.
+
+## Requirements without specialist rules
+
+An applicable requirement keeps its identity, versioned customer threshold,
+business/service/asset scope, required evidence, freshness and assessment date even
+when its technical evaluator is unavailable. The same source binding, exact
+citations, inventory, interpretation fingerprints, analyst rationale/history and
+separate exception/signal/bundle actions remain available.
+
+The conservative fallback explicitly displays **Specialist evaluation unavailable;
+analyst review required.** It returns provisional **Needs Review** when a current,
+in-scope, provenance-complete non-policy source needs expert evaluation, or
+**Evidence Missing** when no usable pertinent evidence exists. A policy alone,
+stale/out-of-scope report or deficient source inventory cannot establish usable
+operating evidence. A valid source can still be reviewed directly when it has no
+candidate facts, or when an individual candidate's citation/meaning is invalid;
+that invalid candidate remains unconfirmed and challengeable.
+
+Fallback evidence is cited as material **for specialist review**, never as support
+for meeting the requirement. Individual explicit meaning confirmation records only
+what the source says. It does not evaluate the supplied threshold or manufacture
+implementation, coverage or operating assurance. There is no grouped supporting-
+fact approval for an unavailable evaluator. Caller-supplied adverse/conflicting
+interpretations and lexical concerns remain visible and separately reviewable;
+neither a keyword nor human confirmation turns them into verified technical failure.
+Even after every meaning, signal and complete-bundle decision, the fallback can
+never return `Met`, `Partially Met` or `Risk Identified`, and never silently skips
+the requirement. Its next action identifies the required specialist evaluation or
+the smallest missing evidence package against the supplied customer criterion.
+
+The fourth fixture concerns **vulnerability remediation**: the customer supplies
+critical-issue remediation within 30 calendar days on every in-scope production
+asset, independent closure retesting and expected dated inventory/closure evidence, while
+no vulnerability technical evaluator exists. `vm-present` retains cited vendor
+evidence and a separately presented concern; `vm-missing` keeps the same requirement
+visible with its evidence gap. Neither fixture proves vulnerability compliance or
+failure. A future independently tested evaluator can be attached through the typed
+extension without changing the common review/result interface or adding a family
+branch to the UI. The retained MFA-specific review actions are a separate legacy
+adapter, explicitly not a requirement for adding another family.
+
+These are code-supplied synthetic requirement packages. This milestone does not add
+a policy editor, live customer-requirement ingestion or confidential evidence flow.
 
 ## Human review and safety
 
@@ -104,6 +167,14 @@ Conflicts and vendor admissions are separately required to stay `Needs Review`.
 These denominators describe this hand-authored corpus, not estimated real-world
 error rates. Unreviewed packages can never produce `Met`.
 
+The fallback fixtures and regressions are additional to those original TLS/DR
+denominators. Backend and Streamlit tests cover evidence present/missing, arbitrary
+family registration, individual meaning confirmation and challenge history,
+retained adverse evidence, source limitations, and changed customer policy,
+threshold, date and source invalidation. They demonstrate safe workflow inclusion
+without technical automation. They do not estimate expert judgment quality or
+real-world completeness for vulnerability management or future domains.
+
 Streamlit AppTest drives the actual widgets and records the following scripted
 paths. A widget interaction is one family/package selection, text entry, checkbox
 change, radio selection or button click. The paths use one common rationale and
@@ -143,9 +214,16 @@ both Unit tests and PostgreSQL compatibility on the PR head. Draft PR #6 remains
 unmerged for independent review of technical rules, evidence bindings, adversarial
 coverage and governance boundaries.
 
-Local verification: `app.py` and all touched Python modules compiled; full
+Prior three-evaluator baseline verification: `app.py` and all touched Python modules compiled; full
 `DATABASE_URL=sqlite:///:memory: .venv/bin/python -m pytest -q` completed with
 **708 passed, 1 skipped**. The skipped test requires PostgreSQL and is covered by
 the separate PostgreSQL compatibility job. Diff/compatibility/security review
 confirmed that changes stay within synthetic review, parsing bindings, technical
 rules and documentation, with no governed-write integration.
+
+Fallback-correction verification: `app.py` and all touched Python modules compiled
+before the full isolated suite, which completed with **756 passed, 1 skipped**.
+The correction adds 35 backend and 13 Streamlit regressions, including arbitrary
+family registration and the typed evaluator extension. The remaining local skip is
+the PostgreSQL-only smoke check. Both GitHub Actions job results on the final head
+are recorded on draft PR #6 for independent re-review.

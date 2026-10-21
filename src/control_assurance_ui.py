@@ -2,26 +2,36 @@
 import streamlit as st
 
 from src.control_assurance import ControlReviewState, inspect_control, record_control_review
-from src.control_assurance_pilot import control_pilot_cases
+from src.control_assurance_pilot import control_pilot_cases, fallback_pilot_cases
 from src.control_assurance_presentation import present_control, render_assurance_summary
+from src.control_assurance_registry import registered_review_families
+from src.mfa_assurance_adapter import mfa_review_family
 
 
 def render_control_assurance_pilot(*, actor_label="Pilot analyst"):
     st.subheader("Evidence-Based Control Assurance")
-    st.caption("Control Assurance Review · synthetic proof for three control families. "
+    st.caption("Control Assurance Review · applicable customer requirements, with specialist coverage disclosed. "
+               "Synthetic evidence only. "
                "Session-only, provisional results; separate governed confirmation is required. "
                "This pilot does not provide production authorization.")
-    family = st.selectbox("Control family", ("Privileged MFA", "Transport encryption (TLS)", "Disaster-recovery testing"), key="m3d_family")
+    registrations = registered_review_families(
+        control_pilot_cases() + fallback_pilot_cases(), adapters=(mfa_review_family(),),
+    )
+    if not registrations:
+        st.info("No applicable customer requirements are registered for review.")
+        return
+    family = st.selectbox("Control family", tuple(registrations), key="m3d_family")
     prior = st.session_state.get("m3d_last_family")
     if prior != family:
-        st.session_state.pop("m3c1_current_review", None)
-        st.session_state.pop("m3d_current_review", None)
+        for registration in registrations.values():
+            for key in registration.state_keys:
+                st.session_state.pop(key, None)
     st.session_state["m3d_last_family"] = family
-    if family == "Privileged MFA":
-        from src.mfa_review_ui import render_mfa_review_pilot
-        render_mfa_review_pilot(actor_label=actor_label)
+    registration = registrations[family]
+    if registration.renderer:
+        registration.renderer(actor_label=actor_label)
         return
-    cases = [c for c in control_pilot_cases() if c.family == family]
+    cases = registration.cases
     case_id = st.selectbox("Synthetic control package", [c.case_id for c in cases],
                            format_func=lambda key: next(c.title for c in cases if c.case_id == key), key="m3d_case:" + family)
     case = next(c for c in cases if c.case_id == case_id)
@@ -78,6 +88,21 @@ def render_control_assurance_pilot(*, actor_label="Pilot analyst"):
                              disabled=not agrees or not note.strip() or all(f.confirmed for f in support)):
                     record(action="support", fact_ids=tuple(f.proposal.fact_id for f in support),
                            presented_fingerprints=fps, confirms=agrees)
+            meanings = [f for f in view.facts if f.direction == "review"]
+            if meanings:
+                st.markdown("**Review an interpretation's meaning — sufficiency not evaluated**")
+                meaning_id = st.selectbox("Interpretation to review", [f.proposal.fact_id for f in meanings], key=prefix + ":meaning")
+                f = next(f for f in meanings if f.proposal.fact_id == meaning_id)
+                st.write(f"{f.proposal.dimension} = {f.proposal.value}; subject: {f.proposal.subject}")
+                st.caption(f"{f.filename} · {f.proposal.location}")
+                st.code(f.proposal.quote, language=None)
+                agrees = st.checkbox(
+                    "I checked this interpretation against its full source and confirm its meaning, without judging whether the requirement is met.",
+                    key=prefix + ":meaning-confirmation:" + f.fingerprint,
+                )
+                if st.button("Confirm this interpretation's meaning", key=prefix + ":meaning-record",
+                             disabled=not agrees or not note.strip() or bool(f.reasons) or f.confirmed):
+                    record(action="meaning", fact_ids=(meaning_id,), presented_fingerprints=(f.fingerprint,), confirms=agrees)
             adverse = [f for f in view.facts if f.direction == "adverse" and not f.reasons]
             if adverse:
                 st.markdown("**Review exception meaning separately**")

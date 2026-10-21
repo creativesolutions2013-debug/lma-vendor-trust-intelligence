@@ -2,7 +2,9 @@
 from dataclasses import replace
 from datetime import date
 
-from src.control_assurance import ControlCase, Observation, RequirementContext
+from src.control_assurance import (
+    ControlCase, CustomerThreshold, DomainEvaluator, Observation, RequirementContext,
+)
 from src.evidence_source_validation import EvidenceInput, bind_evidence, segment_id
 from src.tls_assurance import TLS_SIGNALS, TlsThreshold, evaluate_tls, tls_direction
 from src.dr_assurance import DR_SIGNALS, DrThreshold, dr_direction, evaluate_dr
@@ -46,7 +48,8 @@ def _tls_case(case_id="tls-strong", *, threshold=None, config=None, scan=None, e
                for dim, line, value in (("minimum_version", 1, 12), ("legacy_rejected", 2, True), ("scope_complete", 3, True)))
     return ControlCase(case_id, "Complete endpoint configuration and operating scans", "Transport encryption (TLS)",
                        r, t,
-                       (policy, config, scan) + tuple(extra), ps, AS_OF, evaluate_tls, tls_direction, TLS_SIGNALS, "TLS-1.0")
+                       (policy, config, scan) + tuple(extra), ps, AS_OF,
+                       DomainEvaluator("TLS-1.0", evaluate_tls, tls_direction, TLS_SIGNALS))
 
 
 def _dr_case(case_id="dr-strong", *, threshold=None, report=None, extra=()):
@@ -68,7 +71,7 @@ def _dr_case(case_id="dr-strong", *, threshold=None, report=None, extra=()):
         ("achieved_rto_minutes", 3, 120), ("achieved_rpo_minutes", 4, 15)))
     return ControlCase(case_id, "Completed full-service exercise with achieved recovery objectives", "Disaster-recovery testing",
                        r, t, (plan, report) + tuple(extra), ps, AS_OF,
-                       evaluate_dr, dr_direction, DR_SIGNALS, "DR-1.0")
+                       DomainEvaluator("DR-1.0", evaluate_dr, dr_direction, DR_SIGNALS))
 
 
 def control_pilot_cases():
@@ -101,3 +104,43 @@ def control_pilot_cases():
                        for p in base.proposals)
             cases.append(replace(base, case_id=family + "-" + suffix, title=title, documents=docs, proposals=ps))
     return tuple(cases)
+
+
+def fallback_pilot_cases():
+    """An unrelated requirement with supplied criteria and no technical rules.
+
+    Proposed meanings and concern labels are hand-authored draft inputs, never
+    inferred from keywords or computed against the acceptance threshold.
+    """
+    scope = "all production assets in the customer service inventory"
+    requirement = RequirementContext(
+        "VM-01.REMEDIATION", "synthetic-customer-vulnerability", "2026.1",
+        "Synthetic customer policy owner", date(2026, 10, 1),
+        "Acme Analytics", "production", scope, 90,
+        business_use_case="Customer production data processing on vendor-managed assets",
+        required_evidence=("dated critical-vulnerability remediation tickets and independent closure retests for all in-scope assets",),
+        assurance_type="Implementation records and independently verified operating closure",
+    )
+    threshold = CustomerThreshold(
+        "Remediate critical vulnerabilities within 30 calendar days of discovery "
+        "on every in-scope production asset; verify closure by independent retest."
+    )
+    tickets = document("vm-remediation-tickets", (
+        "SYNTHETIC vendor ticket export: critical issue CV-SYNTH-01 on the production API was recorded as closed 25 days after discovery.\n"
+        "This ticket export does not contain independent closure retests or a reconciliation to the full asset inventory."
+    ), scope, kind="configuration")
+    exception = document("vm-exception-response", (
+        "SYNTHETIC vendor response: one critical issue on a production worker remains unresolved 45 days after discovery; "
+        "the vendor reports an exception but has not supplied a retest or a complete asset reconciliation."
+    ), scope, kind="assertion")
+    candidates = (
+        proposal(tickets, "reported_closure_days", 1, 25, fact_id="vm-reported-closure"),
+        replace(proposal(exception, "reported_open_days", 1, 45, fact_id="vm-reported-exception"),
+                concern="potential_exception"),
+    )
+    present = ControlCase("vm-present", "Remediation records and a reported unresolved exception",
+                          "Vulnerability remediation", requirement, threshold,
+                          (tickets, exception), candidates, AS_OF)
+    missing = replace(present, case_id="vm-missing", title="No remediation evidence supplied",
+                      documents=(), proposals=())
+    return present, missing
