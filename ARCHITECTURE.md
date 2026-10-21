@@ -90,6 +90,18 @@ Organization
 
 ## Security design considerations for production
 
+M4B-1 places a pure authentication preflight before all side-effectful app imports,
+retains development-only demo seeding, and confines local evidence operations with
+canonical keys and directory-relative no-follow descriptors. Production identity
+remains unconfigured and fails closed.
+
+`assessment_evidence_access.py` is a future metadata-only read preflight, with an
+absent-by-default server-owned identity/relationship authority. Its DTOs are not
+credentials; current ORM vendor/assessment IDs do not establish organization or
+engagement membership. No authority or live evidence retrieval is registered in
+the app. M4A continues to use synthetic fixtures. See [threat model and remaining
+prerequisites](docs/M4B1_Secure_Assessment_Boundary.md).
+
 - Multi-tenant organization scoping
 - Role-based access control
 - Immutable audit logs
