@@ -101,6 +101,25 @@ adds a synthetic privileged-MFA review in the Evidence Center. One explicit acti
 can confirm displayed supporting interpretations while exception triage and
 complete-bundle review remain separate. Every result stays provisional.
 
+### Evidence-Based Control Assurance — platform direction versus current proof
+
+The intended capability evaluates **every applicable vendor security control**
+against customer-defined requirements, applicable technical/industry standards,
+actual implementation and operation, service scope, evidence freshness, and
+material exceptions. A vendor stating that a control exists, attaching a policy,
+or providing a matching quotation does **not** establish its sufficiency.
+Privileged MFA was chosen as an early **reference scenario**, not a product
+category or boundary. The merged M3A/M3B/M3C pilots do **not** yet provide
+standards-based technical assurance across other control families. The M1 TLS
+and M2 encryption, DR and IR pilots provide earlier screening/draft capabilities,
+not equivalent validated technical assurance.
+
+The next engineering correction is a **control-neutral evidence/review contract**
+with genuinely separate domain-specific evaluations, first proven alongside MFA
+for transport encryption and disaster-recovery tests. All results remain
+source-linked, provisional and analyst-governed. See [M3D cross-control assurance
+work item](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/issues/5).
+
 ## Planned Industry-Pilot Capabilities
 
 ### 1. Business Assessment Intake
