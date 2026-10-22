@@ -252,3 +252,27 @@ def test_direct_isolated_postgresql_scoped_metadata_and_export(
         db.commit()
     assert service.list_evidence() == ()
     assert report_service.build() is None
+
+
+def test_ownership_changed_while_csv_is_built_denies_stale_export(ctx, monkeypatch):
+    authorized_admin(ctx)
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    original = service._csv
+    def changed_after_queries(*args, **kwargs):
+        content = original(*args, **kwargs)
+        update(ctx, Engagement, 101, vendor_id=22)
+        return content
+    monkeypatch.setattr(service, "_csv", changed_after_queries)
+    assert service.build() is None
+
+
+def test_grant_revoked_while_csv_is_built_denies_export(ctx, monkeypatch):
+    authorized_admin(ctx)
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    original = service._csv
+    def revoked_after_queries(*args, **kwargs):
+        content = original(*args, **kwargs)
+        update(ctx, EngagementAccessGrant, 701, status="revoked")
+        return content
+    monkeypatch.setattr(service, "_csv", revoked_after_queries)
+    assert service.build() is None
