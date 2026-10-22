@@ -291,3 +291,37 @@ def test_postgresql_transactional_note_audit_integrity(
     finally:
         transaction.rollback()
         connection.close()
+
+
+def test_internal_operation_kind_cannot_be_substituted(guarded):
+    ctx, service = guarded
+    before = database_snapshot(ctx)
+    assert service._record("approval", 9001, "Nope") is False
+    assert service._record(None, 9001, "Nope") is False
+    assert database_snapshot(ctx) == before
+
+
+def test_session_rotation_after_audit_insert_rolls_back_everything(guarded):
+    ctx, service = guarded
+    before = database_snapshot(ctx)
+    def rotate_during_audit(mapper, connection, obj):
+        ctx.source.identity = replace(ctx.identity, session_id="sid_rotated_during_audit")
+    event.listen(AuditLog, "before_insert", rotate_during_audit)
+    try:
+        assert service.record_assessment_review_note(1001, "Rollback after audit") is False
+    finally:
+        event.remove(AuditLog, "before_insert", rotate_during_audit)
+    assert database_snapshot(ctx) == before
+
+
+def test_expiry_after_audit_insert_rolls_back_everything(guarded):
+    ctx, service = guarded
+    before = database_snapshot(ctx)
+    def expire_during_audit(mapper, connection, obj):
+        ctx.clock[0] = ctx.identity.expires_at
+    event.listen(AuditLog, "before_insert", expire_during_audit)
+    try:
+        assert service.record_evidence_review_note(9001, "Rollback after expiry") is False
+    finally:
+        event.remove(AuditLog, "before_insert", expire_during_audit)
+    assert database_snapshot(ctx) == before
