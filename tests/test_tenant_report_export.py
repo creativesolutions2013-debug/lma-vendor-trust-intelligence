@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from test_tenant_read_scope import ctx, update, NOW, ISSUER, TrustedSyntheticSource, rows
+from test_database_evidence_authority import isolated_engine as synthetic_isolated_engine
 from src.assessment_evidence_access import AuthenticatedIdentity
 from src.authz import Principal, ROLE_ADMIN, ROLE_VIEWER
 from src.db import Engagement, EngagementAccessGrant, OrganizationMembership, Vendor
@@ -209,3 +210,45 @@ def test_navigation_page_registry_matches_real_app_source_without_importing_app(
         ):
             found = {k.value for k in node.value.keys if isinstance(k, ast.Constant)}
     assert found == LEGACY_PAGES
+
+
+def test_direct_isolated_postgresql_scoped_metadata_and_export(
+        synthetic_isolated_engine, monkeypatch):
+    # The imported fixture creates an isolated temporary schema *only* in
+    # GitHub's synthetic PostgreSQL service, never a customer database.
+    if synthetic_isolated_engine.dialect.name != "postgresql":
+        pytest.skip("Direct PostgreSQL exercise runs in GitHub Actions only")
+    from sqlalchemy.orm import sessionmaker
+    import src.tenant_read_scope as tenant_scope
+    from src.tenant_read_scope import TenantReadService
+
+    factory = sessionmaker(bind=synthetic_isolated_engine,
+                           autoflush=False, expire_on_commit=False)
+    rows(factory)
+    with factory() as db:
+        db.get(OrganizationMembership, 501).role = ROLE_ADMIN
+        db.commit()
+    monkeypatch.setattr(tenant_scope, "_utc_now", lambda: NOW)
+    identity = AuthenticatedIdentity(
+        Principal("reader-a", "Synthetic reader", "synthetic@invalid.test", ROLE_ADMIN),
+        ISSUER, "lma-synthetic", "sid_postgresql_synthetic", 1,
+        NOW - timedelta(minutes=1), NOW + timedelta(minutes=30),
+    )
+    source = TrustedSyntheticSource(identity)
+    service = TenantReadService(factory, identity_source=source)
+    assert [x.id for x in service.list_vendors()] == [11]
+    assert [x.id for x in service.list_engagements()] == [101]
+    assert [x.id for x in service.list_assessments()] == [1001]
+    assert [x.id for x in service.list_evidence()] == [9001]
+    assert service.get_evidence(9002) is None
+    assert service.get_evidence(9201) is None
+    assert service.visible_counts() == ScopedCounts(1, 1, 1, 1)
+    report_service = TenantReportService(factory, identity_source=source)
+    before = report_service.build()
+    assert before is not None and len(before.rows) == 1
+    assert before.rows[0].evidence_items == 1
+    with factory() as db:
+        db.get(EngagementAccessGrant, 701).status = "revoked"
+        db.commit()
+    assert service.list_evidence() == ()
+    assert report_service.build() is None
