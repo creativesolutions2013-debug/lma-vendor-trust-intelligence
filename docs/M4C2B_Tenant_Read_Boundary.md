@@ -19,6 +19,34 @@ wait until issuance completes. SQLite uses `BEGIN IMMEDIATE` to reserve the writ
 for the same bounded operation; it is not proof of PostgreSQL locking behavior.
 Unsupported dialects, dirty sessions and database/identity failures deny.
 
+Each transaction pins the exact server-supplied identity-source object and SQL
+session factory before its first authentication call. Both identity lookups use
+that captured source; replacing either dependency during authentication, SQL work
+or final validation discards the complete response, even when a replacement
+returns identical issuer/subject/session fields. Scope DTOs are not credentials.
+
+PostgreSQL also holds a shared transaction advisory lock for the membership-table
+OID and exact issuer/subject predicate before reading membership rows. A database
+trigger takes the corresponding exclusive lock for membership INSERT/UPDATE/DELETE,
+including both old and new identity keys. This serializes new same-identity
+memberships in another organization through issuance, including direct SQL writers.
+Unrelated identities and independently owned schemas use different keys. Hash
+collisions can add contention; they do not grant permission. The database trigger
+must be installed and enabled ALWAYS; an absent or disabled guard denies reads.
+PostgreSQL transactions must use Read Committed; repeatable snapshots and driver
+autocommit deny because they cannot provide this issuance contract. Existing
+databases must apply the guard migration before scoped reads can resume.
+
+The additive `0014a_membership_identity_guard` migration installs only PostgreSQL
+guard functions/triggers and advances the migration version; it does not backfill
+memberships, assign ownership or rewrite data. SQLite retains its native writer
+reservation. Destructive guard downgrade requires separate owner review. A row
+UPDATE can acquire its tuple lock before its trigger runs, so conflicting lock
+orders may abort a transaction under the existing bounded SQL timeouts; callers
+must treat that as denial/retry. This is not a deadlock-free scheduling claim.
+Privileged database owners can disable guards; ordinary SQL writers cannot bypass
+them, and deployed administrative privileges remain a separate security boundary.
+
 The final check compares the current server session with the initial session,
 then validates current membership, effective role, grants, relationship snapshot
 and fresh time windows under the held locks. No identity-provider lookup follows

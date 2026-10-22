@@ -10,7 +10,7 @@ Admin, streamlit.session_state or production startup. No file keys, bytes,
 governed outcomes, or authorization tokens are returned.
 """
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
@@ -23,6 +23,7 @@ from src.db import (
     Assessment, Engagement, EngagementAccessGrant, Evidence, Organization,
     OrganizationMembership, Vendor,
 )
+from src.membership_identity_guard import acquire_membership_identity_guard
 
 
 def _utc_now():
@@ -87,6 +88,8 @@ class _Scope:
     engagement_ids: frozenset[int]
     authority: tuple = ()
     relationships: tuple = ()
+    identity_source: object = field(default=None, repr=False, compare=False)
+    session_factory: object = field(default=None, repr=False, compare=False)
 
 
 def _session_identity_key(identity):
@@ -107,6 +110,11 @@ class TenantReadService:
     def __init__(self, session_factory, *, identity_source=None):
         self._sessions = session_factory
         self._identity_source = identity_source
+
+    def _check_dependencies(self, source, factory):
+        if (source is None or factory is None or self._identity_source is not source
+                or self._sessions is not factory):
+            raise PermissionError("Scoped access denied.")
 
     @staticmethod
     def _valid_identity(identity, now):
@@ -225,28 +233,33 @@ class TenantReadService:
         PostgreSQL row locks serialize revocation/reparenting of existing rows.
         SQLite reserves its writer before reading. No endpoint is wired here.
         """
-        if self._sessions is None or self._identity_source is None:
-            raise PermissionError("Scoped access denied.")
-        identity = self._identity_source.authenticated_identity()
+        source, factory = self._identity_source, self._sessions
+        self._check_dependencies(source, factory)
+        identity = source.authenticated_identity()
+        self._check_dependencies(source, factory)
         if not self._valid_identity(identity, _utc_now()):
             raise PermissionError("Scoped access denied.")
-        with self._sessions() as session, session.no_autoflush, session.begin():
+        with factory() as session, session.no_autoflush, session.begin():
             if session.get_bind().dialect.name == "sqlite":
                 session.connection().exec_driver_sql("BEGIN IMMEDIATE")
             elif session.get_bind().dialect.name == "postgresql":
                 session.connection().exec_driver_sql("SET LOCAL lock_timeout = '3s'")
                 session.connection().exec_driver_sql("SET LOCAL statement_timeout = '10s'")
+                acquire_membership_identity_guard(session.connection(), OrganizationMembership.__table__,
+                                                   identity.issuer, identity.principal.subject)
             else:
                 raise PermissionError("Scoped access denied.")
             scope = self._scope(permission, session=session, identity=identity, lock=True)
             if scope is None or not scope.engagement_ids:
                 raise PermissionError("Scoped access denied.")
-            scope = replace(scope, relationships=self._relationships(session, scope, lock=True))
+            scope = replace(scope, relationships=self._relationships(session, scope, lock=True),
+                            identity_source=source, session_factory=factory)
             yield session, scope
             # A dedicated read transaction must never flush unrelated pending
             # ORM changes at commit. The factory contract is server-owned.
             if session.new or session.dirty or session.deleted:
                 raise PermissionError("Scoped access denied.")
+            self._check_dependencies(source, factory)
 
     def _finish_authorized(self, session, scope, permission):
         """Last remote session check, then SQL/time checks while locks remain held.
@@ -254,7 +267,9 @@ class TenantReadService:
         There is no remote lookup after the final DB validation. Session changes
         after issuance require a future coordinated session lease to retract data.
         """
-        last = self._identity_source.authenticated_identity()
+        self._check_dependencies(scope.identity_source, scope.session_factory)
+        last = scope.identity_source.authenticated_identity()
+        self._check_dependencies(scope.identity_source, scope.session_factory)
         if (not self._valid_identity(last, _utc_now())
                 or _session_identity_key(last) != _session_identity_key(scope.identity)):
             raise PermissionError("Scoped access denied.")
@@ -277,6 +292,7 @@ class TenantReadService:
                 or not self._permitted(last, active[0][2], permission)
                 or current_grants != scope.engagement_ids):
             raise PermissionError("Scoped access denied.")
+        self._check_dependencies(scope.identity_source, scope.session_factory)
 
     def _project(self, kind, scope, *, session=None, item_id=None, parent_id=None,
                  limit=100, after_id=0, count=False):

@@ -600,3 +600,56 @@ def test_postgres_final_identity_expiry_or_rotation_discards_complete_result(pos
     result = getattr(ctx.service, operation)()
     assert ctx.source.calls >= 2
     assert result == (scoped.ScopedCounts(0, 0, 0, 0) if operation == "visible_counts" else ())
+
+
+@pytest.mark.parametrize("operation", ["list_vendors", "list_evidence", "visible_counts"])
+@pytest.mark.parametrize("phase", ["initial_identity", "projection", "final_identity", "final_sql"])
+def test_transaction_pins_source_and_denies_replacement_with_identical_claims(ctx, monkeypatch,
+                                                                           operation, phase):
+    replacement = TrustedSyntheticSource(ctx.identity)
+    original_source = ctx.source
+    original_identity = original_source.authenticated_identity
+    original_project = ctx.service._project
+    original_relationships = ctx.service._relationships
+    swapped = [False]
+    def swap():
+        swapped[0] = True
+        ctx.service._identity_source = replacement
+    def identity():
+        result = original_identity()
+        if ((phase == "initial_identity" and original_source.calls == 1)
+                or (phase == "final_identity" and original_source.calls == 2)):
+            swap()
+        return result
+    def project(*args, **kwargs):
+        result = original_project(*args, **kwargs)
+        if phase == "projection":
+            swap()
+        return result
+    def relationships(*args, **kwargs):
+        result = original_relationships(*args, **kwargs)
+        if phase == "final_sql" and not kwargs["lock"]:
+            swap()
+        return result
+    monkeypatch.setattr(original_source, "authenticated_identity", identity)
+    monkeypatch.setattr(ctx.service, "_project", project)
+    monkeypatch.setattr(ctx.service, "_relationships", relationships)
+    result = getattr(ctx.service, operation)()
+    assert swapped[0], "Regression must replace the source while the operation is in flight"
+    assert result == (scoped.ScopedCounts(0, 0, 0, 0) if operation == "visible_counts" else ())
+    assert replacement.calls == 0, "A copied identity must never substitute a different trust dependency"
+
+
+def test_transaction_denies_session_factory_replacement(ctx, monkeypatch):
+    original = ctx.service._project
+    calls = []
+    def replacement_factory():
+        calls.append(True)
+        return ctx.factory()
+    def project(*args, **kwargs):
+        result = original(*args, **kwargs)
+        ctx.service._sessions = replacement_factory
+        return result
+    monkeypatch.setattr(ctx.service, "_project", project)
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(0, 0, 0, 0)
+    assert calls == []
