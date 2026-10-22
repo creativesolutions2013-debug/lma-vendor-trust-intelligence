@@ -1,12 +1,57 @@
 # M4C-2B-1 — Tenant-scoped read proof
 
-**Status:** New opt-in read service and synthetic tests on feature branch. Not connected to app.py or real authentication. Production remains disabled. Tracks Issue #16.
+**Status:** Draft, unwired read service and synthetic tests, corrected for PR #19's independent review. Not connected to app.py or real authentication. Production remains disabled. Tracks Issues #16/#17.
 
 ## Boundary
 
 The read-only TenantReadService returns immutable vendor, engagement, assessment, evidence metadata and scoped counts. It requires an injected trusted identity source, database-verified current membership, role permission and explicit current engagement grants. All read queries constrain organization and matching vendor/engagement/assessment/evidence relationships. Sibling engagements without grants and legacy null links are not returned. Storage paths, bytes, tokens, risk scores and governed actions are never returned.
 
-Identity providers, cookies, callbacks, distributed session storage and deployed tenant protections are **not implemented** by this slice. Caller-created identity objects are not authentication; the source must be secured by separately reviewed server integration. Session and grants are rechecked after read queries. This is a synthetic proof, not a production guarantee.
+Identity providers, cookies, callbacks, distributed session storage and deployed tenant protections are **not implemented** by this slice. Caller-created identity objects are not authentication; the source must be secured by separately reviewed server integration. This is a synthetic proof, not a production guarantee.
+
+## Authorization consistency and issuance
+
+Each list, exact lookup and complete counts result uses one dedicated database
+transaction. PostgreSQL locks membership, grants and canonical parent rows with
+`FOR UPDATE` in a fixed order before projection, holding those locks through the
+last session lookup and authorization validation. Concurrent revocation, role or
+ownership changes on those rows must commit before authorization is acquired or
+wait until issuance completes. SQLite uses `BEGIN IMMEDIATE` to reserve the writer
+for the same bounded operation; it is not proof of PostgreSQL locking behavior.
+Unsupported dialects, dirty sessions and database/identity failures deny.
+
+The final check compares the current server session with the initial session,
+then validates current membership, effective role, grants, relationship snapshot
+and fresh time windows under the held locks. No identity-provider lookup follows
+that database check. Results are issued only when the transaction successfully
+finishes; failed validation or commit discards the entire result. Counts use
+SQL aggregates in this one scope and return four zeros on any failure, never a
+mixture of successful and denied child lists.
+
+This defines a point-in-time issuance boundary, not retrospective revocation of
+metadata already issued. SQL locks do not atomically lease an external session
+store: a rotation/revocation observed during the final session lookup denies;
+a change after its successful observation cannot retract issued metadata. A
+future deployed session/SQL integration must define a coordinated session lease,
+timeouts and delivery lifecycle before claiming stronger revocation guarantees.
+New grants/rows are not permission to expand an already captured scope. No live
+runtime or byte-read capability is enabled here.
+
+## Bounded discovery
+
+List methods retain immutable tuple results and add keyword-only `limit` (default
+100, maximum 200) and `after_id` (default 0). IDs sort ascending; use the last
+returned ID as the next cursor. Invalid page arguments deny. Parent filters and
+exact lookups independently reauthorize. Counts describe the entire authorized
+scope, independently of list limits. Pages are separate authorized transactions;
+there is no cross-page snapshot or cursor authority token. Assignment and due-date
+UX remain separate Issue #17 work.
+
+Returned pages are bounded; authorization fingerprints still scan/lock the
+existing granted hierarchy, and whole-scope counts require aggregate scans.
+This is not a production-scale query-cost bound. PostgreSQL lock waits are
+limited to three seconds and each statement to ten seconds; timeout denies.
+Narrower page-specific locking and deployed identity-call timeouts remain
+performance/availability review items before live integration.
 
 ## Legacy route inventory: all remain blocked for production
 
@@ -29,7 +74,7 @@ The service does **not** make these paths safe; no route was wired in this miles
 
 ## Acceptance and limitations
 
-Synthetic tests cover two organizations, different roles, siblings, null/inconsistent parent links, expired/revoked grants/memberships and sessions, forged roles and selectors, changed relationships during I/O, source outages, and counts. Recheck session and database authority before releasing rows; any invalidity fails closed. No real secrets or evidence are involved.
+Synthetic tests cover two organizations, different roles, siblings, null/inconsistent parent links, expired/revoked grants/memberships and sessions, forged roles and selectors, changed relationships during I/O, source outages, consistent counts and bounded pages. Direct PostgreSQL integration/concurrency cases use temporary UUID-owned schemas in a synthetic service; they never inspect customer schemas. No real secrets or evidence are involved. Exact validation results and remaining limits are recorded in PR #19.
 
 Before merge compile app.py and touched Python files, run full pytest, check diff and both GitHub Actions jobs, and obtain independent security/product review and explicit owner approval.
 

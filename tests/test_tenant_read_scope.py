@@ -318,13 +318,13 @@ def test_source_and_database_outages_deny_without_leaking_errors(ctx, monkeypatc
 
 def test_source_changes_at_final_post_io_check_denies(ctx, monkeypatch):
     original = ctx.source.authenticated_identity
-    def replace_on_third():
+    def replace_on_final():
         result = original()
-        if ctx.source.calls == 3:
+        if ctx.source.calls == 2:
             ctx.source.identity = replace(ctx.identity, session_id="sid_rotated")
             return ctx.source.identity
         return result
-    monkeypatch.setattr(ctx.source, "authenticated_identity", replace_on_third)
+    monkeypatch.setattr(ctx.source, "authenticated_identity", replace_on_final)
     assert ctx.service.list_vendors() == ()
 
 
@@ -358,3 +358,245 @@ def test_revocation_during_final_projection_denies(ctx, monkeypatch):
         return result
     monkeypatch.setattr(ctx.service, "_project", revoke_after_second_read)
     assert ctx.service.list_evidence() == ()
+
+
+@pytest.mark.parametrize("change", ["member_revoke", "grant_revoke", "role", "member_expiry", "grant_expiry", "rotation"])
+@pytest.mark.parametrize("operation", ["list_vendors", "list_evidence", "visible_counts"])
+def test_authority_change_during_final_identity_lookup_denies_entire_result(ctx, monkeypatch, change, operation):
+    """The old implementation took its last DB snapshot before this blocking I/O.
+
+    SQLite's isolated shared-connection fixture deliberately injects a completed
+    mutation. Real PostgreSQL writers are separately tested to block on locks.
+    """
+    original_project = ctx.service._project
+    ready = [False]
+    changed = [False]
+    def project(*args, **kwargs):
+        result = original_project(*args, **kwargs)
+        ready[0] = True
+        return result
+    def final_identity():
+        if ready[0] and not changed[0]:
+            changed[0] = True
+            if change == "member_revoke":
+                update(ctx, OrganizationMembership, 501, status="revoked")
+            elif change == "grant_revoke":
+                update(ctx, EngagementAccessGrant, 701, status="revoked")
+            elif change == "role":
+                update(ctx, OrganizationMembership, 501, role=ROLE_VIEWER)
+            elif change in ("member_expiry", "grant_expiry"):
+                model, row_id = ((OrganizationMembership, 501) if change == "member_expiry"
+                                 else (EngagementAccessGrant, 701))
+                update(ctx, model, row_id, expires_at=NOW + timedelta(seconds=1))
+                ctx.clock[0] = NOW + timedelta(seconds=1)
+            else:
+                ctx.source.identity = replace(ctx.identity, session_id="sid_rotated_during_final_lookup")
+        return ctx.source.identity
+    monkeypatch.setattr(ctx.service, "_project", project)
+    monkeypatch.setattr(ctx.source, "authenticated_identity", final_identity)
+    result = getattr(ctx.service, operation)()
+    assert changed[0], "The test must reach the final blocking identity lookup"
+    assert result == (scoped.ScopedCounts(0, 0, 0, 0) if operation == "visible_counts" else ())
+
+
+@pytest.mark.parametrize("failure", ["query", "session", "unavailable_identity"])
+def test_counts_discard_all_prior_components_on_partial_failure(ctx, monkeypatch, failure):
+    original_project = ctx.service._project
+    generated = []
+    def project(kind, *args, **kwargs):
+        if kwargs.get("count") and generated and failure == "query":
+            raise RuntimeError("synthetic-partial-count-diagnostic")
+        result = original_project(kind, *args, **kwargs)
+        if kwargs.get("count"):
+            generated.append(kind)
+            if len(generated) == 1:
+                if failure == "session":
+                    ctx.source.identity = replace(ctx.identity, session_id="sid_rotated_after_vendor_count")
+                elif failure == "unavailable_identity":
+                    ctx.source.identity = None
+        return result
+    monkeypatch.setattr(ctx.service, "_project", project)
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(0, 0, 0, 0)
+    assert generated, "At least one authorized count must have been assembled before denial"
+
+
+def test_counts_require_all_component_permissions(ctx, monkeypatch):
+    monkeypatch.setitem(authz.ROLE_PERMISSIONS, ROLE_ANALYST, frozenset({authz.PERMISSION_VENDOR_READ}))
+    assert ctx.service.list_vendors()
+    assert ctx.service.list_evidence() == ()
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(0, 0, 0, 0)
+
+
+def test_bounded_keyset_pages_and_counts_do_not_disclose_siblings(ctx):
+    with ctx.factory() as db:
+        db.add_all([Evidence(id=10000 + i, vendor_id=11, assessment_id=1001, document_type="Synthetic",
+                            document_name=f"synthetic_allowed_{i}.txt") for i in range(205)])
+        db.commit()
+    first = ctx.service.list_evidence()
+    assert len(first) == 100
+    assert first[0].id == 9001
+    second = ctx.service.list_evidence(after_id=first[-1].id)
+    third = ctx.service.list_evidence(after_id=second[-1].id)
+    assert len(second) == 100 and len(third) == 6
+    combined = first + second + third
+    ids = [r.id for r in combined]
+    assert ids == [9001] + list(range(10000, 10205))
+    assert len(set(ids)) == len(ids)
+    assert len(ctx.service.list_evidence(limit=200)) == 200
+    assert ctx.service.list_evidence(assessment_id=1002, after_id=0, limit=200) == ()
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(1, 1, 1, 206)
+
+
+@pytest.mark.parametrize("method", ["list_vendors", "list_engagements", "list_assessments", "list_evidence"])
+@pytest.mark.parametrize("arguments", [
+    {"limit": 0}, {"limit": 201}, {"limit": -1}, {"limit": True}, {"limit": "1"},
+    {"limit": None}, {"after_id": -1}, {"after_id": True}, {"after_id": "0"}, {"after_id": None},
+])
+def test_invalid_pagination_fails_closed(ctx, method, arguments):
+    assert getattr(ctx.service, method)(**arguments) == ()
+
+
+@pytest.mark.parametrize("method,allowed_id", [
+    ("list_vendors", 11), ("list_engagements", 101), ("list_assessments", 1001), ("list_evidence", 9001),
+])
+def test_keyset_cursor_is_exclusive_and_each_page_reauthorizes(ctx, method, allowed_id):
+    listing = getattr(ctx.service, method)
+    assert [row.id for row in listing(limit=1)] == [allowed_id]
+    assert listing(limit=1, after_id=allowed_id) == ()
+    update(ctx, EngagementAccessGrant, 701, status="revoked")
+    assert listing(limit=1) == ()
+
+
+# Direct PostgreSQL proof runs only in the explicitly synthetic Actions/test
+# environment. A PostgreSQL URL alone never authorizes creating test schemas.
+@pytest.fixture
+def postgres_ctx(monkeypatch):
+    import os
+    from uuid import uuid4
+    from sqlalchemy.schema import CreateSchema, DropSchema
+    database_url = os.getenv("DATABASE_URL", "")
+    if os.getenv("GITHUB_ACTIONS") != "true" or not database_url.startswith("postgresql"):
+        pytest.skip("Requires the isolated synthetic PostgreSQL test service")
+    root = create_engine(database_url)
+    schema = "tenant_read_security_" + uuid4().hex
+    with root.begin() as connection:
+        connection.execute(CreateSchema(schema))
+    engine = root.execution_options(schema_translate_map={None: schema})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    rows(factory)
+    clock = [NOW]
+    monkeypatch.setattr(scoped, "_utc_now", lambda: clock[0])
+    identity = AuthenticatedIdentity(
+        Principal("reader-a", "Synthetic reader", "reader@synthetic.invalid", ROLE_ADMIN),
+        ISSUER, "lma-synthetic", "sid_synthetic", 1,
+        NOW - timedelta(minutes=1), NOW + timedelta(minutes=30),
+    )
+    source = TrustedSyntheticSource(identity)
+    service = TenantReadService(factory, identity_source=source)
+    try:
+        yield SimpleNamespace(factory=factory, source=source, service=service, identity=identity,
+                              clock=clock, engine=engine)
+    finally:
+        with root.begin() as connection:
+            connection.execute(DropSchema(schema, cascade=True))
+        root.dispose()
+
+
+def test_postgres_direct_scoped_projection_counts_and_revocation(postgres_ctx):
+    ctx = postgres_ctx
+    assert [row.id for row in ctx.service.list_vendors(limit=1)] == [11]
+    assert [row.id for row in ctx.service.list_assessments(limit=1)] == [1001]
+    assert [row.id for row in ctx.service.list_evidence(limit=1)] == [9001]
+    assert ctx.service.get_vendor(22) is None
+    assert ctx.service.get_engagement(102) is None
+    assert ctx.service.get_assessment(1002) is None
+    assert ctx.service.get_evidence(9201) is None
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(1, 1, 1, 1)
+    update(ctx, EngagementAccessGrant, 701, status="revoked")
+    assert ctx.service.list_evidence() == ()
+    assert ctx.service.visible_counts() == scoped.ScopedCounts(0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("mutation", ["member", "grant", "vendor", "engagement", "assessment", "evidence"])
+@pytest.mark.parametrize("operation", ["list_evidence", "visible_counts"])
+def test_postgres_authority_and_parent_writers_block_through_final_identity_lookup(postgres_ctx, monkeypatch,
+                                                                                  mutation, operation):
+    """Two physical connections prove row locks, not a mocked recheck sequence.
+
+    The writer is forced to hit PostgreSQL's lock timeout while final session I/O
+    is paused. It can commit only after the read's defined issuance boundary.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from sqlalchemy import text, update as sql_update
+    from sqlalchemy.exc import OperationalError
+    ctx = postgres_ctx
+    at_final, release = Event(), Event()
+    model, row_id, values = {
+        "member": (OrganizationMembership, 501, {"status": "revoked"}),
+        "grant": (EngagementAccessGrant, 701, {"status": "revoked"}),
+        "vendor": (Vendor, 11, {"organization_id": 2}),
+        "engagement": (Engagement, 101, {"vendor_id": 22}),
+        "assessment": (Assessment, 1001, {"engagement_id": 102}),
+        "evidence": (Evidence, 9001, {"assessment_id": 1002}),
+    }[mutation]
+    original = ctx.source.authenticated_identity
+    def identity():
+        value = original()
+        if ctx.source.calls == 2:
+            at_final.set()
+            if not release.wait(10):
+                raise RuntimeError("Synthetic reader coordination timed out")
+        return value
+    monkeypatch.setattr(ctx.source, "authenticated_identity", identity)
+    def writer():
+        with ctx.factory() as db:
+            db.execute(text("SET LOCAL lock_timeout = '500ms'"))
+            with pytest.raises(OperationalError) as error:
+                db.execute(sql_update(model).where(model.id == row_id).values(**values))
+            assert getattr(error.value.orig, "sqlstate", None) == "55P03"
+            db.rollback()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        pending = executor.submit(getattr(ctx.service, operation))
+        try:
+            assert at_final.wait(10), "Read must pause while the authority and parent locks are held"
+            executor.submit(writer).result(timeout=10)
+        finally:
+            release.set()
+        result = pending.result(timeout=10)
+    expected = scoped.ScopedCounts(1, 1, 1, 1) if operation == "visible_counts" else None
+    if expected is not None:
+        assert result == expected
+    else:
+        assert [row.id for row in result] == [9001]
+    # Once issuance completes the mutation is permitted, and the next request
+    # independently reauthorizes rather than reusing the prior rows or counts.
+    with ctx.factory() as db:
+        db.execute(sql_update(model).where(model.id == row_id).values(**values))
+        db.commit()
+    assert ctx.service.get_evidence(9001) is None
+
+
+@pytest.mark.parametrize("change", ["member_expiry", "grant_expiry", "session_expiry", "rotation"])
+@pytest.mark.parametrize("operation", ["list_evidence", "visible_counts"])
+def test_postgres_final_identity_expiry_or_rotation_discards_complete_result(postgres_ctx, monkeypatch,
+                                                                           change, operation):
+    ctx = postgres_ctx
+    if change == "member_expiry":
+        update(ctx, OrganizationMembership, 501, expires_at=NOW + timedelta(seconds=1))
+    elif change == "grant_expiry":
+        update(ctx, EngagementAccessGrant, 701, expires_at=NOW + timedelta(seconds=1))
+    original = ctx.source.authenticated_identity
+    def identity():
+        value = original()
+        if ctx.source.calls == 2:
+            if change == "rotation":
+                ctx.source.identity = replace(ctx.identity, session_id="sid_rotated")
+                return ctx.source.identity
+            ctx.clock[0] = ctx.identity.expires_at if change == "session_expiry" else NOW + timedelta(seconds=1)
+        return value
+    monkeypatch.setattr(ctx.source, "authenticated_identity", identity)
+    result = getattr(ctx.service, operation)()
+    assert ctx.source.calls >= 2
+    assert result == (scoped.ScopedCounts(0, 0, 0, 0) if operation == "visible_counts" else ())
