@@ -5,13 +5,31 @@ from src.auth_context import get_startup_context
 STARTUP_CONTEXT = get_startup_context()
 CURRENT_USER = STARTUP_CONTEXT.principal
 
+import streamlit as st
+
+from src.app_navigation import LEGACY_PAGE_PERMISSIONS, select_app_page
+
+st.set_page_config(
+    page_title="LMA Vendor Trust Intelligence",
+    page_icon="🛡️",
+    layout="wide",
+)
+
+page = select_app_page(CURRENT_USER)
+if page == "Guided Assessment Demo":
+    from src.guided_assessment_demo_ui import render_guided_assessment_demo
+
+    render_guided_assessment_demo()
+    # The isolated demo exits before importing or initializing any DB, seed,
+    # storage, AI client or governed write service used by legacy pages.
+    st.stop()
+
 import json
 import os
 from datetime import date, datetime, timezone
 
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 
 from src.db import (
     ApprovalDecision,
@@ -175,12 +193,6 @@ from src.tiering import get_tier_profile, tier_label
 # Application configuration
 # =========================================================
 
-st.set_page_config(
-    page_title="LMA Vendor Trust Intelligence",
-    page_icon="🛡️",
-    layout="wide",
-)
-
 init_db()
 
 database_health = check_database_health(engine)
@@ -203,17 +215,7 @@ if STARTUP_CONTEXT.development_demo_seed_allowed:
 
 EVIDENCE_STORAGE = get_evidence_storage()
 
-PAGE_PERMISSIONS = {
-    "Control Tower": PERMISSION_VENDOR_READ,
-    "Vendors": PERMISSION_VENDOR_READ,
-    "New Vendor Intake": PERMISSION_VENDOR_WRITE,
-    "Assessments": PERMISSION_ASSESSMENT_MANAGE,
-    "Evidence Center": PERMISSION_EVIDENCE_UPLOAD,
-    "Findings": PERMISSION_FINDING_MANAGE,
-    "Monitoring": PERMISSION_MONITORING_MANAGE,
-    "Reports": PERMISSION_REPORT_EXPORT,
-    "Audit Log": PERMISSION_AUDIT_READ,
-}
+PAGE_PERMISSIONS = LEGACY_PAGE_PERMISSIONS
 
 ASSESSMENT_TYPES = [
     "Full Security Assessment",
@@ -9204,31 +9206,6 @@ def render_audit_log():
 # =========================================================
 # Navigation
 # =========================================================
-
-st.sidebar.title("LMA Vendor Trust Intelligence")
-
-st.sidebar.caption("Development identity — not production authentication")
-st.sidebar.write(
-    {
-        "User": CURRENT_USER.display_name,
-        "Role": CURRENT_USER.role,
-    }
-)
-
-available_pages = [
-    page_name
-    for page_name, permission in PAGE_PERMISSIONS.items()
-    if can(CURRENT_USER, permission)
-]
-
-if not available_pages:
-    st.error("Your role does not have access to any application pages.")
-    st.stop()
-
-page = st.sidebar.radio(
-    "Navigation",
-    available_pages,
-)
 
 if page == "Control Tower":
     render_control_tower()

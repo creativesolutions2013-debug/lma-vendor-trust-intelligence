@@ -100,6 +100,9 @@ def run_startup(mode, *, healthy=True, auth_error=None):
 
     namespace = {
         "get_startup_context": authenticate,
+        # Exercise the unchanged legacy initialization path after the new
+        # side-effect-free navigation gate. Real demo startup is AppTest-covered.
+        "select_app_page": lambda principal: calls.append("navigation") or "Control Tower",
         "st": SimpleNamespace(set_page_config=lambda **kwargs: calls.append("UI"),
                               error=lambda *args: None, write=lambda *args: None, stop=stop),
         "init_db": lambda: calls.append("init_db"),
@@ -115,7 +118,7 @@ def run_startup(mode, *, healthy=True, auth_error=None):
 def test_development_startup_preserves_order_and_demo_behavior():
     calls, namespace = run_startup(AUTH_MODE_DEVELOPMENT)
     exec(startup_statements(), namespace)
-    assert calls == ["authenticate", "UI", "init_db", "health", "session", "seed", "storage"]
+    assert calls == ["authenticate", "UI", "navigation", "init_db", "health", "session", "seed", "storage"]
     assert namespace["CURRENT_USER"] is DEMO_PRINCIPAL
 
 
@@ -125,7 +128,7 @@ def test_future_authenticated_production_path_never_seeds_demo_data():
     calls, namespace = run_startup(AUTH_MODE_PRODUCTION)
     exec(startup_statements(), namespace)
     assert "seed" not in calls
-    assert calls == ["authenticate", "UI", "init_db", "health", "session", "storage"]
+    assert calls == ["authenticate", "UI", "navigation", "init_db", "health", "session", "storage"]
 
 
 def test_authentication_failure_prevents_all_startup_callbacks():
@@ -139,7 +142,7 @@ def test_unhealthy_database_stops_before_session_seed_or_storage():
     calls, namespace = run_startup(AUTH_MODE_DEVELOPMENT, healthy=False)
     with pytest.raises(RuntimeError, match="synthetic UI stopped"):
         exec(startup_statements(), namespace)
-    assert calls == ["authenticate", "UI", "init_db", "health"]
+    assert calls == ["authenticate", "UI", "navigation", "init_db", "health"]
 
 
 def test_development_mode_is_configuration_not_verified_identity(monkeypatch):
