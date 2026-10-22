@@ -249,6 +249,8 @@ class TenantReadService:
         return self._read("vendor")
 
     def get_vendor(self, vendor_id):
+        if not _positive_id(vendor_id):
+            return None
         rows = self._read("vendor", item_id=vendor_id)
         return rows[0] if len(rows) == 1 else None
 
@@ -256,6 +258,8 @@ class TenantReadService:
         return self._read("engagement", parent_id=vendor_id)
 
     def get_engagement(self, engagement_id):
+        if not _positive_id(engagement_id):
+            return None
         rows = self._read("engagement", item_id=engagement_id)
         return rows[0] if len(rows) == 1 else None
 
@@ -263,6 +267,8 @@ class TenantReadService:
         return self._read("assessment", parent_id=engagement_id)
 
     def get_assessment(self, assessment_id):
+        if not _positive_id(assessment_id):
+            return None
         rows = self._read("assessment", item_id=assessment_id)
         return rows[0] if len(rows) == 1 else None
 
@@ -270,6 +276,8 @@ class TenantReadService:
         return self._read("evidence", parent_id=assessment_id)
 
     def get_evidence(self, evidence_id):
+        if not _positive_id(evidence_id):
+            return None
         rows = self._read("evidence", item_id=evidence_id)
         return rows[0] if len(rows) == 1 else None
 
