@@ -334,3 +334,27 @@ def test_uncommitted_request_session_data_is_not_read_or_flushed(ctx):
         assert [x.id for x in ctx.service.list_vendors()] == [11]
         assert request_db.new
         request_db.rollback()
+
+
+def test_membership_expiry_during_authority_database_read_denies(ctx):
+    update(ctx, OrganizationMembership, 501, expires_at=NOW + timedelta(seconds=1))
+    original = ctx.service._sessions
+    def delayed_factory():
+        session = original()
+        ctx.clock[0] = NOW + timedelta(seconds=1)
+        return session
+    ctx.service._sessions = delayed_factory
+    assert ctx.service.list_vendors() == ()
+
+
+def test_revocation_during_final_projection_denies(ctx, monkeypatch):
+    original = ctx.service._project
+    calls = [0]
+    def revoke_after_second_read(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls[0] += 1
+        if calls[0] == 2:
+            update(ctx, EngagementAccessGrant, 701, status="revoked")
+        return result
+    monkeypatch.setattr(ctx.service, "_project", revoke_after_second_read)
+    assert ctx.service.list_evidence() == ()
