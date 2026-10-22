@@ -162,17 +162,25 @@ class TenantAssessmentEvidenceOperations:
                         # Avoid copying note contents/PII into broad audit logs.
                     ))
                     session.flush()
-                    # A session expiring during the write must not commit.
+                    # These are fresh SQL reads inside the same locked
+                    # transaction. Never rely only on pre-write snapshots.
+                    final_member = self._membership(session, identity, permission, _utc_now())
+                    final_target = self._target(
+                        session, kind, target_id, identity.organization_id,
+                    )
+                    final_grant = self._grant(session, member.id, target.engagement_id, _utc_now())
                     final = _utc_now()
                     current = self._source.authenticated_identity()
-                    if (not _valid_identity(current, final)
+                    if (final_member != member or final_target != target
+                            or final_grant != grant
+                            or not _valid_identity(current, final)
                             or _session_identity_key(current) != _session_identity_key(identity)
                             or not _current(_db_time(member.valid_from),
                                             _db_time(member.expires_at), final)
                             or not _current(_db_time(grant.valid_from),
                                             _db_time(grant.expires_at), final)):
-                        # A normal return within begin() would COMMIT; force a
-                        # rollback before leaving the managed transaction.
+                        # Returning from a managed transaction commits! Explicit
+                        # rollback makes audit and review note atomic on denial.
                         session.rollback()
                         return False
                 return True
