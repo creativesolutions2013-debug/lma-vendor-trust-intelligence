@@ -122,7 +122,7 @@ class TenantAssessmentEvidenceOperations:
         return target, member_id, context
 
     @staticmethod
-    def _preserve_legacy(session, target, context, now):
+    def _require_attributed_current_note(session, target, context):
         if target.note is None or target.note == "":
             return
         if type(target.note) is not str:
@@ -131,13 +131,13 @@ class TenantAssessmentEvidenceOperations:
         latest = session.execute(select(r).where(
             r.object_type == context["object_type"], r.object_id == context["object_id"],
         ).order_by(r.id.desc()).limit(1)).scalar_one_or_none()
-        if latest is not None and latest.content == target.note:
-            return  # Already retained, including an earlier tenant's revision.
-        if latest is not None and any(getattr(latest, key) != value for key, value in context.items()):
-            # Never relabel untracked old text as the new tenant/engagement's
-            # rationale after a relationship move. An owner must reconcile it.
+        if latest is None or latest.origin != "analyst" or latest.content != target.note:
+            # Current relationships cannot establish historical ownership. Keep
+            # unattributed text in place pending separately reviewed reconciliation;
+            # never copy it into history under the current tenant's identity.
             raise PermissionError("Scoped access denied.")
-        session.add(r(**context, content=target.note, origin="legacy_unknown", created_at=now))
+        # Known prior-scope text is already retained in its immutable revision.
+        # A new note appends only the caller's fresh text in the current scope.
 
     def _record(self, kind, target_id, note):
         if kind not in ("assessment", "evidence") or not _positive_id(target_id) or not _valid_note(note):
@@ -149,7 +149,7 @@ class TenantAssessmentEvidenceOperations:
             with self._reader._authorized_transaction(permission) as (session, scope):
                 target, member_id, context = self._context(session, scope, kind, target_id)
                 identity, now = scope.identity, _utc_now()
-                self._preserve_legacy(session, target, context, now)
+                self._require_attributed_current_note(session, target, context)
                 session.add(AnalystNoteRevision(
                     **context, content=note, origin="analyst", created_at=now,
                     actor_issuer=identity.issuer, actor_subject=identity.principal.subject,
@@ -184,7 +184,10 @@ class TenantAssessmentEvidenceOperations:
             with self._reader._authorized_transaction(permission) as (session, scope):
                 _, _, context = self._context(session, scope, kind, target_id)
                 r = AnalystNoteRevision
-                query = select(r).where(r.id > after_id, *(getattr(r, key) == value for key, value in context.items()))
+                # Unknown captures from earlier versions remain stored, but
+                # current linkage cannot authorize their historical content.
+                query = select(r).where(r.origin == "analyst", r.id > after_id,
+                                        *(getattr(r, key) == value for key, value in context.items()))
                 records = session.execute(query.order_by(r.id).limit(limit)).scalars().all()
                 result = tuple(NoteRevisionSummary(
                     **{name: (_db_time(row.created_at) if name == "created_at" else getattr(row, name))

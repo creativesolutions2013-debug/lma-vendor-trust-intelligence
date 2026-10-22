@@ -14,7 +14,7 @@ from src.db import AnalystNoteRevision, Base
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BEFORE = "0014_organization_engagement_authorization"
+BEFORE = "0014a_membership_identity_guard"
 HEAD = "0015_analyst_note_revisions"
 NOW = datetime(2026, 10, 22, 20, 0, tzinfo=timezone.utc)
 

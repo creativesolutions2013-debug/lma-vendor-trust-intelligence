@@ -10,7 +10,7 @@ from src.db import AnalystNoteRevision, install_note_revision_guards, note_revis
 
 
 revision = "0015_analyst_note_revisions"
-down_revision = "0014_organization_engagement_authorization"
+down_revision = "0014a_membership_identity_guard"
 branch_labels = None
 depends_on = None
 

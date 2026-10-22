@@ -29,6 +29,15 @@ until issuance; changed/expired sessions observed at the final lookup deny.
 The export caps engagement rows at 200 and denies overflow, rather than silently
 truncating either rows or their aggregate counts. CSV formula defenses remain.
 
+Reads, export, note writes and note-history issuance also inherit PR #19's
+issuer/subject predicate guard. A PostgreSQL ALWAYS trigger serializes raw SQL
+membership INSERT/UPDATE/DELETE against each authorized transaction, including
+new same-identity memberships in another organization after the final check.
+Read Committed and non-autocommit connections are mandatory; other isolation
+modes deny. Unrelated identities do not share an application-wide lock. See
+[the foundation boundary](M4C2B_Tenant_Read_Boundary.md) for migration and timeout
+limits. Each transaction pins its source and session factory throughout issuance.
+
 This is a point-in-time issuance model, not revocation of metadata already issued.
 SQL does not atomically lease an external session store; changes after the last
 successful session observation need a future coordinated lease/delivery design.
@@ -63,19 +72,22 @@ contract, avoiding a separate conflicting lock order. The legacy current-note
 field remains compatible while each secure update appends an immutable revision
 with exact record/tenant/vendor/engagement/assessment/evidence references,
 authenticated issuer/subject/effective role, membership, non-bearer session ID,
-timestamp and content. Existing nonempty legacy rationale is preserved before
-the first secure update as `legacy_unknown`, with absent historical attribution;
-its timestamp is capture time, not an invented original authorship date. Earlier
-rationale, uncertainty and evidence references remain verbatim in history.
+timestamp and content. Nonempty legacy rationale without a matching latest
+analyst-attributed revision is quarantined in place: a write denies without
+overwriting text, creating history or audit, or assigning current ownership.
+No automatic `legacy_unknown` capture occurs. This includes legacy notes before
+any history exists, even if the present relationship appears authorized.
 
 Revision reads independently reauthorize the exact current target and filter
 stored tenant and parent snapshots; a new owner or sibling grant cannot read
-earlier-scope history. When prior revision context exists, a reassignment cannot
-relabel that context's text as a new tenant's baseline; unexplained legacy edits
-after such a move fail closed. Before history exists, the first legacy capture
-can establish only the currently authorized relationship and capture time;
-original ownership, authorship and historical scope remain unverified. Any live
-legacy-data pilot needs separately reviewed ownership/provenance reconciliation.
+earlier-scope history. History excludes all `legacy_unknown` rows before paging;
+any previously captured unknown rows remain immutable and hidden. A matching
+latest known analyst revision may remain under its original scope while a fresh
+note is appended in a new authorized scope; old content is never copied or
+returned to the new scope. Untracked edits fail closed. Visible history contains
+only known attributed revisions and does not prove complete legacy provenance.
+Unattributed ownership requires a separate, explicitly reviewed reconciliation
+process; this slice adds no reconciliation endpoint or permission bypass.
 There is no global note-history endpoint and no new form, approval step or UI
 integration.
 
@@ -92,7 +104,8 @@ commit errors roll back all related changes. Denied/nonexistent targets look ali
 
 ## Additive history migration
 
-The smallest essential additive revision, `0015_analyst_note_revisions`, adds a
+Following PR #19's guard-only `0014a` revision, the essential additive revision,
+`0015_analyst_note_revisions`, adds a
 dedicated revision table and nullable audit identity columns for legacy
 compatibility. It does not rewrite legacy notes/events, backfill identities, grant
 access or change assessment decisions. SQLite/PostgreSQL guards reject revision
@@ -109,21 +122,22 @@ migration and final-head Actions results are recorded in PR #21.
 
 ## Correction validation record
 
-Compilation of `app.py` and every touched Python file preceded the full suites.
-SQLite: **1,692 passed, 95 skipped**, six Alembic deprecation warnings. Disposable
-PostgreSQL 16: **1,785 passed, 2 skipped**, twelve Alembic warnings. The two remaining
-skips cover PostgreSQL-only concepts in the SQLite migration parameterization;
-all PostgreSQL integration and concurrency variants ran. These fixtures use
-temporary owned schemas; the container's synthetic schema alone received the
-additive migration. No production database was accessed or migrated.
+Compile `app.py` and every touched Python file before the full suites. Exact
+SQLite/PostgreSQL counts, final-head CI links and independent-review receipts are
+recorded in PR #21. PostgreSQL integration fixtures use temporary owned schemas;
+only the disposable container's synthetic schema receives migrations. No
+production database is accessed or migrated.
 
 Regressions include final export revocation/reparenting, SQL aggregate counts
 beyond list-page limits, CSV/commit failure, concurrent note appends retaining
 both rationales, cross-tenant/sibling history suppression, equivalent subjects
 from different issuers, late session changes, audit/revision rollback, migration
-data preservation and actual database history mutation rejection. Complete diff,
-security/compatibility and whitespace checks passed. Exact final-head CI links
-and independent review gates remain in PR #21; passing tests authorize no merge.
+data preservation and actual database history mutation rejection. New cases
+cover unattributed first notes after tenant/sibling moves, hidden unknown rows,
+nonvacuous failed-revision rollback, source replacement and raw SQL membership
+inserts after final validation for export, notes and history. Complete diff,
+security/compatibility and whitespace checks are required; passing tests
+authorize no merge.
 
 The current `app.py` still has unrestricted legacy Assessment and Evidence Center selectors, uploads and writes. **These new operations are not registered with those pages**, and real production authentication still fails closed. This milestone does not make the existing pages, UI reporting, governed dispositions, document custody or byte retrieval safe for real customers.
 

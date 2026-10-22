@@ -23,6 +23,8 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+from src.membership_identity_guard import install_membership_identity_guard
+
 
 DATA_DIR = (
     Path(__file__)
@@ -134,6 +136,9 @@ class OrganizationMembership(Base):
     status = Column(String(20), nullable=False)
     valid_from = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+event.listen(OrganizationMembership.__table__, "after_create", install_membership_identity_guard)
 
 
 class EngagementAccessGrant(Base):

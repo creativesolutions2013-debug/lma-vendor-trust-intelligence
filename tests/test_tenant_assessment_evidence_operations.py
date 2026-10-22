@@ -29,6 +29,15 @@ def guarded(ctx, monkeypatch):
     )
 
 
+@pytest.fixture(params=("sqlite", "postgres"))
+def quarantine_guarded(request, monkeypatch):
+    context = request.getfixturevalue("ctx" if request.param == "sqlite" else "postgres_ctx")
+    monkeypatch.setattr(operations, "_utc_now", lambda: context.clock[0])
+    return context, TenantAssessmentEvidenceOperations(
+        context.factory, identity_source=context.source
+    )
+
+
 def database_snapshot(ctx):
     with ctx.factory() as session:
         a = session.get(Assessment, 1001)
@@ -336,11 +345,9 @@ def test_expiry_after_audit_insert_rolls_back_everything(guarded):
 
 
 @pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
-def test_repeated_notes_preserve_legacy_rationale_and_individual_attribution(guarded, kind, target):
+def test_repeated_attributed_notes_preserve_rationale_and_individual_attribution(guarded, kind, target):
     ctx, service = guarded
     model, field = (Assessment, "notes") if kind == "assessment" else (Evidence, "analyst_notes")
-    legacy = "Source p.7: exception remains; operating proof incomplete."
-    update(ctx, model, target, **{field: legacy})
     record = getattr(service, "record_" + kind + "_review_note")
     history = getattr(service, "list_" + kind + "_note_revisions")
     first = "Source p.8: follow-up requested; no assurance conclusion."
@@ -349,12 +356,9 @@ def test_repeated_notes_preserve_legacy_rationale_and_individual_attribution(gua
     ctx.clock[0] += timedelta(seconds=1)
     assert record(target, second)
     revisions = history(target)
-    assert [row.content for row in revisions] == [legacy, first, second]
-    assert [row.origin for row in revisions] == ["legacy_unknown", "analyst", "analyst"]
-    unknown = revisions[0]
-    assert (unknown.actor_issuer, unknown.actor_subject, unknown.actor_role,
-            unknown.membership_id, unknown.session_id) == (None, None, None, None, None)
-    for row in revisions[1:]:
+    assert [row.content for row in revisions] == [first, second]
+    assert [row.origin for row in revisions] == ["analyst", "analyst"]
+    for row in revisions:
         assert (row.organization_id, row.vendor_id, row.engagement_id, row.assessment_id) == (1, 11, 101, 1001)
         assert (row.actor_issuer, row.actor_subject, row.actor_role, row.membership_id,
                 row.session_id) == (ISSUER, "reader-a", ROLE_ANALYST, 501, ctx.identity.session_id)
@@ -362,27 +366,137 @@ def test_repeated_notes_preserve_legacy_rationale_and_individual_attribution(gua
         assert row.evidence_id == (9001 if kind == "evidence" else None)
         assert row.created_at.tzinfo is not None
     with pytest.raises(FrozenInstanceError):
-        revisions[1].content = "Erase prior exception"
-    assert revisions[1].created_at == NOW
-    assert revisions[2].created_at == NOW + timedelta(seconds=1)
+        revisions[0].content = "Erase prior exception"
+    assert revisions[0].created_at == NOW
+    assert revisions[1].created_at == NOW + timedelta(seconds=1)
     with ctx.factory() as database:
         assert getattr(database.get(model, target), field) == second
         audits = database.execute(select(AuditLog)).scalars().all()
         assert len(audits) == 2
         for row in audits:
             assert row.details_json is None
-            assert not any(text in repr(row.__dict__) for text in (legacy, first, second))
+            assert not any(text in repr(row.__dict__) for text in (first, second))
 
 
-def test_untracked_legacy_change_is_retained_without_inventing_actor(guarded):
-    ctx, service = guarded
-    assert service.record_assessment_review_note(1001, "First tracked rationale")
-    update(ctx, Assessment, 1001, notes="Legacy writer changed rationale; attribution unknown")
-    assert service.record_assessment_review_note(1001, "New explicit analyst rationale")
-    history = service.list_assessment_note_revisions(1001)
-    assert [row.content for row in history] == ["First tracked rationale",
-        "Legacy writer changed rationale; attribution unknown", "New explicit analyst rationale"]
-    assert history[1].origin == "legacy_unknown" and history[1].actor_subject is None
+@pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
+def test_untracked_legacy_change_blocks_overwrite_without_inventing_actor(quarantine_guarded, kind, target):
+    ctx, service = quarantine_guarded
+    model, field = (Assessment, "notes") if kind == "assessment" else (Evidence, "analyst_notes")
+    record = getattr(service, "record_" + kind + "_review_note")
+    assert record(target, "First tracked rationale")
+    update(ctx, model, target, **{field: "Legacy writer changed rationale; attribution unknown"})
+    before = database_snapshot(ctx)
+    assert not record(target, "New explicit analyst rationale")
+    assert database_snapshot(ctx) == before
+    history = getattr(service, "list_" + kind + "_note_revisions")(target)
+    assert [row.content for row in history] == ["First tracked rationale"]
+    assert history[0].origin == "analyst"
+
+
+def move_synthetic_target_scope(ctx, move):
+    """Keep the caller authorized after a move, without assigning note ownership."""
+    if move == "engagement":
+        update(ctx, Assessment, 1001, engagement_id=102)
+        with ctx.factory() as database:
+            database.add(EngagementAccessGrant(id=702, membership_id=501, engagement_id=102,
+                         status="active", valid_from=NOW - timedelta(days=1),
+                         expires_at=NOW + timedelta(days=1)))
+            database.commit()
+    elif move == "organization":
+        update(ctx, Vendor, 11, organization_id=2)
+        update(ctx, OrganizationMembership, 601, role=ROLE_ADMIN)
+        with ctx.factory() as database:
+            database.add(EngagementAccessGrant(id=802, membership_id=601, engagement_id=101,
+                         status="active", valid_from=NOW - timedelta(days=1),
+                         expires_at=NOW + timedelta(days=1)))
+            database.commit()
+        ctx.source.identity = AuthenticatedIdentity(
+            Principal("reader-b", "Other reviewer", "other@synthetic.invalid", ROLE_ADMIN),
+            ISSUER, "lma-synthetic", "sid_other", 2,
+            NOW - timedelta(minutes=1), NOW + timedelta(minutes=30),
+        )
+
+
+def insert_synthetic_unknown_revision(ctx, kind, target, content):
+    """Represent an old-version capture; current linkage proves no provenance."""
+    with ctx.factory() as database:
+        assessment = database.get(Assessment, 1001)
+        vendor = database.get(Vendor, assessment.vendor_id)
+        database.add(AnalystNoteRevision(
+            organization_id=vendor.organization_id, vendor_id=vendor.id,
+            engagement_id=assessment.engagement_id, assessment_id=assessment.id,
+            evidence_id=target if kind == "evidence" else None,
+            object_type=kind, object_id=target, content=content,
+            origin="legacy_unknown", created_at=NOW,
+        ))
+        database.commit()
+
+
+@pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
+@pytest.mark.parametrize("move", ["unchanged", "organization", "engagement"])
+def test_first_unattributed_note_is_quarantined_even_for_currently_authorized_owner(quarantine_guarded,
+                                                                                 kind, target, move):
+    ctx, service = quarantine_guarded
+    model, field = (Assessment, "notes") if kind == "assessment" else (Evidence, "analyst_notes")
+    legacy = "Private original rationale: unresolved material exception, source p.7."
+    update(ctx, model, target, **{field: legacy})
+    move_synthetic_target_scope(ctx, move)
+    # Denial must concern unattributed content, not a missing current entitlement.
+    assert getattr(service._reader, "get_" + kind)(target) is not None
+    before = database_snapshot(ctx)
+    assert before[-2] == [] and before[-1] == []
+    history = getattr(service, "list_" + kind + "_note_revisions")
+    record = getattr(service, "record_" + kind + "_review_note")
+    assert history(target) == ()
+    assert record(target, "New owner rationale") is False
+    assert history(target) == ()
+    assert database_snapshot(ctx) == before
+
+
+@pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
+@pytest.mark.parametrize("move", ["unchanged", "organization"])
+@pytest.mark.parametrize("prior_analyst", [False, True])
+def test_preexisting_unknown_revision_cannot_authorize_content_or_overwrite(quarantine_guarded, kind, target,
+                                                                          move, prior_analyst):
+    ctx, service = quarantine_guarded
+    model, field = (Assessment, "notes") if kind == "assessment" else (Evidence, "analyst_notes")
+    content = "Original private uncertainty; not an assurance conclusion."
+    record = getattr(service, "record_" + kind + "_review_note")
+    if prior_analyst:
+        assert record(target, content)
+    else:
+        update(ctx, model, target, **{field: content})
+    move_synthetic_target_scope(ctx, move)
+    # Reproduce an earlier unsafe capture under the current (possibly new)
+    # tenant. Matching content and present-day scope must not validate it.
+    insert_synthetic_unknown_revision(ctx, kind, target, content)
+    before = database_snapshot(ctx)
+    assert before[-2][-1][-2:] == ("legacy_unknown", content)
+    expected = [content] if prior_analyst and move == "unchanged" else []
+    visible = getattr(service, "list_" + kind + "_note_revisions")(target)
+    assert [row.content for row in visible] == expected
+    assert all(row.origin == "analyst" for row in visible)
+    assert record(target, "Cannot assign unknown provenance") is False
+    assert database_snapshot(ctx) == before
+
+
+@pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
+def test_unknown_history_filter_precedes_pagination_without_deleting_captures(quarantine_guarded, kind, target):
+    ctx, service = quarantine_guarded
+    record = getattr(service, "record_" + kind + "_review_note")
+    history = getattr(service, "list_" + kind + "_note_revisions")
+    insert_synthetic_unknown_revision(ctx, kind, target, "Quarantined first capture")
+    assert record(target, "First attributed note from an empty current field")
+    assert record(target, "Second attributed note")
+    insert_synthetic_unknown_revision(ctx, kind, target, "Quarantined later capture")
+    before = database_snapshot(ctx)
+    first = history(target, limit=1)
+    assert [row.content for row in first] == ["First attributed note from an empty current field"]
+    second = history(target, limit=1, after_id=first[0].id)
+    assert [row.content for row in second] == ["Second attributed note"]
+    assert history(target, limit=1, after_id=second[0].id) == ()
+    assert database_snapshot(ctx) == before
+    assert [row[-2] for row in before[-2]] == ["legacy_unknown", "analyst", "analyst", "legacy_unknown"]
 
 
 @pytest.mark.parametrize("kind,target", [("assessment", 1002), ("assessment", 2001),
@@ -542,16 +656,19 @@ def test_equal_subjects_at_different_issuers_produce_distinct_immutable_audit_id
 @pytest.mark.parametrize("kind,target", [("assessment", 1001), ("evidence", 9001)])
 def test_failed_revision_insert_rolls_back_legacy_note_history_and_audit(guarded, kind, target):
     ctx, service = guarded
-    model, field = (Assessment, "notes") if kind == "assessment" else (Evidence, "analyst_notes")
-    update(ctx, model, target, **{field: "Prior source-verifiable exception"})
+    record = getattr(service, "record_" + kind + "_review_note")
+    assert record(target, "Prior source-verifiable exception")
     before = database_snapshot(ctx)
+    failures = []
     def failed_revision(mapper, connection, row):
+        failures.append(row.content)
         raise RuntimeError("Synthetic revision storage failure")
     event.listen(AnalystNoteRevision, "before_insert", failed_revision)
     try:
-        assert not getattr(service, "record_" + kind + "_review_note")(target, "Never lose prior exception")
+        assert not record(target, "Never lose prior exception")
     finally:
         event.remove(AnalystNoteRevision, "before_insert", failed_revision)
+    assert failures == ["Never lose prior exception"]
     assert database_snapshot(ctx) == before
 
 
