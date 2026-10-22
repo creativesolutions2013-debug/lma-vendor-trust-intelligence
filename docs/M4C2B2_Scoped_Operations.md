@@ -110,6 +110,16 @@ dedicated revision table and nullable audit identity columns for legacy
 compatibility. It does not rewrite legacy notes/events, backfill identities, grant
 access or change assessment decisions. SQLite/PostgreSQL guards reject revision
 UPDATE/DELETE (and PostgreSQL TRUNCATE); normal service operations only append.
+SQLite also rejects duplicate revision IDs and referenced target deletion,
+primary-key changes or replacement, even when foreign keys and recursive triggers
+are disabled on a default connection. Target updates check both old and new IDs,
+including SQLite rowid aliases. Unreferenced targets retain their existing
+behavior. These are narrow history-retention guards, not global SQLite foreign-key
+enforcement; new service revisions still require an exact authorized target.
+Existing orphan history stays unchanged; automatic ID collisions deny creation
+pending separate reconciliation rather than attaching history to a new target.
+The additive `0015a_note_target_retention` installs these guards for SQLite
+databases already at prototype `0015`; PostgreSQL only advances the version.
 Existing data is preserved, and automatic destructive downgrade refuses before
 mutation pending an independent retention/rollback plan. Tests apply migrations
 only to disposable synthetic databases/schemas, never production.

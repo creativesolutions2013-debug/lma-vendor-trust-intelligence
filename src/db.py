@@ -1486,16 +1486,51 @@ class AnalystNoteRevision(Base):
 
 
 def note_revision_guard_statements(dialect, schema=None):
-    """Fixed append-only DDL; identifiers are quoted, never request-controlled."""
+    """Fixed history/target retention DDL; no request-controlled identifiers."""
     quote = dialect.identifier_preparer.quote
     prefix = quote(schema) + "." if schema else ""
     table = prefix + quote("analyst_note_revisions")
     if dialect.name == "sqlite":
-        return tuple(
-            f"CREATE TRIGGER IF NOT EXISTS {quote('note_revisions_no_' + action.lower())} "
+        statements = [
+            f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_revisions_no_' + action.lower())} "
             f"BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'Analyst note revisions are append-only'); END"
             for action in ("UPDATE", "DELETE")
+        ]
+        # SQLite REPLACE can implicitly DELETE without firing DELETE triggers
+        # when recursive_triggers is off. Block duplicate-ID INSERT explicitly.
+        statements.append(
+            f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_revisions_no_replace')} "
+            f"BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) "
+            "BEGIN SELECT RAISE(ABORT, 'Analyst note revisions are append-only'); END"
         )
+        # build_engine intentionally leaves legacy SQLite FK settings alone.
+        # These narrow equivalents of target RESTRICT apply even with FKs and
+        # recursive triggers off, including both forms of implicit replacement.
+        for parent, reference in (("assessments", "assessment_id"), ("evidence", "evidence_id")):
+            parent_table = prefix + quote(parent)
+            old_reference = f"EXISTS (SELECT 1 FROM {table} WHERE {quote(reference)} = OLD.id)"
+            new_reference = f"EXISTS (SELECT 1 FROM {table} WHERE {quote(reference)} = NEW.id)"
+            for action, condition in (
+                ("DELETE", old_reference),
+                # INTEGER PRIMARY KEY aliases (rowid/oid/_rowid_) can change
+                # id without firing an UPDATE OF id trigger.
+                ("UPDATE", f"OLD.id IS NOT NEW.id AND ({old_reference} OR {new_reference})"),
+            ):
+                name = "note_history_" + parent + "_no_" + action.split()[0].lower()
+                statements.append(
+                    f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote(name)} BEFORE {action} ON {parent_table} "
+                    f"WHEN {condition} BEGIN SELECT RAISE(ABORT, 'Analyst note history target is retained'); END"
+                )
+            # An omitted INTEGER PRIMARY KEY is still -1 in BEFORE INSERT.
+            # Check its actual allocated ID too, so an older orphan reference
+            # cannot silently attach to a newly allocated target. ABORT rolls
+            # back the complete INSERT statement, including REPLACE deletion.
+            statements.append(
+                f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_history_' + parent + '_no_insert')} "
+                f"AFTER INSERT ON {parent_table} WHEN {new_reference} "
+                "BEGIN SELECT RAISE(ABORT, 'Analyst note history target is retained'); END"
+            )
+        return tuple(statements)
     if dialect.name == "postgresql":
         function = prefix + quote("reject_note_revision_mutation")
         return (
