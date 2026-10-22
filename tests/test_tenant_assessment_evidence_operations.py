@@ -256,27 +256,38 @@ def test_postgresql_transactional_note_audit_integrity(
     from sqlalchemy.orm import sessionmaker
     from test_tenant_read_scope import rows, TrustedSyntheticSource
     engine = synthetic_isolated_engine
-    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    rows(factory)
-    monkeypatch.setattr(operations, "_utc_now", lambda: NOW)
-    identity = AuthenticatedIdentity(
-        Principal("reader-a", "Reader", "reader@synthetic.invalid", ROLE_ADMIN),
-        ISSUER, "lma-synthetic", "sid_pg_write", 1,
-        NOW - timedelta(minutes=1), NOW + timedelta(minutes=30),
+    # Each test owns a root transaction; commits inside the dedicated note
+    # sessions are savepoints and never persist into other PostgreSQL tests.
+    connection = engine.connect()
+    transaction = connection.begin()
+    factory = sessionmaker(
+        bind=connection, autoflush=False, expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
     )
-    source = TrustedSyntheticSource(identity)
-    service = TenantAssessmentEvidenceOperations(factory, identity_source=source)
-    assert service.record_assessment_review_note(1001, "Scoped PG assessment note")
-    assert service.record_evidence_review_note(9001, "Scoped PG evidence note")
-    assert not service.record_evidence_review_note(9002, "Sibling denied")
-    assert not service.record_assessment_review_note(2001, "Other tenant denied")
-    with factory() as session:
-        assert session.get(Assessment, 1001).notes == "Scoped PG assessment note"
-        assert session.get(Evidence, 9001).analyst_notes == "Scoped PG evidence note"
-        assert session.get(Assessment, 1001).approval_status == "Pending"
-        assert session.get(Evidence, 9001).storage_path is not None
-        assert session.query(AuditLog).count() == 2
-    with factory() as session:
-        session.get(EngagementAccessGrant, 701).status = "revoked"
-        session.commit()
-    assert service.record_evidence_review_note(9001, "After revocation") is False
+    try:
+        rows(factory)
+        monkeypatch.setattr(operations, "_utc_now", lambda: NOW)
+        identity = AuthenticatedIdentity(
+            Principal("reader-a", "Reader", "reader@synthetic.invalid", ROLE_ADMIN),
+            ISSUER, "lma-synthetic", "sid_pg_write", 1,
+            NOW - timedelta(minutes=1), NOW + timedelta(minutes=30),
+        )
+        source = TrustedSyntheticSource(identity)
+        service = TenantAssessmentEvidenceOperations(factory, identity_source=source)
+        assert service.record_assessment_review_note(1001, "Scoped PG assessment note")
+        assert service.record_evidence_review_note(9001, "Scoped PG evidence note")
+        assert not service.record_evidence_review_note(9002, "Sibling denied")
+        assert not service.record_assessment_review_note(2001, "Other tenant denied")
+        with factory() as session:
+            assert session.get(Assessment, 1001).notes == "Scoped PG assessment note"
+            assert session.get(Evidence, 9001).analyst_notes == "Scoped PG evidence note"
+            assert session.get(Assessment, 1001).approval_status == "Pending"
+            assert session.get(Evidence, 9001).storage_path is not None
+            assert session.query(AuditLog).count() == 2
+        with factory() as session:
+            session.get(EngagementAccessGrant, 701).status = "revoked"
+            session.commit()
+        assert service.record_evidence_review_note(9001, "After revocation") is False
+    finally:
+        transaction.rollback()
+        connection.close()
