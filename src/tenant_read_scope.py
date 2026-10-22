@@ -153,6 +153,12 @@ class TenantReadService:
                     g.engagement_id, g.status, g.valid_from, g.expires_at,
                 ).where(g.membership_id == member.id)).all()
 
+            # Re-evaluate membership, grant and identity windows after I/O:
+            # the initial authorization clock may have expired mid-query.
+            end_now = _utc_now()
+            if (not _current(_db_time(member.valid_from), _db_time(member.expires_at), end_now)
+                    or not _current(identity.issued_at, identity.expires_at, end_now)):
+                return None
             by_engagement = {}
             for grant in grants:
                 by_engagement.setdefault(grant.engagement_id, []).append(grant)
@@ -160,11 +166,8 @@ class TenantReadService:
                 engagement_id for engagement_id, rows in by_engagement.items()
                 if _positive_id(engagement_id) and len(rows) == 1
                 and rows[0].status == "active"
-                and _current(_db_time(rows[0].valid_from), _db_time(rows[0].expires_at), _utc_now())
+                and _current(_db_time(rows[0].valid_from), _db_time(rows[0].expires_at), end_now)
             )
-            # The clock and upstream session must still be current after DB I/O.
-            if not _current(identity.issued_at, identity.expires_at, _utc_now()):
-                return None
             return _Scope(identity, member.role, entitled)
         except Exception:
             return None
@@ -227,10 +230,15 @@ class TenantReadService:
             # so parent-link changes cannot release stale projections.
             if rows != self._project(kind, second, item_id=item_id, parent_id=parent_id):
                 return ()
-            # Final trusted session and clock check after all database I/O.
+            # Verify entitlements again after the final row query: a concurrent
+            # revocation there must not leak the rows selected earlier.
+            final = self._scope(permission)
+            if (final is None or _session_identity_key(first.identity) != _session_identity_key(final.identity)
+                    or first.role != final.role or first.engagement_ids != final.engagement_ids):
+                return ()
             last = self._identity_source.authenticated_identity()
             if (type(last) is not AuthenticatedIdentity or type(last.principal) is not Principal
-                    or _session_identity_key(last) != _session_identity_key(second.identity)
+                    or _session_identity_key(last) != _session_identity_key(final.identity)
                     or not _current(last.issued_at, last.expires_at, _utc_now())):
                 return ()
             return rows
