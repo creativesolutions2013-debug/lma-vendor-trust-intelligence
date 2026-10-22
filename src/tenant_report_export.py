@@ -127,11 +127,16 @@ class TenantReportService:
             # Revalidate after assembling bytes, including effects of DB work
             # and access expiry; never return stale scope after revocation.
             final = reader._scope(PERMISSION_REPORT_EXPORT)
-            if not _same_authority(first, final):
+            if not _same_authority(first, final) or data != self._data(final):
+                return None
+            # Read authorization once more after checking the final projection;
+            # a changed grant during those database reads must also deny.
+            post_query = reader._scope(PERMISSION_REPORT_EXPORT)
+            if not _same_authority(first, post_query):
                 return None
             current = reader._identity_source.authenticated_identity()
-            if (type(current) is not type(final.identity)
-                    or _session_identity_key(current) != _session_identity_key(final.identity)):
+            if (type(current) is not type(post_query.identity)
+                    or _session_identity_key(current) != _session_identity_key(post_query.identity)):
                 return None
             # Scope's time/DB checks run in _scope; explicit final time check.
             from src.tenant_read_scope import _current, _utc_now
