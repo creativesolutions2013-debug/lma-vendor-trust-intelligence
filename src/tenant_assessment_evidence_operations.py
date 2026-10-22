@@ -108,7 +108,8 @@ class TenantAssessmentEvidenceOperations:
         return row
 
     def _record(self, kind, target_id, note):
-        if (not _positive_id(target_id) or not _valid_note(note)
+        if (kind not in ("assessment", "evidence")
+                or not _positive_id(target_id) or not _valid_note(note)
                 or self._sessions is None or self._source is None):
             return False
         permission = (PERMISSION_ASSESSMENT_MANAGE if kind == "assessment"
