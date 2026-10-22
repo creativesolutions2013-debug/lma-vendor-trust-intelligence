@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import event, select
 
 from test_tenant_read_scope import NOW, ctx, update, ISSUER
+from test_database_evidence_authority import isolated_engine as synthetic_isolated_engine
 from src.assessment_evidence_access import AuthenticatedIdentity
 from src.authz import Principal, ROLE_ADMIN, ROLE_VIEWER
 from src.db import (
@@ -244,7 +245,7 @@ def test_request_session_uncommitted_changes_are_not_flushed(guarded):
         ))
         assert service.record_evidence_review_note(9001, "Legitimate independent note")
         assert dirty_session.new
-        assert dirty_session.get(Assessment, 7777) is not None
+        assert any(item.id == 7777 for item in dirty_session.new)
         dirty_session.rollback()
 
 
