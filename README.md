@@ -10,6 +10,15 @@ Our goal is to reduce assessment time by analyzing security evidence vendors alr
 
 The existing application provides a working foundation for vendor risk management. The complete AI-powered assessment experience described below is the product direction, not a claim that every capability is currently implemented.
 
+## Try the guided synthetic assessment
+
+Run `AUTH_MODE=development streamlit run app.py` and open **Guided Assessment Demo**.
+One session takes an industry reviewer from relationship context through synthetic
+evidence, the cited assessment worklist, targeted questions, simulated analyst
+actions and a downloadable provisional report. Replay a recovery exercise or
+inspect a persistent TLS exception. No database, external API or real vendor data
+is required for this journey. See the [demo runbook and limitations](docs/Guided_Assessment_Demo.md).
+
 ## Official Product Blueprint
 
 [View the LMA End-to-End Product Workflow](docs/LMA_Vendor_Trust_Intelligence_End_to_End_Workflow.md)
