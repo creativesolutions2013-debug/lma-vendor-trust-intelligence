@@ -9,10 +9,11 @@ No application routes use this service yet. Do not connect it to development
 Admin, streamlit.session_state or production startup. No file keys, bytes,
 governed outcomes, or authorization tokens are returned.
 """
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 
 from src.assessment_evidence_access import AuthenticatedIdentity, _current, _positive_id, _text
 from src.authz import (
@@ -84,6 +85,8 @@ class _Scope:
     identity: AuthenticatedIdentity
     role: str
     engagement_ids: frozenset[int]
+    authority: tuple = ()
+    relationships: tuple = ()
 
 
 def _session_identity_key(identity):
@@ -105,59 +108,66 @@ class TenantReadService:
         self._sessions = session_factory
         self._identity_source = identity_source
 
-    def _scope(self, permission):
+    @staticmethod
+    def _valid_identity(identity, now):
+        return (type(identity) is AuthenticatedIdentity
+                and type(identity.principal) is Principal
+                and _positive_id(identity.organization_id)
+                and all(_text(value) for value in (identity.issuer, identity.principal.subject,
+                                                   identity.audience, identity.session_id))
+                and _current(identity.issued_at, identity.expires_at, now))
+
+    @staticmethod
+    def _permitted(identity, role, permission):
+        permissions = permission if type(permission) is tuple else (permission,)
+        return role in VALID_ROLES and all(can(Principal(
+            identity.principal.subject, identity.principal.display_name,
+            identity.principal.email, role), value) for value in permissions)
+
+    def _scope(self, permission, *, session=None, identity=None, lock=False):
+        """Internal authority snapshot; public reads use the locked transaction.
+
+        The optional independent snapshot remains for compatibility with unwired
+        callers, but is not an authorization capability and cannot release data.
+        """
         try:
             if self._sessions is None or self._identity_source is None:
                 return None
-            identity = self._identity_source.authenticated_identity()
-            now = _utc_now()
-            if (type(identity) is not AuthenticatedIdentity
-                    or type(identity.principal) is not Principal
-                    or not _positive_id(identity.organization_id)
-                    or not all(_text(value) for value in (
-                        identity.issuer, identity.principal.subject,
-                        identity.audience, identity.session_id,
-                    ))
-                    or not _current(identity.issued_at, identity.expires_at, now)):
+            if identity is None:
+                identity = self._identity_source.authenticated_identity()
+            if not self._valid_identity(identity, _utc_now()):
                 return None
-
+            if session is None:
+                with self._sessions() as database, database.no_autoflush:
+                    return self._scope(permission, session=database, identity=identity)
             m, g = OrganizationMembership, EngagementAccessGrant
-            with self._sessions() as session, session.no_autoflush:
-                # Check *all* current memberships for this issuer+subject. Never
-                # choose a tenant from a UI selector or first-match DB row.
-                memberships = session.execute(select(
-                    m.id, m.organization_id, m.role, m.status,
-                    m.valid_from, m.expires_at,
-                ).join(Organization, Organization.id == m.organization_id).where(
-                    m.issuer == identity.issuer, m.subject == identity.principal.subject,
-                )).all()
-                current_members = [
-                    member for member in memberships
-                    if member.status == "active"
-                    and _current(_db_time(member.valid_from), _db_time(member.expires_at), now)
-                ]
-                if len(current_members) != 1:
-                    return None
-                member = current_members[0]
-                if (member.organization_id != identity.organization_id
-                        or member.role not in VALID_ROLES
-                        or not can(Principal(identity.principal.subject,
-                                             identity.principal.display_name,
-                                             identity.principal.email, member.role),
-                                   permission)):
-                    return None
-
-                # Duplicate grant records, even if one is inactive, cannot be
-                # used as an arbitrary first-match entitlement.
-                grants = session.execute(select(
-                    g.engagement_id, g.status, g.valid_from, g.expires_at,
-                ).where(g.membership_id == member.id)).all()
-
-            # Re-evaluate membership, grant and identity windows after I/O:
-            # the initial authorization clock may have expired mid-query.
+            memberships_query = select(
+                m.id, m.organization_id, m.role, m.status, m.valid_from, m.expires_at,
+            ).join(Organization, Organization.id == m.organization_id).where(
+                m.issuer == identity.issuer, m.subject == identity.principal.subject,
+            ).order_by(m.id)
+            if lock:
+                memberships_query = memberships_query.with_for_update(of=m)
+            memberships = session.execute(memberships_query).all()
+            now = _utc_now()
+            current_members = [member for member in memberships
+                               if member.status == "active"
+                               and _current(_db_time(member.valid_from), _db_time(member.expires_at), now)]
+            if len(current_members) != 1:
+                return None
+            member = current_members[0]
+            if (member.organization_id != identity.organization_id
+                    or not self._permitted(identity, member.role, permission)):
+                return None
+            grants_query = select(
+                g.id, g.engagement_id, g.status, g.valid_from, g.expires_at,
+            ).where(g.membership_id == member.id).order_by(g.id)
+            if lock:
+                grants_query = grants_query.with_for_update(of=g)
+            grants = session.execute(grants_query).all()
             end_now = _utc_now()
             if (not _current(_db_time(member.valid_from), _db_time(member.expires_at), end_now)
-                    or not _current(identity.issued_at, identity.expires_at, end_now)):
+                    or not self._valid_identity(identity, end_now)):
                 return None
             by_engagement = {}
             for grant in grants:
@@ -168,11 +178,108 @@ class TenantReadService:
                 and rows[0].status == "active"
                 and _current(_db_time(rows[0].valid_from), _db_time(rows[0].expires_at), end_now)
             )
-            return _Scope(identity, member.role, entitled)
+            # Include all authority columns: role/window/status changes and newly
+            # ambiguous membership/grant rows invalidate the complete response.
+            authority = (tuple(tuple(row) for row in memberships), tuple(tuple(row) for row in grants))
+            return _Scope(identity, member.role, entitled, authority)
         except Exception:
             return None
 
-    def _project(self, kind, scope, *, item_id=None, parent_id=None):
+    def _relationships(self, session, scope, *, lock):
+        """Lock canonical existing parents without DISTINCT/aggregate FOR UPDATE.
+
+        Deterministic table/ID ordering is shared by read and export. New inserts
+        are outside the issued snapshot; no new entitlement is inferred from them.
+        """
+        v, e, a, d = Vendor, Engagement, Assessment, Evidence
+        org = scope.identity.organization_id
+        queries = [
+            (Organization, select(Organization.id).where(Organization.id == org)),
+            # Lock engagements before deriving their vendor parents; otherwise
+            # a reassignment between vendor/engagement locks could leave the new
+            # vendor row unprotected at issuance.
+            (e, select(e.id, e.vendor_id, e.service_name, e.status).where(e.id.in_(scope.engagement_ids))),
+            (v, select(v.id, v.organization_id, v.display_name, v.criticality).where(
+                v.organization_id == org,
+                v.id.in_(select(e.vendor_id).where(e.id.in_(scope.engagement_ids))))),
+            (a, select(a.id, a.vendor_id, a.engagement_id, a.assessment_type, a.status).join(
+                e, and_(e.id == a.engagement_id, e.vendor_id == a.vendor_id)
+            ).join(v, v.id == e.vendor_id).where(v.organization_id == org, e.id.in_(scope.engagement_ids))),
+            (d, select(d.id, d.vendor_id, d.assessment_id, d.document_type, d.document_name, d.status).join(
+                a, and_(a.id == d.assessment_id, a.vendor_id == d.vendor_id)
+            ).join(e, and_(e.id == a.engagement_id, e.vendor_id == a.vendor_id)
+            ).join(v, v.id == e.vendor_id).where(v.organization_id == org, e.id.in_(scope.engagement_ids))),
+        ]
+        result = []
+        for model, query in queries:
+            query = query.order_by(model.id)
+            if lock:
+                query = query.with_for_update(of=model)
+            result.append(tuple(tuple(row) for row in session.execute(query).all()))
+        return tuple(result)
+
+    @contextmanager
+    def _authorized_transaction(self, permission):
+        """Server-internal transaction; hold SQL authority until issuance.
+
+        PostgreSQL row locks serialize revocation/reparenting of existing rows.
+        SQLite reserves its writer before reading. No endpoint is wired here.
+        """
+        if self._sessions is None or self._identity_source is None:
+            raise PermissionError("Scoped access denied.")
+        identity = self._identity_source.authenticated_identity()
+        if not self._valid_identity(identity, _utc_now()):
+            raise PermissionError("Scoped access denied.")
+        with self._sessions() as session, session.no_autoflush, session.begin():
+            if session.get_bind().dialect.name == "sqlite":
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            elif session.get_bind().dialect.name == "postgresql":
+                session.connection().exec_driver_sql("SET LOCAL lock_timeout = '3s'")
+                session.connection().exec_driver_sql("SET LOCAL statement_timeout = '10s'")
+            else:
+                raise PermissionError("Scoped access denied.")
+            scope = self._scope(permission, session=session, identity=identity, lock=True)
+            if scope is None or not scope.engagement_ids:
+                raise PermissionError("Scoped access denied.")
+            scope = replace(scope, relationships=self._relationships(session, scope, lock=True))
+            yield session, scope
+            # A dedicated read transaction must never flush unrelated pending
+            # ORM changes at commit. The factory contract is server-owned.
+            if session.new or session.dirty or session.deleted:
+                raise PermissionError("Scoped access denied.")
+
+    def _finish_authorized(self, session, scope, permission):
+        """Last remote session check, then SQL/time checks while locks remain held.
+
+        There is no remote lookup after the final DB validation. Session changes
+        after issuance require a future coordinated session lease to retract data.
+        """
+        last = self._identity_source.authenticated_identity()
+        if (not self._valid_identity(last, _utc_now())
+                or _session_identity_key(last) != _session_identity_key(scope.identity)):
+            raise PermissionError("Scoped access denied.")
+        final = self._scope(permission, session=session, identity=last)
+        if (final is None or final.role != scope.role or final.engagement_ids != scope.engagement_ids
+                or final.authority != scope.authority
+                or self._relationships(session, final, lock=False) != scope.relationships):
+            raise PermissionError("Scoped access denied.")
+        # SQL reads can block too. Re-evaluate the cached locked windows after
+        # all I/O, immediately before issuance; no identity/SQL call follows.
+        now = _utc_now()
+        if not self._valid_identity(last, now):
+            raise PermissionError("Scoped access denied.")
+        members, grants = final.authority
+        active = [row for row in members if row[3] == "active"
+                  and _current(_db_time(row[4]), _db_time(row[5]), now)]
+        current_grants = frozenset(row[1] for row in grants if row[2] == "active"
+                                  and _current(_db_time(row[3]), _db_time(row[4]), now))
+        if (len(active) != 1 or active[0][1] != last.organization_id
+                or not self._permitted(last, active[0][2], permission)
+                or current_grants != scope.engagement_ids):
+            raise PermissionError("Scoped access denied.")
+
+    def _project(self, kind, scope, *, session=None, item_id=None, parent_id=None,
+                 limit=100, after_id=0, count=False):
         v, e, a, d = Vendor, Engagement, Assessment, Evidence
         if kind == "vendor":
             columns = (v.id, v.display_name, v.criticality)
@@ -197,56 +304,44 @@ class TenantReadService:
             ).join(v, v.id == e.vendor_id)
             key, parent_key, target = d.id, d.assessment_id, EvidenceSummary
         else:
-            return ()
-        stmt = stmt.where(
-            v.organization_id == scope.identity.organization_id,
-            e.id.in_(scope.engagement_ids),
-        )
+            raise PermissionError("Scoped access denied.")
+        stmt = stmt.where(v.organization_id == scope.identity.organization_id, e.id.in_(scope.engagement_ids))
         if item_id is not None:
             stmt = stmt.where(key == item_id)
         if parent_id is not None and parent_key is not None:
             stmt = stmt.where(parent_key == parent_id)
-        stmt = stmt.distinct().order_by(key)
-        with self._sessions() as session, session.no_autoflush:
-            return tuple(target(*row) for row in session.execute(stmt).all())
+        if count:
+            stmt = stmt.with_only_columns(func.count(key.distinct()))
+        else:
+            stmt = stmt.where(key > after_id).distinct().order_by(key).limit(limit)
+        if session is None:
+            with self._sessions() as database, database.no_autoflush:
+                return self._project(kind, scope, session=database, item_id=item_id,
+                                     parent_id=parent_id, limit=limit, after_id=after_id, count=count)
+        result = session.execute(stmt)
+        return result.scalar_one() if count else tuple(target(*row) for row in result.all())
 
-    def _read(self, kind, *, item_id=None, parent_id=None):
+    def _read(self, kind, *, item_id=None, parent_id=None, limit=100, after_id=0):
         if ((item_id is not None and not _positive_id(item_id))
-                or (parent_id is not None and not _positive_id(parent_id))):
+                or (parent_id is not None and not _positive_id(parent_id))
+                or type(limit) is not int or not 1 <= limit <= 200
+                or type(after_id) is not int or after_id < 0):
             return ()
         permission = PERMISSION_EVIDENCE_READ if kind == "evidence" else PERMISSION_VENDOR_READ
-        first = self._scope(permission)
-        if first is None or not first.engagement_ids:
-            return ()
         try:
-            rows = self._project(kind, first, item_id=item_id, parent_id=parent_id)
-            # Revoked grants and changed/expired sessions during I/O must not
-            # release already-collected projections. Re-read DB entitlements.
-            second = self._scope(permission)
-            if (second is None or _session_identity_key(first.identity) != _session_identity_key(second.identity)
-                    or first.role != second.role or first.engagement_ids != second.engagement_ids):
-                return ()
-            # Also recheck relationships after the second entitlement snapshot
-            # so parent-link changes cannot release stale projections.
-            if rows != self._project(kind, second, item_id=item_id, parent_id=parent_id):
-                return ()
-            # Verify entitlements again after the final row query: a concurrent
-            # revocation there must not leak the rows selected earlier.
-            final = self._scope(permission)
-            if (final is None or _session_identity_key(first.identity) != _session_identity_key(final.identity)
-                    or first.role != final.role or first.engagement_ids != final.engagement_ids):
-                return ()
-            last = self._identity_source.authenticated_identity()
-            if (type(last) is not AuthenticatedIdentity or type(last.principal) is not Principal
-                    or _session_identity_key(last) != _session_identity_key(final.identity)
-                    or not _current(last.issued_at, last.expires_at, _utc_now())):
-                return ()
+            with self._authorized_transaction(permission) as (session, scope):
+                rows = self._project(kind, scope, session=session, item_id=item_id,
+                                     parent_id=parent_id, limit=limit, after_id=after_id)
+                if rows != self._project(kind, scope, session=session, item_id=item_id,
+                                         parent_id=parent_id, limit=limit, after_id=after_id):
+                    raise PermissionError("Scoped access denied.")
+                self._finish_authorized(session, scope, permission)
             return rows
         except Exception:
             return ()
 
-    def list_vendors(self):
-        return self._read("vendor")
+    def list_vendors(self, *, limit=100, after_id=0):
+        return self._read("vendor", limit=limit, after_id=after_id)
 
     def get_vendor(self, vendor_id):
         if not _positive_id(vendor_id):
@@ -254,8 +349,8 @@ class TenantReadService:
         rows = self._read("vendor", item_id=vendor_id)
         return rows[0] if len(rows) == 1 else None
 
-    def list_engagements(self, *, vendor_id=None):
-        return self._read("engagement", parent_id=vendor_id)
+    def list_engagements(self, *, vendor_id=None, limit=100, after_id=0):
+        return self._read("engagement", parent_id=vendor_id, limit=limit, after_id=after_id)
 
     def get_engagement(self, engagement_id):
         if not _positive_id(engagement_id):
@@ -263,8 +358,8 @@ class TenantReadService:
         rows = self._read("engagement", item_id=engagement_id)
         return rows[0] if len(rows) == 1 else None
 
-    def list_assessments(self, *, engagement_id=None):
-        return self._read("assessment", parent_id=engagement_id)
+    def list_assessments(self, *, engagement_id=None, limit=100, after_id=0):
+        return self._read("assessment", parent_id=engagement_id, limit=limit, after_id=after_id)
 
     def get_assessment(self, assessment_id):
         if not _positive_id(assessment_id):
@@ -272,8 +367,8 @@ class TenantReadService:
         rows = self._read("assessment", item_id=assessment_id)
         return rows[0] if len(rows) == 1 else None
 
-    def list_evidence(self, *, assessment_id=None):
-        return self._read("evidence", parent_id=assessment_id)
+    def list_evidence(self, *, assessment_id=None, limit=100, after_id=0):
+        return self._read("evidence", parent_id=assessment_id, limit=limit, after_id=after_id)
 
     def get_evidence(self, evidence_id):
         if not _positive_id(evidence_id):
@@ -282,9 +377,12 @@ class TenantReadService:
         return rows[0] if len(rows) == 1 else None
 
     def visible_counts(self):
-        # Counts inherit the same access protections as each read. These are
-        # explicitly *not* global customer/vendor totals.
-        return ScopedCounts(
-            len(self.list_vendors()), len(self.list_engagements()),
-            len(self.list_assessments()), len(self.list_evidence()),
-        )
+        try:
+            permissions = (PERMISSION_VENDOR_READ, PERMISSION_EVIDENCE_READ)
+            with self._authorized_transaction(permissions) as (session, scope):
+                counts = ScopedCounts(*(self._project(kind, scope, session=session, count=True)
+                                        for kind in ("vendor", "engagement", "assessment", "evidence")))
+                self._finish_authorized(session, scope, permissions)
+            return counts
+        except Exception:
+            return ScopedCounts(0, 0, 0, 0)

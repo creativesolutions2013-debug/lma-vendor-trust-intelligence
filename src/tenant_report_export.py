@@ -11,8 +11,14 @@ from dataclasses import dataclass
 import csv
 from io import StringIO
 
+from sqlalchemy import and_, func, select
+
 from src.authz import PERMISSION_REPORT_EXPORT
-from src.tenant_read_scope import TenantReadService, _session_identity_key
+from src.db import Assessment, Engagement, Evidence, Vendor
+from src.tenant_read_scope import TenantReadService
+
+
+MAX_REPORT_ROWS = 200
 
 
 @dataclass(frozen=True)
@@ -31,13 +37,6 @@ class ScopedReport:
     csv_bytes: bytes
 
 
-def _same_authority(first, second):
-    return (first is not None and second is not None
-            and _session_identity_key(first.identity) == _session_identity_key(second.identity)
-            and first.role == second.role
-            and first.engagement_ids == second.engagement_ids)
-
-
 def _safe_csv_cell(value):
     """Guard spreadsheet formula execution from untrusted vendor/service labels."""
     if type(value) is not str:
@@ -54,47 +53,36 @@ class TenantReportService:
     """Read-only report for *explicitly granted* engagement relationships.
 
     Missing, revoked, expired or changed session/grant/role produces no report.
-    Metadata is checked twice, then authorization and the current server session
-    are checked after CSV preparation. A future API must still use a secure
-    transport and record authorized export audits independently.
+    One transaction holds SQL authority and exact parent rows stable through CSV
+    construction, final session validation and successful transaction completion.
+    This defines metadata issuance, not a browser download or a session-store
+    lease. A future API still requires secure delivery and scoped export audit.
     """
 
     def __init__(self, session_factory, *, identity_source=None):
         self._reader = TenantReadService(session_factory, identity_source=identity_source)
 
-    def _data(self, scope):
-        reader = self._reader
-        vendors = reader._project("vendor", scope)
-        engagements = reader._project("engagement", scope)
-        assessments = reader._project("assessment", scope)
-        evidence = reader._project("evidence", scope)
-        return vendors, engagements, assessments, evidence
+    def _data(self, scope, *, session):
+        """Aggregate only the locked, entitled hierarchy in the same transaction.
 
-    @staticmethod
-    def _rows(data):
-        vendors, engagements, assessments, evidence = data
-        vendor_by_id = {v.id: v for v in vendors}
-        assessment_counts = {}
-        for item in assessments:
-            assessment_counts[item.engagement_id] = assessment_counts.get(item.engagement_id, 0) + 1
-        evidence_counts = {}
-        for item in evidence:
-            evidence_counts[item.engagement_id] = evidence_counts.get(item.engagement_id, 0) + 1
-        result = []
-        for engagement in engagements:
-            vendor = vendor_by_id.get(engagement.vendor_id)
-            if vendor is None:
-                # No incomplete/cross-linked partial report is acceptable.
-                return None
-            result.append(ScopedReportRow(
-                vendor_id=vendor.id,
-                vendor_name=vendor.display_name,
-                engagement_id=engagement.id,
-                service_name=engagement.service_name,
-                assessments=assessment_counts.get(engagement.id, 0),
-                evidence_items=evidence_counts.get(engagement.id, 0),
-            ))
-        return tuple(result)
+        Counts do not inherit a list page's limit, nor materialize evidence
+        document fields. Overflow denies instead of releasing a partial export.
+        """
+        v, e, a, d = Vendor, Engagement, Assessment, Evidence
+        assessments = select(func.count(a.id)).where(
+            a.engagement_id == e.id, a.vendor_id == e.vendor_id,
+        ).correlate(e).scalar_subquery()
+        evidence = select(func.count(d.id)).select_from(d).join(
+            a, and_(a.id == d.assessment_id, a.vendor_id == d.vendor_id),
+        ).where(a.engagement_id == e.id, a.vendor_id == e.vendor_id).correlate(e).scalar_subquery()
+        query = select(v.id, v.display_name, e.id, e.service_name, assessments, evidence).select_from(e).join(
+            v, v.id == e.vendor_id,
+        ).where(v.organization_id == scope.identity.organization_id,
+                e.id.in_(scope.engagement_ids)).order_by(e.id).limit(MAX_REPORT_ROWS + 1)
+        rows = session.execute(query).all()
+        if len(rows) > MAX_REPORT_ROWS:
+            raise PermissionError("Scoped export denied.")
+        return tuple(ScopedReportRow(*row) for row in rows)
 
     @staticmethod
     def _csv(rows):
@@ -113,36 +101,16 @@ class TenantReportService:
     def build(self) -> ScopedReport | None:
         try:
             reader = self._reader
-            first = reader._scope(PERMISSION_REPORT_EXPORT)
-            if first is None or not first.engagement_ids:
-                return None
-            data = self._data(first)
-            second = reader._scope(PERMISSION_REPORT_EXPORT)
-            if not _same_authority(first, second) or data != self._data(second):
-                return None
-            rows = self._rows(data)
-            if not rows:
-                return None
-            csv_bytes = self._csv(rows)
-            # Revalidate after assembling bytes, including effects of DB work
-            # and access expiry; never return stale scope after revocation.
-            final = reader._scope(PERMISSION_REPORT_EXPORT)
-            if not _same_authority(first, final) or data != self._data(final):
-                return None
-            # Read authorization once more after checking the final projection;
-            # a changed grant during those database reads must also deny.
-            post_query = reader._scope(PERMISSION_REPORT_EXPORT)
-            if not _same_authority(first, post_query):
-                return None
-            current = reader._identity_source.authenticated_identity()
-            if (type(current) is not type(post_query.identity)
-                    or _session_identity_key(current) != _session_identity_key(post_query.identity)):
-                return None
-            # Scope's time/DB checks run in _scope; explicit final time check.
-            from src.tenant_read_scope import _current, _utc_now
-            if not _current(current.issued_at, current.expires_at, _utc_now()):
-                return None
-            return ScopedReport(rows, csv_bytes)
+            with reader._authorized_transaction(PERMISSION_REPORT_EXPORT) as (session, scope):
+                rows = self._data(scope, session=session)
+                if not rows:
+                    raise PermissionError("Scoped export denied.")
+                report = ScopedReport(rows, self._csv(rows))
+                # SQL locks remain held across the last external session lookup,
+                # fresh role/grant/relationship reads and post-I/O expiry checks.
+                reader._finish_authorized(session, scope, PERMISSION_REPORT_EXPORT)
+            # A failed commit/context exit must discard already-generated bytes.
+            return report
         except Exception:
             # Same external behavior as no entitlement. No database, token, or
             # provider diagnostics leak through this surface.

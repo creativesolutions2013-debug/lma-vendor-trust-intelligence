@@ -1,27 +1,21 @@
-"""M4C-2B-2B: unwired, audited, engagement-bound analyst note changes.
+"""Unwired, scoped analyst notes with append-only history and atomic audit.
 
-Optional notes are *not* governed control acceptance, approval, risk scoring,
-assessment status, evidence custody, or file operation. Never register this
-with development principals, Streamlit selectors or an unverified browser
-identity. Live production auth remains disabled.
-
-A dedicated transaction locks authorization rows and the exact target during
-the write (PostgreSQL FOR UPDATE). SQLite fixtures are synthetic only.
+These optional annotations never approve controls or change risk/status/source
+fields. Reuse the read/export transaction's lock order and issuance boundary;
+production authentication and legacy Streamlit routes remain disabled.
 """
+from dataclasses import dataclass
+from datetime import datetime
+
 from sqlalchemy import and_, select, update
 
-from src.assessment_evidence_access import (
-    AuthenticatedIdentity, _current, _positive_id, _text,
-)
-from src.authz import (
-    Principal, VALID_ROLES, can, PERMISSION_ASSESSMENT_MANAGE,
-    PERMISSION_EVIDENCE_ANALYZE,
-)
+from src.assessment_evidence_access import _current, _positive_id
+from src.authz import PERMISSION_ASSESSMENT_MANAGE, PERMISSION_EVIDENCE_ANALYZE
 from src.db import (
-    Assessment, AuditLog, Engagement, EngagementAccessGrant, Evidence,
-    Organization, OrganizationMembership, Vendor,
+    AnalystNoteRevision, Assessment, AuditLog, Engagement, EngagementAccessGrant,
+    Evidence, Vendor,
 )
-from src.tenant_read_scope import _db_time, _session_identity_key, _utc_now
+from src.tenant_read_scope import TenantReadService, _db_time, _utc_now
 
 
 def _valid_note(note):
@@ -31,167 +25,184 @@ def _valid_note(note):
             and not any(ord(char) == 127 for char in note))
 
 
-def _valid_identity(value, now):
-    return (type(value) is AuthenticatedIdentity
-            and type(value.principal) is Principal
-            and _positive_id(value.organization_id)
-            and all(_text(x) for x in (
-                value.issuer, value.principal.subject, value.audience,
-                value.session_id,
-            ))
-            and _current(value.issued_at, value.expires_at, now))
+@dataclass(frozen=True)
+class NoteRevisionSummary:
+    id: int
+    organization_id: int
+    vendor_id: int
+    engagement_id: int
+    assessment_id: int
+    evidence_id: int | None
+    object_type: str
+    object_id: int
+    actor_issuer: str | None
+    actor_subject: str | None
+    actor_role: str | None
+    membership_id: int | None
+    session_id: str | None  # Correlation identifier, never a bearer handle.
+    created_at: datetime
+    content: str
+    origin: str
 
 
 class TenantAssessmentEvidenceOperations:
-    """Write-only review notes with one transaction and authorization audit.
+    """Server-only note writes and exact-target history reads.
 
-    No entity instance or audit detail is released to the caller: True/False
-    means committed/not committed; a nonexistent and forbidden ID look alike.
-    Upstream identity source and session factory are trusted server dependencies.
+    True/False means committed/not committed. History returns bounded immutable
+    projections; nonexistent and forbidden targets look alike. Dependencies are
+    trusted server wiring, never request-selected credentials or organizations.
     """
 
     def __init__(self, session_factory, *, identity_source=None):
-        self._sessions = session_factory
-        self._source = identity_source
+        self._sessions, self._source = session_factory, identity_source
+        self._reader = TenantReadService(session_factory, identity_source=identity_source)
 
-    def _target(self, session, kind, target_id, organization_id):
+    @staticmethod
+    def _permission(kind):
+        return PERMISSION_ASSESSMENT_MANAGE if kind == "assessment" else PERMISSION_EVIDENCE_ANALYZE
+
+    def _target(self, session, kind, target_id, organization_id, *, engagement_ids):
         a, e, v, d = Assessment, Engagement, Vendor, Evidence
         if kind == "assessment":
-            query = select(a.id, a.vendor_id, a.engagement_id).select_from(a).join(
+            query = select(
+                a.id.label("object_id"), a.vendor_id, a.engagement_id,
+                a.id.label("assessment_id"), a.notes.label("note"),
+            ).select_from(a).join(
                 e, and_(e.id == a.engagement_id, e.vendor_id == a.vendor_id)
             ).join(v, v.id == e.vendor_id).where(
                 a.id == target_id, v.organization_id == organization_id,
-            ).with_for_update()
+                e.id.in_(engagement_ids),
+            ).with_for_update(of=a)
         else:
-            query = select(d.id, a.vendor_id, a.engagement_id).select_from(d).join(
+            query = select(
+                d.id.label("object_id"), a.vendor_id, a.engagement_id,
+                a.id.label("assessment_id"), d.analyst_notes.label("note"),
+            ).select_from(d).join(
                 a, and_(a.id == d.assessment_id, a.vendor_id == d.vendor_id)
             ).join(e, and_(e.id == a.engagement_id, e.vendor_id == a.vendor_id)
             ).join(v, v.id == e.vendor_id).where(
                 d.id == target_id, v.organization_id == organization_id,
-            ).with_for_update()
+                e.id.in_(engagement_ids),
+            ).with_for_update(of=d)
         matches = session.execute(query).all()
         return matches[0] if len(matches) == 1 else None
 
-    def _membership(self, session, identity, permission, now):
-        m = OrganizationMembership
-        matches = session.execute(
-            select(m.id, m.organization_id, m.role, m.status,
-                   m.valid_from, m.expires_at)
-            .join(Organization, Organization.id == m.organization_id)
-            .where(m.issuer == identity.issuer, m.subject == identity.principal.subject)
-            .with_for_update()
-        ).all()
-        current = [x for x in matches if x.status == "active" and
-                   _current(_db_time(x.valid_from), _db_time(x.expires_at), now)]
-        if len(current) != 1:
-            return None
-        member = current[0]
-        if (member.organization_id != identity.organization_id
-                or member.role not in VALID_ROLES
-                or not can(Principal(identity.principal.subject,
-                                     identity.principal.display_name,
-                                     identity.principal.email, member.role), permission)):
-            return None
-        return member
-
     def _grant(self, session, member_id, engagement_id, now):
+        # The shared transaction has already locked all membership grants before
+        # any parent. This exact-target check never introduces another lock order.
         g = EngagementAccessGrant
         rows = session.execute(select(
             g.id, g.status, g.valid_from, g.expires_at,
-        ).where(g.membership_id == member_id,
-                g.engagement_id == engagement_id).with_for_update()).all()
-        if len(rows) != 1 or rows[0].status != "active":
+        ).where(g.membership_id == member_id, g.engagement_id == engagement_id)).all()
+        if (len(rows) != 1 or rows[0].status != "active"
+                or not _current(_db_time(rows[0].valid_from), _db_time(rows[0].expires_at), now)):
             return None
-        row = rows[0]
-        if not _current(_db_time(row.valid_from), _db_time(row.expires_at), now):
-            return None
-        return row
+        return rows[0]
+
+    def _context(self, session, scope, kind, target_id):
+        identity = scope.identity
+        now = _utc_now()
+        current_members = [row for row in scope.authority[0]
+                           if row[1] == identity.organization_id and row[2] == scope.role
+                           and row[3] == "active" and _current(_db_time(row[4]), _db_time(row[5]), now)]
+        if len(current_members) != 1:
+            raise PermissionError("Scoped access denied.")
+        target = self._target(session, kind, target_id, identity.organization_id,
+                              engagement_ids=scope.engagement_ids)
+        member_id = current_members[0][0]
+        if (target is None or target.engagement_id not in scope.engagement_ids
+                or self._grant(session, member_id, target.engagement_id, _utc_now()) is None):
+            raise PermissionError("Scoped access denied.")
+        context = dict(
+            organization_id=identity.organization_id, vendor_id=target.vendor_id,
+            engagement_id=target.engagement_id, assessment_id=target.assessment_id,
+            evidence_id=target_id if kind == "evidence" else None,
+            object_type=kind, object_id=target_id,
+        )
+        return target, member_id, context
+
+    @staticmethod
+    def _preserve_legacy(session, target, context, now):
+        if target.note is None or target.note == "":
+            return
+        if type(target.note) is not str:
+            raise PermissionError("Scoped access denied.")
+        r = AnalystNoteRevision
+        latest = session.execute(select(r).where(
+            r.object_type == context["object_type"], r.object_id == context["object_id"],
+        ).order_by(r.id.desc()).limit(1)).scalar_one_or_none()
+        if latest is not None and latest.content == target.note:
+            return  # Already retained, including an earlier tenant's revision.
+        if latest is not None and any(getattr(latest, key) != value for key, value in context.items()):
+            # Never relabel untracked old text as the new tenant/engagement's
+            # rationale after a relationship move. An owner must reconcile it.
+            raise PermissionError("Scoped access denied.")
+        session.add(r(**context, content=target.note, origin="legacy_unknown", created_at=now))
 
     def _record(self, kind, target_id, note):
-        if (kind not in ("assessment", "evidence")
-                or not _positive_id(target_id) or not _valid_note(note)
-                or self._sessions is None or self._source is None):
+        if kind not in ("assessment", "evidence") or not _positive_id(target_id) or not _valid_note(note):
             return False
-        permission = (PERMISSION_ASSESSMENT_MANAGE if kind == "assessment"
-                      else PERMISSION_EVIDENCE_ANALYZE)
+        permission = self._permission(kind)
         model = Assessment if kind == "assessment" else Evidence
         field = Assessment.notes if kind == "assessment" else Evidence.analyst_notes
         try:
-            start = _utc_now()
-            identity = self._source.authenticated_identity()
-            if not _valid_identity(identity, start):
-                return False
-            # NEVER inherit a possibly dirty Streamlit/global ORM session.
-            # PostgreSQL write locks prevent concurrent grant/membership/target
-            # changes until commit. SQLite tests cannot prove that behavior.
-            with self._sessions() as session:
-                with session.begin(), session.no_autoflush:
-                    member = self._membership(session, identity, permission, _utc_now())
-                    if member is None:
-                        return False
-                    target = self._target(session, kind, target_id, identity.organization_id)
-                    if target is None or not _positive_id(target.engagement_id):
-                        return False
-                    grant = self._grant(session, member.id, target.engagement_id, _utc_now())
-                    if grant is None:
-                        return False
-                    end = _utc_now()
-                    current = self._source.authenticated_identity()
-                    if (not _valid_identity(current, end)
-                            or _session_identity_key(identity) != _session_identity_key(current)
-                            or not _current(_db_time(member.valid_from),
-                                            _db_time(member.expires_at), end)
-                            or not _current(_db_time(grant.valid_from),
-                                            _db_time(grant.expires_at), end)):
-                        return False
-
-                    # These are the ONLY permitted source mutations. No status,
-                    # scopes, approvals, scores, evidence paths or AI findings.
-                    changed = session.execute(
-                        update(model).where(model.id == target_id).values({field: note})
-                    )
-                    if changed.rowcount != 1:
-                        return False
-                    session.add(AuditLog(
-                        actor_subject=identity.principal.subject,
-                        actor_role=member.role,
-                        action=kind + ".review_note_updated",
-                        object_type=kind,
-                        object_id=str(target_id),
-                        vendor_id=target.vendor_id,
-                        outcome="success",
-                        # Avoid copying note contents/PII into broad audit logs.
-                    ))
-                    session.flush()
-                    # These are fresh SQL reads inside the same locked
-                    # transaction. Never rely only on pre-write snapshots.
-                    final_member = self._membership(session, identity, permission, _utc_now())
-                    final_target = self._target(
-                        session, kind, target_id, identity.organization_id,
-                    )
-                    final_grant = self._grant(session, member.id, target.engagement_id, _utc_now())
-                    final = _utc_now()
-                    current = self._source.authenticated_identity()
-                    if (final_member != member or final_target != target
-                            or final_grant != grant
-                            or not _valid_identity(current, final)
-                            or _session_identity_key(current) != _session_identity_key(identity)
-                            or not _current(_db_time(member.valid_from),
-                                            _db_time(member.expires_at), final)
-                            or not _current(_db_time(grant.valid_from),
-                                            _db_time(grant.expires_at), final)):
-                        # Returning from a managed transaction commits! Explicit
-                        # rollback makes audit and review note atomic on denial.
-                        session.rollback()
-                        return False
-                return True
+            with self._reader._authorized_transaction(permission) as (session, scope):
+                target, member_id, context = self._context(session, scope, kind, target_id)
+                identity, now = scope.identity, _utc_now()
+                self._preserve_legacy(session, target, context, now)
+                session.add(AnalystNoteRevision(
+                    **context, content=note, origin="analyst", created_at=now,
+                    actor_issuer=identity.issuer, actor_subject=identity.principal.subject,
+                    actor_role=scope.role, membership_id=member_id, session_id=identity.session_id,
+                ))
+                changed = session.execute(update(model).where(model.id == target_id).values({field: note}))
+                if changed.rowcount != 1:
+                    raise PermissionError("Scoped access denied.")
+                session.add(AuditLog(
+                    actor_subject=identity.principal.subject, actor_role=scope.role,
+                    actor_issuer=identity.issuer, organization_id=identity.organization_id,
+                    membership_id=member_id, session_id=identity.session_id,
+                    action=kind + ".review_note_updated", object_type=kind,
+                    object_id=str(target_id), vendor_id=target.vendor_id,
+                    outcome="success", created_at=now,
+                    # Never copy note text or historical rationale into audit.
+                ))
+                session.flush()
+                self._reader._finish_authorized(session, scope, permission)
+            return True
         except Exception:
-            # Session context rolls back on SQL errors. Hide existence and
-            # backend/provider diagnostics from the untrusted caller.
+            # Exceptions roll back current note, revisions AND audit together.
             return False
+
+    def _history(self, kind, target_id, *, limit=100, after_id=0):
+        if (kind not in ("assessment", "evidence") or not _positive_id(target_id)
+                or type(limit) is not int or not 1 <= limit <= 200
+                or type(after_id) is not int or after_id < 0):
+            return ()
+        permission = self._permission(kind)
+        try:
+            with self._reader._authorized_transaction(permission) as (session, scope):
+                _, _, context = self._context(session, scope, kind, target_id)
+                r = AnalystNoteRevision
+                query = select(r).where(r.id > after_id, *(getattr(r, key) == value for key, value in context.items()))
+                records = session.execute(query.order_by(r.id).limit(limit)).scalars().all()
+                result = tuple(NoteRevisionSummary(
+                    **{name: (_db_time(row.created_at) if name == "created_at" else getattr(row, name))
+                       for name in NoteRevisionSummary.__dataclass_fields__}
+                ) for row in records)
+                self._reader._finish_authorized(session, scope, permission)
+            return result
+        except Exception:
+            return ()
 
     def record_assessment_review_note(self, assessment_id, note):
         return self._record("assessment", assessment_id, note)
 
     def record_evidence_review_note(self, evidence_id, note):
         return self._record("evidence", evidence_id, note)
+
+    def list_assessment_note_revisions(self, assessment_id, *, limit=100, after_id=0):
+        return self._history("assessment", assessment_id, limit=limit, after_id=after_id)
+
+    def list_evidence_note_revisions(self, evidence_id, *, limit=100, after_id=0):
+        return self._history("evidence", evidence_id, limit=limit, after_id=after_id)

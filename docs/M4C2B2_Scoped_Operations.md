@@ -10,7 +10,7 @@ M4C-2B-1 introduces the test-only tenant-scoped read contract. M4C-2B-2 first ex
 
 ## Added contracts
 
-- `src/tenant_report_export.py`: metadata-only report with one row per *explicitly granted* engagement and assessment/evidence counts. It reuses M4C-2B-1 `TenantReadService` current identity, membership, exact grant and role checks. It performs an independent `report.export` permission check; a claimed global Admin role is ignored. Queries validate organization/vendor/engagement/assessment/evidence parent links. It rechecks identity and entitlement after data selection and CSV construction. No storage paths, source quotations, evidence bytes, risk scores or governed approvals appear in the CSV.
+- `src/tenant_report_export.py`: metadata-only report with one row per *explicitly granted* engagement and assessment/evidence counts. It reuses PR #19's locked `TenantReadService` transaction, current identity, membership, exact grant and independent `report.export` permission; a claimed global Admin role is ignored. SQL aggregates validate organization/vendor/engagement/assessment/evidence parent links. CSV preparation and final authorization occur under the same held locks. No storage paths, source quotations, evidence bytes, risk scores or governed approvals appear in the CSV.
 - `src/production_route_policy.py`: an inventory and deny-first classification for every existing legacy navigation page and common operation, plus unknown paths. Even named scoped capability routes require a separate source-authorized service; **classification never authorizes**.
 - `tests/test_tenant_report_export.py`: synthetic authorization, tenant and sibling suppression, role, revocation, expiry, race, CSV injection, and route-coverage regressions.
 
@@ -18,9 +18,28 @@ M4C-2B-1 introduces the test-only tenant-scoped read contract. M4C-2B-2 first ex
 
 The route policy is NOT connected to Streamlit/HTTP and is NOT sufficient to protect existing pages. Production startup in `src/auth_context.py` remains disabled before side effects; no IdP or cookies are wired. The existing global `render_reports` CSV and other legacy read/write/upload services remain unchanged and MUST remain blocked in any real authenticated deployment.
 
-The export consistency rechecks are a defensive proof rather than a substitute for server-side access transactions, durable revocation semantics, concurrent change handling, source-custody protections or independent security review. The future production export endpoint must reauthorize itself and audit completed exports.
+The corrected export uses one dedicated transaction through a defined issuance
+boundary. PostgreSQL locks existing membership/grants and canonical organization,
+engagement, vendor, assessment and evidence rows in that order (IDs sorted within
+each table); SQLite uses a writer reservation. CSV is prepared before the final
+session lookup, then fresh locked SQL authority/relationship and post-I/O time
+checks run. Data is returned only after successful transaction completion. A
+concurrent revocation or parent reassignment commits before acquisition or waits
+until issuance; changed/expired sessions observed at the final lookup deny.
+The export caps engagement rows at 200 and denies overflow, rather than silently
+truncating either rows or their aggregate counts. CSV formula defenses remain.
 
-`main` contains neither this work nor PR #19. Another open draft PR #18 overlaps earlier milestone planning and must be reconciled to avoid parallel authorization designs.
+This is a point-in-time issuance model, not revocation of metadata already issued.
+SQL does not atomically lease an external session store; changes after the last
+successful session observation need a future coordinated lease/delivery design.
+Authorization fingerprints still scan/lock the granted hierarchy despite bounded
+returned rows. PostgreSQL uses 3s lock waits and 10s per-statement timeouts; these
+are not whole-request cost or latency guarantees. A deployed endpoint still needs
+secure transport, export audit, session timeouts and source custody review.
+
+PR #21 remains stacked on corrected, unmerged draft PR #19. PR #18 was closed
+without merge; Issue #17 retains unfinished workspace requirements. No PR is
+merged by this correction.
 
 ## Next implementation gates
 
@@ -39,7 +58,72 @@ Compile app.py and touched code before isolated full pytest, review complete dif
 
 The trusted server-injected identity must be valid and unexpired. In one independent database transaction the operation obtains the current issuer/subject/organization membership and role, validates the requested assessment or evidence through exact organization/vendor/engagement/assessment/evidence joins, checks a unique active nonexpired grant for that engagement, and enforces the existing `assessment.manage` or `evidence.analyze` RBAC permission. Incoming Admin claims, role selectors and vendor IDs are ignored as authorization.
 
-Before commit the operation rechecks the trusted session, current membership, grant and target parent relationship. PostgreSQL locks the relevant membership/grant and target rows (`SELECT FOR UPDATE`) while the annotated field and a minimal actor/action/object AuditLog record commit atomically. The audit record intentionally never contains the review note itself, and denied/nonexistent IDs produce identical `False` results. Failed audit writes must roll back the note. A separate authorized read/service/UI integration is needed before customers can use these methods.
+Note operations use the shared read/export lock order and final authorization
+contract, avoiding a separate conflicting lock order. The legacy current-note
+field remains compatible while each secure update appends an immutable revision
+with exact record/tenant/vendor/engagement/assessment/evidence references,
+authenticated issuer/subject/effective role, membership, non-bearer session ID,
+timestamp and content. Existing nonempty legacy rationale is preserved before
+the first secure update as `legacy_unknown`, with absent historical attribution;
+its timestamp is capture time, not an invented original authorship date. Earlier
+rationale, uncertainty and evidence references remain verbatim in history.
+
+Revision reads independently reauthorize the exact current target and filter
+stored tenant and parent snapshots; a new owner or sibling grant cannot read
+earlier-scope history. When prior revision context exists, a reassignment cannot
+relabel that context's text as a new tenant's baseline; unexplained legacy edits
+after such a move fail closed. Before history exists, the first legacy capture
+can establish only the currently authorized relationship and capture time;
+original ownership, authorship and historical scope remain unverified. Any live
+legacy-data pilot needs separately reviewed ownership/provenance reconciliation.
+There is no global note-history endpoint and no new form, approval step or UI
+integration.
+
+`list_assessment_note_revisions` and `list_evidence_note_revisions` return
+immutable, exact-target history pages with `after_id` and `limit` (default 100,
+maximum 200). They require the same current analyst permission as the associated
+note operation and independently reauthorize every page.
+
+Revision, latest-note compatibility update and AuditLog event commit in the same
+transaction. The audit stores immutable-at-issuance issuer, organization,
+membership and non-bearer session snapshots alongside existing fields; it never
+contains note text. Failed revision/audit writes, late authorization failures or
+commit errors roll back all related changes. Denied/nonexistent targets look alike.
+
+## Additive history migration
+
+The smallest essential additive revision, `0015_analyst_note_revisions`, adds a
+dedicated revision table and nullable audit identity columns for legacy
+compatibility. It does not rewrite legacy notes/events, backfill identities, grant
+access or change assessment decisions. SQLite/PostgreSQL guards reject revision
+UPDATE/DELETE (and PostgreSQL TRUNCATE); normal service operations only append.
+Existing data is preserved, and automatic destructive downgrade refuses before
+mutation pending an independent retention/rollback plan. Tests apply migrations
+only to disposable synthetic databases/schemas, never production.
+
+These guards do not protect against a privileged database owner disabling them,
+nor convert legacy audit rows into a cryptographic or external immutable ledger.
+Database administration, backups, retention and deployed audit access remain
+separate security gates. Exact compilation, full-suite, PostgreSQL concurrency,
+migration and final-head Actions results are recorded in PR #21.
+
+## Correction validation record
+
+Compilation of `app.py` and every touched Python file preceded the full suites.
+SQLite: **1,692 passed, 95 skipped**, six Alembic deprecation warnings. Disposable
+PostgreSQL 16: **1,785 passed, 2 skipped**, twelve Alembic warnings. The two remaining
+skips cover PostgreSQL-only concepts in the SQLite migration parameterization;
+all PostgreSQL integration and concurrency variants ran. These fixtures use
+temporary owned schemas; the container's synthetic schema alone received the
+additive migration. No production database was accessed or migrated.
+
+Regressions include final export revocation/reparenting, SQL aggregate counts
+beyond list-page limits, CSV/commit failure, concurrent note appends retaining
+both rationales, cross-tenant/sibling history suppression, equivalent subjects
+from different issuers, late session changes, audit/revision rollback, migration
+data preservation and actual database history mutation rejection. Complete diff,
+security/compatibility and whitespace checks passed. Exact final-head CI links
+and independent review gates remain in PR #21; passing tests authorize no merge.
 
 The current `app.py` still has unrestricted legacy Assessment and Evidence Center selectors, uploads and writes. **These new operations are not registered with those pages**, and real production authentication still fails closed. This milestone does not make the existing pages, UI reporting, governed dispositions, document custody or byte retrieval safe for real customers.
 

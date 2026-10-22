@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from test_tenant_read_scope import ctx, update, NOW, ISSUER, TrustedSyntheticSource, rows
+from test_tenant_read_scope import ctx, postgres_ctx, update, NOW, ISSUER, TrustedSyntheticSource, rows
 from test_database_evidence_authority import isolated_engine as synthetic_isolated_engine
 from src.assessment_evidence_access import AuthenticatedIdentity
 from src.authz import Principal, ROLE_ADMIN, ROLE_VIEWER
-from src.db import Engagement, EngagementAccessGrant, OrganizationMembership, Vendor
+from src.db import Assessment, Engagement, EngagementAccessGrant, Evidence, OrganizationMembership, Vendor
 from src.production_route_policy import (
     LEGACY_PAGES, LEGACY_OPERATIONS, SCOPED_SERVICE_CAPABILITIES,
     classify_production_route,
@@ -115,7 +115,7 @@ def test_csv_formula_prefixes_always_quote_with_apostrophe(ctx, prefix):
 def test_grant_revocation_during_projection_denies_csv(ctx, monkeypatch):
     authorized_admin(ctx)
     service = TenantReportService(ctx.factory, identity_source=ctx.source)
-    original = service._reader._project
+    original = service._data
     first = [True]
     def revoked(*args, **kwargs):
         answer = original(*args, **kwargs)
@@ -123,7 +123,7 @@ def test_grant_revocation_during_projection_denies_csv(ctx, monkeypatch):
             first[0] = False
             update(ctx, EngagementAccessGrant, 701, status="revoked")
         return answer
-    monkeypatch.setattr(service._reader, "_project", revoked)
+    monkeypatch.setattr(service, "_data", revoked)
     assert service.build() is None
 
 
@@ -160,7 +160,9 @@ def test_outage_after_report_query_denies_with_no_diagnostics(ctx, monkeypatch, 
     original = service._csv
     def outage(*args, **kwargs):
         answer = original(*args, **kwargs)
-        service._reader._sessions = failed
+        # The already-open transaction must fail closed on its final SQL
+        # authority check, rather than relying on a new session factory.
+        monkeypatch.setattr(service._reader, "_scope", lambda *args, **kwargs: failed())
         return answer
     monkeypatch.setattr(service, "_csv", outage)
     assert service.build() is None
@@ -276,3 +278,209 @@ def test_grant_revoked_while_csv_is_built_denies_export(ctx, monkeypatch):
         return content
     monkeypatch.setattr(service, "_csv", revoked_after_queries)
     assert service.build() is None
+
+
+@pytest.mark.parametrize("change", [
+    "member_revoke", "grant_revoke", "role", "vendor_org", "engagement_parent",
+    "assessment_parent", "evidence_parent", "member_expiry", "grant_expiry",
+    "session_expiry", "rotation", "unavailable",
+])
+def test_final_identity_lookup_cannot_release_stale_export(ctx, monkeypatch, change):
+    """Original final-window bug: the CSV exists before the blocking lookup.
+
+    SQLite's shared synthetic connection permits this deliberate internal
+    mutation injection. Physical PostgreSQL connections below separately prove
+    that external writers actually serialize through the issuance boundary.
+    """
+    authorized_admin(ctx)
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    prepared, mutated = [False], [False]
+    original_csv = service._csv
+    def csv_ready(*args, **kwargs):
+        result = original_csv(*args, **kwargs)
+        prepared[0] = True
+        return result
+    def final_identity():
+        if prepared[0] and not mutated[0]:
+            mutated[0] = True
+            mutations = {
+                "member_revoke": (OrganizationMembership, 501, {"status": "revoked"}),
+                "grant_revoke": (EngagementAccessGrant, 701, {"status": "revoked"}),
+                "role": (OrganizationMembership, 501, {"role": ROLE_VIEWER}),
+                "vendor_org": (Vendor, 11, {"organization_id": 2}),
+                "engagement_parent": (Engagement, 101, {"vendor_id": 22}),
+                "assessment_parent": (Assessment, 1001, {"engagement_id": 102}),
+                "evidence_parent": (Evidence, 9001, {"assessment_id": 1002}),
+            }
+            if change in mutations:
+                model, identifier, values = mutations[change]
+                update(ctx, model, identifier, **values)
+            elif change in ("member_expiry", "grant_expiry"):
+                model, identifier = ((OrganizationMembership, 501) if change == "member_expiry"
+                                     else (EngagementAccessGrant, 701))
+                update(ctx, model, identifier, expires_at=NOW + timedelta(seconds=1))
+                ctx.clock[0] = NOW + timedelta(seconds=1)
+            elif change == "session_expiry":
+                ctx.clock[0] = ctx.identity.expires_at
+            elif change == "rotation":
+                ctx.source.identity = replace(ctx.identity, session_id="sid_final_export_rotation")
+            else:
+                ctx.source.identity = None
+        return ctx.source.identity
+    monkeypatch.setattr(service, "_csv", csv_ready)
+    monkeypatch.setattr(ctx.source, "authenticated_identity", final_identity)
+    assert service.build() is None
+    assert prepared[0] and mutated[0], "The final identity I/O must be exercised after CSV construction"
+
+
+def test_export_aggregates_all_scoped_records_beyond_list_page_limit(ctx):
+    authorized_admin(ctx)
+    with ctx.factory() as database:
+        database.add_all([
+            Assessment(id=20000 + i, vendor_id=11, engagement_id=101, assessment_type="Synthetic count")
+            for i in range(130)
+        ])
+        database.flush()
+        database.add_all([
+            Evidence(id=30000 + i * 2 + j, vendor_id=11, assessment_id=20000 + i,
+                     document_type="Synthetic", document_name=f"synthetic-count-{i}-{j}.txt")
+            for i in range(130) for j in range(2)
+        ])
+        database.commit()
+    result = export(ctx)
+    assert result is not None
+    assert len(result.rows) == 1
+    assert (result.rows[0].assessments, result.rows[0].evidence_items) == (131, 261)
+    assert "synthetic-count" not in result.csv_bytes.decode("utf-8")
+
+
+def test_failed_transaction_commit_discards_already_constructed_csv(ctx, monkeypatch, caplog):
+    from sqlalchemy import event
+    authorized_admin(ctx)
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    prepared = [False]
+    original_csv = service._csv
+    def csv_ready(*args, **kwargs):
+        content = original_csv(*args, **kwargs)
+        prepared[0] = True
+        return content
+    def failed_commit(session):
+        raise RuntimeError("synthetic-private-export-commit-diagnostic")
+    monkeypatch.setattr(service, "_csv", csv_ready)
+    event.listen(ctx.factory.class_, "before_commit", failed_commit)
+    try:
+        assert service.build() is None
+    finally:
+        event.remove(ctx.factory.class_, "before_commit", failed_commit)
+    assert prepared[0], "Constructed CSV must not be issued before successful transaction completion"
+    assert "synthetic-private-export-commit-diagnostic" not in caplog.text
+
+
+def test_export_row_bound_rejects_overflow_instead_of_releasing_partial_report(ctx):
+    authorized_admin(ctx)
+    with ctx.factory() as database:
+        database.add_all([Engagement(id=2000 + i, vendor_id=11, service_name=f"Synthetic service {i}")
+                          for i in range(200)])
+        database.flush()
+        database.add_all([
+            EngagementAccessGrant(id=2000 + i, membership_id=501, engagement_id=2000 + i,
+                                  status="active", valid_from=NOW - timedelta(days=1),
+                                  expires_at=NOW + timedelta(days=1))
+            for i in range(199)
+        ])
+        database.commit()
+    result = export(ctx)
+    assert result is not None and len(result.rows) == 200
+    with ctx.factory() as database:
+        database.add(EngagementAccessGrant(id=2199, membership_id=501, engagement_id=2199,
+                                          status="active", valid_from=NOW - timedelta(days=1),
+                                          expires_at=NOW + timedelta(days=1)))
+        database.commit()
+    assert export(ctx) is None
+
+
+@pytest.mark.parametrize("mutation", ["member", "grant", "vendor", "engagement", "assessment", "evidence"])
+def test_postgres_export_locks_authority_and_exact_parents_through_issuance(postgres_ctx, monkeypatch, mutation):
+    """Real two-connection UPDATE attempts cannot race the prepared export."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from sqlalchemy import text, update as sql_update
+    from sqlalchemy.exc import OperationalError
+    ctx = postgres_ctx
+    authorized_admin(ctx)
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    at_final, release = Event(), Event()
+    model, identifier, values = {
+        "member": (OrganizationMembership, 501, {"status": "revoked"}),
+        "grant": (EngagementAccessGrant, 701, {"status": "revoked"}),
+        "vendor": (Vendor, 11, {"organization_id": 2}),
+        "engagement": (Engagement, 101, {"vendor_id": 22}),
+        "assessment": (Assessment, 1001, {"engagement_id": 102}),
+        "evidence": (Evidence, 9001, {"assessment_id": 1002}),
+    }[mutation]
+    original_identity = ctx.source.authenticated_identity
+    def identity():
+        result = original_identity()
+        if ctx.source.calls == 2:
+            at_final.set()
+            if not release.wait(10):
+                raise RuntimeError("Synthetic export coordination timed out")
+        return result
+    monkeypatch.setattr(ctx.source, "authenticated_identity", identity)
+    def concurrent_writer():
+        with ctx.factory() as database:
+            database.execute(text("SET LOCAL lock_timeout = '500ms'"))
+            with pytest.raises(OperationalError) as error:
+                database.execute(sql_update(model).where(model.id == identifier).values(**values))
+            assert getattr(error.value.orig, "sqlstate", None) == "55P03"
+            database.rollback()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        pending = executor.submit(service.build)
+        try:
+            assert at_final.wait(10), "Prepared CSV must reach final session check under SQL locks"
+            executor.submit(concurrent_writer).result(timeout=10)
+        finally:
+            release.set()
+        result = pending.result(timeout=10)
+    assert result is not None
+    assert [(row.vendor_id, row.engagement_id, row.assessments, row.evidence_items)
+            for row in result.rows] == [(11, 101, 1, 1)]
+    # After the defined issuance boundary the writer can commit. Each new
+    # request must independently authorize and cannot release the stale report.
+    with ctx.factory() as database:
+        database.execute(sql_update(model).where(model.id == identifier).values(**values))
+        database.commit()
+    next_result = service.build()
+    if mutation in ("assessment", "evidence"):
+        # Moving a child out of scope changes only its new aggregate; it does
+        # not revoke the parent engagement or justify a global empty fallback.
+        assert next_result is not None
+        assert next_result.rows[0].evidence_items == 0
+        assert next_result.rows[0].assessments == (0 if mutation == "assessment" else 1)
+    else:
+        assert next_result is None
+
+
+@pytest.mark.parametrize("change", ["member_expiry", "grant_expiry", "session_expiry", "rotation", "unavailable"])
+def test_postgres_export_discards_csv_when_final_session_lookup_changes_authority(postgres_ctx, monkeypatch, change):
+    ctx = postgres_ctx
+    authorized_admin(ctx)
+    if change == "member_expiry":
+        update(ctx, OrganizationMembership, 501, expires_at=NOW + timedelta(seconds=1))
+    elif change == "grant_expiry":
+        update(ctx, EngagementAccessGrant, 701, expires_at=NOW + timedelta(seconds=1))
+    service = TenantReportService(ctx.factory, identity_source=ctx.source)
+    original_identity = ctx.source.authenticated_identity
+    def identity():
+        value = original_identity()
+        if ctx.source.calls == 2:
+            if change == "rotation":
+                ctx.source.identity = replace(ctx.identity, session_id="sid_pg_final_export_rotation")
+                return ctx.source.identity
+            if change == "unavailable":
+                return None
+            ctx.clock[0] = ctx.identity.expires_at if change == "session_expiry" else NOW + timedelta(seconds=1)
+        return value
+    monkeypatch.setattr(ctx.source, "authenticated_identity", identity)
+    assert service.build() is None
+    assert ctx.source.calls == 2
