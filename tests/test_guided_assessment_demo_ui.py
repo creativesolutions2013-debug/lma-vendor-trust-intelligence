@@ -446,3 +446,88 @@ def test_actual_app_production_mode_still_fails_closed(no_live_effects, monkeypa
     assert at.exception
     assert any("Production authentication is not configured" in item.message for item in at.exception)
     assert not at.title and not at.dataframe
+
+
+def finish(at):
+    step(at, 'Results')
+    widget(at.button, 'Finish assessment review (demo)').click()
+    return run(at)
+
+
+def test_actual_completion_preserves_open_concerns_and_downloads_snapshot(no_live_effects, downloads):
+    from src.guided_assessment_demo import report_payload
+    at = app(actual=True)
+    assert 'Review walkthrough: In progress' in shown(at)
+    assert 'guided_demo:completion' not in at.session_state
+    widget(at.selectbox, 'Demo scenario').set_value('exception')
+    run(at)
+    model = model_for(at)
+    tls = next(row for row in model.worklist.rows if row.control_id == 'ENC-01')
+    review(at, tls.requirement_id, 'Create Finding', 'The alternate TLS listener remains unresolved.')
+    review(at, tls.requirement_id, 'Accept', 'Discuss the draft; keep the finding open.')
+    before = report_payload(model_for(at), at.session_state['guided_demo:actions'])
+    finish(at)
+    completion = at.session_state['guided_demo:completion']
+    assert 'Assessment review completed (demo) — vendor decision pending; open actions remain' in shown(at)
+    assert 'Open draft findings: 1' in shown(at)
+    assert 'Targeted follow-ups: 1' in shown(at)
+    assert '1 active; 1 superseded; 0 stale' in shown(at)
+    assert before['targeted_requests'][0]['question'] in shown(at)
+    completed = json.loads(downloads[-1][0])
+    assert completed == report_payload(model_for(at), at.session_state['guided_demo:actions'], completion)
+    assert completed['review_completion']['completed_at'] in shown(at)
+    assert completed['review_completion']['snapshot_fingerprint'] in shown(at)
+    before.pop('review_completion')
+    assert completion.snapshot == before
+    assert all(row['Provisional outcome'] == 'Needs Review' for _, row in worklist_table(at).iterrows())
+    snapshot_bytes = downloads[-1][0]
+    run(at)
+    assert downloads[-1][0] == snapshot_bytes
+    assert not any(b.label == 'Finish assessment review (demo)' for b in at.button)
+    other = app()
+    assert 'Review walkthrough: In progress' in shown(other)
+    assert 'guided_demo:completion' not in other.session_state
+    widget(at.button, 'Reopen demo review').click()
+    run(at)
+    assert widget(at.radio, 'Demo step').value == 'Analyst Review'
+    assert 'Review walkthrough: In progress' in shown(at)
+    assert len(at.session_state['guided_demo:actions']) == 2
+    assert completion.snapshot == before
+    finish(at)
+    widget(at.button, 'Start another assessment').click()
+    run(at)
+    assert widget(at.radio, 'Demo step').value == 'Start'
+    assert at.session_state['guided_demo:actions'] == ()
+    assert 'guided_demo:completion' not in at.session_state
+
+
+@pytest.mark.parametrize('change', ['risk', 'replay', 'scenario', 'annotation', 'reset'])
+def test_completion_cannot_survive_changed_context(no_live_effects, downloads, change):
+    at = app()
+    finish(at)  # No per-row approvals or annotations are required to finish.
+    snapshot = at.session_state['guided_demo:completion'].snapshot_json
+    if change == 'risk':
+        widget(at.selectbox, 'Risk context').set_value('Limited test data')
+    elif change == 'scenario':
+        widget(at.selectbox, 'Demo scenario').set_value('exception')
+    elif change == 'replay':
+        step(at, 'Questions')
+        widget(at.button, 'Replay new evidence received').click()
+    elif change == 'annotation':
+        target = model_for(at).worklist.rows[0]
+        review(at, target.requirement_id, 'Challenge', 'Reopen this interpretation.')
+        assert 'guided_demo:completion' not in at.session_state
+        assert 'Review walkthrough: In progress' in shown(at)
+    else:
+        widget(at.button, 'Reset demo').click()
+    run(at)
+    assert 'guided_demo:completion' not in at.session_state
+    assert 'Review walkthrough: In progress' in shown(at)
+    step(at, 'Results')
+    assert not any('Assessment review completed' in s.value for s in at.success)
+    assert json.loads(downloads[-1][0])['review_completion']['completed_at'] is None
+    assert widget(at.button, 'Finish assessment review (demo)')
+    assert json.loads(snapshot)['targeted_requests']
+    finish(at)
+    current = at.session_state['guided_demo:completion']
+    assert current.snapshot['evidence_received'] == (change == 'replay')

@@ -11,6 +11,7 @@ from src.control_assurance_presentation import render_assurance_summary
 from src.guided_assessment_demo import (
     ACTIONS, RISK_PROFILES, SCENARIOS, active_actions, build_demo, record_action,
     report_bytes, report_payload, row_fingerprint, source_role, SourceRole,
+    complete_review, completion_is_current,
 )
 
 
@@ -48,6 +49,46 @@ def _receive():
 
 def _clear_review_draft():
     st.session_state.pop(PREFIX + "rationale", None)
+
+
+def _finish(model, actions):
+    if st.session_state.get(PREFIX + "completion") is None:
+        st.session_state[PREFIX + "completion"] = complete_review(model, actions)
+
+
+def _reopen():
+    st.session_state.pop(PREFIX + "completion", None)
+    st.session_state[PREFIX + "step"] = "Analyst Review"
+
+
+def _completed_summary(completion):
+    snapshot = completion.snapshot
+    st.success("Assessment review completed (demo) — vendor decision pending; open actions remain")
+    st.caption("Completed at (UTC): " + completion.completed_at)
+    st.caption("As-of report fingerprint: " + completion.fingerprint)
+    st.write("**Synthetic case:** " + snapshot["scenario_id"])
+    scope = snapshot["scope"]
+    st.write(f"**Assessed scope:** {scope['service']} · {scope['environment']} · as of {scope['as_of']}")
+    st.caption("Synthetic engagement: " + scope["engagement_id"])
+    statuses = {}
+    for row in snapshot["requirements"]:
+        statuses[row["outcome"]] = statuses.get(row["outcome"], 0) + 1
+    st.write("**Requirement status summary:** " + "; ".join(f"{status}: {count}" for status, count in statuses.items()))
+    actions = snapshot["analyst_actions"]
+    st.write(f"**Inherent risk:** {snapshot['risk']['inherent_score']} · {snapshot['risk']['inherent_rating']}")
+    st.info(snapshot["risk"]["residual_recommendation"])
+    st.write(f"Simulated annotations: {sum(a['active'] for a in actions)} active; "
+             f"{sum(a['status'] == 'Superseded' for a in actions)} superseded; "
+             f"{sum(a['status'] == 'Stale context' for a in actions)} stale.")
+    st.warning(f"Open draft findings: {len(snapshot['findings'])} · "
+               f"Targeted follow-ups: {len(snapshot['targeted_requests'])}. "
+               "Unconfirmed interpretations, evidence gaps and risk concerns remain open.")
+    for request in snapshot["targeted_requests"]:
+        st.write("**Remaining question:** " + request["question"])
+    st.write("**Next steps:** Obtain missing evidence, validate source meanings and review exceptions; "
+             "vendor decisions and risk authorization require independent governance outside this demo.")
+    st.button("Reopen demo review", key=PREFIX + "reopen", on_click=_reopen)
+    st.button("Start another assessment", key=PREFIX + "another", on_click=_reset)
 
 
 def _matches(model):
@@ -281,6 +322,8 @@ def _review(model, actions):
             st.error(str(error))
         else:
             st.session_state[PREFIX + "actions"] = actions
+            if st.session_state.pop(PREFIX + "completion", None) is not None:
+                st.rerun()
             st.success("Simulated review recorded for this source and requirement context.")
             if action == "Accept":
                 st.info(REVIEW_LIMIT)
@@ -288,7 +331,14 @@ def _review(model, actions):
     _ledger(model, actions)
 
 
-def _results(model, actions):
+def _results(model, actions, completion=None):
+    if completion is not None:
+        _completed_summary(completion)
+    else:
+        st.info("Finish documents this synthetic review only. It does not approve the vendor, "
+                "confirm technical facts or accept risk. Open actions remain.")
+        st.button("Finish assessment review (demo)", key=PREFIX + "finish",
+                  type="primary", on_click=_finish, args=(model, actions))
     st.subheader("Draft assessment results")
     _exceptions(model)
     _table(model, actions)
@@ -316,7 +366,7 @@ def _results(model, actions):
     else:
         st.write("No simulated finding recorded. Open exceptions remain visible regardless of reviewer actions.")
     _ledger(model, actions)
-    st.download_button("Download synthetic assessment report", data=report_bytes(model, actions),
+    st.download_button("Download synthetic assessment report", data=report_bytes(model, actions, completion),
                        file_name="lma_synthetic_assessment_report.json", mime="application/json",
                        key=PREFIX + "report")
     st.caption("The download contains synthetic sources, exact citations, provisional results and the simulated review ledger. It grants no approval.")
@@ -354,9 +404,15 @@ def render_guided_assessment_demo():
     st.session_state.setdefault(PREFIX + "received", False)
     st.session_state.setdefault(PREFIX + "actions", ())
     model = build_demo(scenario_id, st.session_state[PREFIX + "received"], risk_profile)
+    actions = st.session_state[PREFIX + "actions"]
+    completion = st.session_state.get(PREFIX + "completion")
+    if completion is not None and not completion_is_current(model, actions, completion):
+        st.session_state.pop(PREFIX + "completion", None)
+        completion = None
+        st.warning("Demo review reopened: evidence, context or annotations changed. Finish again to capture a current summary.")
+    st.caption("Review walkthrough: " + ("Completed (demo only); vendor decision pending" if completion else "In progress"))
     st.caption(f"Service: {model.scenario.scope.service} · {model.scenario.scope.environment} · Synthetic assessment date: {model.scenario.scope.as_of}")
     step = st.radio("Demo step", STEPS, horizontal=True, key=PREFIX + "step")
-    actions = st.session_state[PREFIX + "actions"]
     if step == "Start":
         _start(model)
     elif step == "Evidence":
@@ -368,7 +424,7 @@ def render_guided_assessment_demo():
     elif step == "Analyst Review":
         _review(model, actions)
     else:
-        _results(model, actions)
+        _results(model, actions, completion)
     navigation = st.columns(2)
     position = STEPS.index(step)
     navigation[0].button("Back", key=PREFIX + "back", disabled=position == 0,

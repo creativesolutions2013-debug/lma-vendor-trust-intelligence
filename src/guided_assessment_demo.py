@@ -256,7 +256,7 @@ def _citations(row):
     ) for bound in row.review.evidence for segment in bound.document.segments] if row.review else []
 
 
-def report_payload(model, actions):
+def _assessment_payload(model, actions):
     """Export the same current rows, source segments and explicit session ledger."""
     history = _actions(actions)
     active = active_actions(model, history)
@@ -351,5 +351,47 @@ def report_payload(model, actions):
     return json.loads(json.dumps(payload, ensure_ascii=False))
 
 
-def report_bytes(model, actions):
-    return (json.dumps(report_payload(model, actions), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+@dataclass(frozen=True)
+class DemoCompletion:
+    completed_at: str
+    fingerprint: str
+    snapshot_json: str
+
+    @property
+    def snapshot(self):
+        # Return a new value: callers cannot mutate the captured as-of report.
+        return json.loads(self.snapshot_json)
+
+
+def complete_review(model, actions):
+    """Capture documentation of a synthetic review; never a vendor decision."""
+    payload = _assessment_payload(model, actions)
+    return DemoCompletion(
+        datetime.now(timezone.utc).isoformat(), _digest(payload),
+        json.dumps(payload, ensure_ascii=False, sort_keys=True),
+    )
+
+
+def completion_is_current(model, actions, completion):
+    return (type(completion) is DemoCompletion
+            and completion.fingerprint == _digest(completion.snapshot)
+            and completion.fingerprint == _digest(_assessment_payload(model, actions)))
+
+
+def report_payload(model, actions, completion=None):
+    if completion is not None and not completion_is_current(model, actions, completion):
+        raise ValueError("Completion context changed; reopen the demo review and finish again.")
+    payload = completion.snapshot if completion is not None else _assessment_payload(model, actions)
+    payload["review_completion"] = {
+        "status": "Completed (demo review only)" if completion is not None else "In progress",
+        "completed_at": completion.completed_at if completion is not None else None,
+        "snapshot_fingerprint": completion.fingerprint if completion is not None else None,
+        "vendor_decision": "Pending", "vendor_approved": False,
+        "technical_facts_confirmed_by_completion": False, "risk_accepted": False,
+        "limitation": "Completes the synthetic review walkthrough only; open evidence, findings and risk concerns remain unresolved.",
+    }
+    return payload
+
+
+def report_bytes(model, actions, completion=None):
+    return (json.dumps(report_payload(model, actions, completion), ensure_ascii=False, indent=2) + "\n").encode("utf-8")

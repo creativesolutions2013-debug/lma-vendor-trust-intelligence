@@ -64,6 +64,24 @@ data access. They are outside this isolated demo and are not tenant-safe routes.
    effectiveness is manufactured. Use the closing discussion guide for feedback.
 
 Use **Continue**, **Back**, or the step selector without leaving the session.
+On **Results**, click **Finish assessment review (demo)** to complete the review
+walkthrough in one click, even with open gaps or unreviewed requirements. This
+does not approve the vendor, confirm technical facts, accept risk or close findings.
+The completed summary shows the assessed scope, timestamp, requirement statuses,
+annotation counts, open findings and remaining questions. Existing exceptions,
+source quotations, customer policy thresholds and the illustrative residual hold
+remain visible. The report uses the same immutable as-of snapshot and includes
+`review_completion` metadata with vendor decision pending and approval/risk flags
+false. The snapshot fingerprint covers the complete captured assessment payload;
+it establishes consistency, not authenticity or a governed audit record.
+
+**Reopen demo review** retains annotations and returns to Analyst Review for
+corrections; finishing again captures a new snapshot. Evidence replay, risk-context
+changes or new annotations automatically reopen a completed review. Scenario
+changes reset the walkthrough as before. **Start another assessment** clears the
+current session's demo state and returns to Start. Completion is session-only and
+is not shared between browsers or written to a database.
+
 **Reset demo** restores the initial scenario and clears only this demo's state.
 Changing scenarios starts a fresh walkthrough; independent browser sessions do
 not share review state.

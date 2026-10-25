@@ -290,3 +290,45 @@ def test_pure_demo_composition_and_report_work_with_db_and_network_operations_bl
     action = record_action(model, (), rows(model)["ENC-01"].requirement_id,
                            "Request Evidence", "Request focused alternate-listener verification in this simulation only.")
     assert report_bytes(model, action).startswith(b"{\n")
+
+
+@pytest.mark.parametrize('scenario', ['gap', 'exception'])
+def test_completion_is_immutable_as_of_report_and_never_approves(scenario):
+    from dataclasses import FrozenInstanceError
+    from src.guided_assessment_demo import complete_review, completion_is_current
+
+    model = build_demo(scenario)
+    target = rows(model)['ENC-01']
+    actions = record_action(model, (), target.requirement_id, 'Create Finding', 'Open TLS concern.')
+    actions = record_action(model, actions, target.requirement_id, 'Accept', 'Draft discussion only.')
+    before = report_payload(model, actions)
+    completion = complete_review(model, actions)
+    assert completion_is_current(model, actions, completion)
+    completed = report_payload(model, actions, completion)
+    assert json.loads(report_bytes(model, actions, completion)) == completed
+    metadata = completed.pop('review_completion')
+    before.pop('review_completion')
+    assert completed == before == completion.snapshot
+    assert metadata['completed_at'] == completion.completed_at
+    assert metadata['snapshot_fingerprint'] == completion.fingerprint
+    assert metadata['vendor_decision'] == 'Pending'
+    assert metadata['vendor_approved'] is metadata['risk_accepted'] is False
+    assert metadata['technical_facts_confirmed_by_completion'] is False
+    assert completed['findings'] and completed['targeted_requests']
+    assert all(row['outcome'] == 'Needs Review' for row in completed['requirements'])
+    assert completed['risk']['residual_score'] is None
+    changed_copy = completion.snapshot
+    changed_copy['requirements'].clear()
+    assert completion.snapshot['requirements']
+    with pytest.raises(FrozenInstanceError):
+        completion.completed_at = 'changed'
+    for revised, revised_actions in (
+        (build_demo(scenario, evidence_received=True), actions),
+        (build_demo(scenario, risk_profile=RISK_PROFILES[1]), actions),
+        (build_demo('exception' if scenario == 'gap' else 'gap'), actions),
+        (model, record_action(model, actions, target.requirement_id, 'Challenge', 'Still unresolved.')),
+    ):
+        assert not completion_is_current(revised, revised_actions, completion)
+        with pytest.raises(ValueError, match='context changed'):
+            report_bytes(revised, revised_actions, completion)
+    assert completion.snapshot == before
