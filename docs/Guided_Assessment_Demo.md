@@ -54,6 +54,11 @@ data access. They are outside this isolated demo and are not tenant-safe routes.
    actions describe work outside this demo; simulated Accept cannot perform them.
    Source/threshold changes invalidate current annotations.
    Earlier actions and original cited context remain in the session history.
+   **Create finding for [selected requirement ID]** shows the selected title,
+   customer threshold and bound source context beside the action. The recording
+   confirmation names that requirement explicitly. Identical findings with the same requirement,
+   context fingerprint and trimmed rationale are rejected; distinct rationales or
+   changed contexts remain recordable, and prior records are never removed.
    Draft findings require explicit re-review and cannot disappear behind a later
    Accept annotation or changed evidence.
 6. **Results:** Inspect all requirement outcomes, simulated actions and draft

@@ -590,3 +590,69 @@ def test_completed_walkthrough_downloads_original_artifacts_and_both_risk_positi
     assert widget(at.metric, 'Inherent risk').value == '36 · Moderate'
     assert widget(at.metric, 'Residual risk').value == 'Pending — no numeric score'
     assert 'Provisional Moderate hold' in shown(at)
+
+
+def test_finding_context_confirmation_and_duplicate_guard_preserve_association(no_live_effects, downloads, packages):
+    from io import BytesIO
+    from zipfile import ZipFile
+    from src.guided_assessment_demo import report_payload
+    at = app(actual=True)
+    widget(at.selectbox, 'Demo scenario').set_value('exception')
+    run(at)
+    model = model_for(at)
+    tls = next(row for row in model.worklist.rows if row.control_id == 'ENC-01')
+    step(at, 'Analyst Review')
+    widget(at.selectbox, 'Review requirement').set_value(tls.requirement_id)
+    run(at)
+    widget(at.radio, 'Simulated analyst action').set_value('Create Finding')
+    run(at)
+    assert f'Create finding for {tls.requirement_id}' in widget(at.radio, 'Simulated analyst action').options
+    assert f'Finding for {tls.requirement_id} · {tls.title}' in shown(at)
+    assert 'Customer threshold: ' + tls.review.threshold_summary in shown(at)
+    source_context = [caption.value for caption in at.caption if caption.value.startswith('Source context:')]
+    for bound in tls.review.evidence:
+        assert any(bound.document.filename in text and bound.source.account_scope in text
+                   and all(s.location in text for s in bound.document.segments) for text in source_context)
+    assert not any('vm-remediation-tickets' in text for text in source_context)
+    reason = 'The alternate production TLS listener requires validation and remediation evidence.'
+    widget(at.text_area, 'Review rationale').set_value(reason)
+    run(at)
+    widget(at.button, 'Record simulated review').click()
+    run(at)
+    assert any(f'Create Finding recorded for {tls.requirement_id} · {tls.title}' in item.value for item in at.success)
+    history = at.session_state['guided_demo:actions']
+    before = report_payload(model_for(at), history)
+    widget(at.button, 'Record simulated review').click()
+    run(at)
+    assert any('identical draft finding already exists for ENC-02.TLS' in item.value for item in at.error)
+    assert at.session_state['guided_demo:actions'] == history
+    assert report_payload(model_for(at), history) == before
+    # A distinct finding stays possible; completion/package preserve exact TLS provenance.
+    widget(at.text_area, 'Review rationale').set_value('Independently validate the alternate listener inventory.')
+    run(at)
+    widget(at.button, 'Record simulated review').click()
+    run(at)
+    finish(at)
+    with ZipFile(BytesIO(packages[-1])) as archive:
+        report = json.loads(archive.read('report.json'))
+        assert len(report['findings']) == 2
+        for finding in report['findings']:
+            assert finding['requirement_id'] == tls.requirement_id
+            assert all(c['document_id'].startswith('tls-') for c in finding['citations'])
+        assert report['risk']['residual_score'] is None
+        assert report['review_completion']['vendor_approved'] is False
+    # Confirmation survives the rerun needed to reopen a completed review.
+    step(at, 'Analyst Review')
+    widget(at.text_area, 'Review rationale').set_value('A separate post-completion scope concern.')
+    run(at)
+    widget(at.button, 'Record simulated review').click()
+    run(at)
+    assert 'guided_demo:completion' not in at.session_state
+    assert any(tls.requirement_id in item.value for item in at.success)
+    vm = next(row for row in model.worklist.rows if row.requirement_id == 'VM-01.REMEDIATION')
+    widget(at.selectbox, 'Review requirement').set_value(vm.requirement_id)
+    run(at)
+    assert widget(at.text_area, 'Review rationale').value == ''
+    assert 'Create finding for VM-01.REMEDIATION' in widget(at.radio, 'Simulated analyst action').options
+    assert f'Finding for {vm.requirement_id} · {vm.title}' in shown(at)
+    assert any('vm-remediation-tickets' in c.value for c in at.caption if c.value.startswith('Source context:'))

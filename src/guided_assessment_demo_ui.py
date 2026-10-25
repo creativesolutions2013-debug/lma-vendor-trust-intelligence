@@ -326,7 +326,20 @@ def _review(model, actions):
                                   key=PREFIX + "review_requirement", on_change=_clear_review_draft)
     row = next(row for row in model.worklist.rows if row.requirement_id == requirement_id)
     _detail(row)
-    action = st.radio("Simulated analyst action", ACTIONS, format_func=_action_label, key=PREFIX + "action", horizontal=True)
+    action = st.radio("Simulated analyst action", ACTIONS,
+                      format_func=lambda value: f"Create finding for {requirement_id}" if value == "Create Finding" else _action_label(value),
+                      key=PREFIX + "action", horizontal=True)
+    if action == "Create Finding":
+        with st.container(border=True):
+            st.markdown(f"**Finding for {requirement_id} · {row.title}**")
+            st.write("Customer threshold: " + (row.review.threshold_summary if row.review else row.threshold))
+            if row.presentation:
+                st.caption("Customer requirement: " + row.presentation.customer_requirement)
+            if row.review:
+                for bound in row.review.evidence:
+                    st.caption(f"Source context: {bound.document.filename} · {source_role(bound).value} · "
+                               f"{bound.source.service} · {bound.source.environment} · {bound.source.account_scope} · "
+                               + ", ".join(segment.location for segment in bound.document.segments))
     rationale = st.text_area("Review rationale", key=PREFIX + "rationale", max_chars=1200,
                              placeholder="Explain your judgment using the source, requirement and unresolved uncertainty.")
     if st.button("Record simulated review", key=PREFIX + "record", disabled=not rationale.strip()):
@@ -336,11 +349,15 @@ def _review(model, actions):
             st.error(str(error))
         else:
             st.session_state[PREFIX + "actions"] = actions
+            st.session_state[PREFIX + "record_confirmation"] = (
+                f"Simulated {action} recorded for {requirement_id} · {row.title}. Source and requirement context retained.")
             if st.session_state.pop(PREFIX + "completion", None) is not None:
                 st.rerun()
-            st.success("Simulated review recorded for this source and requirement context.")
-            if action == "Accept":
-                st.info(REVIEW_LIMIT)
+    confirmation = st.session_state.pop(PREFIX + "record_confirmation", None)
+    if confirmation:
+        st.success(confirmation)
+        if action == "Accept":
+            st.info(REVIEW_LIMIT)
     st.caption("Challenge, Request Evidence and Create Finding record draft reviewer intentions. They do not change evaluator outcomes or send vendor messages.")
     _ledger(model, actions)
 

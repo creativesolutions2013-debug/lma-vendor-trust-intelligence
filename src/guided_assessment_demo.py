@@ -219,6 +219,14 @@ def record_action(model, actions, requirement_id, action, rationale):
             or any(ord(char) < 32 and char not in "\n\t" or ord(char) == 127 for char in rationale)):
         raise ValueError("Choose a current requirement and action, with a 1–1200 character review rationale.")
     row = rows[0]
+    fingerprint = row_fingerprint(model, row)
+    if action == "Create Finding" and any(
+        previous.action == "Create Finding" and previous.requirement_id == requirement_id
+        and previous.fingerprint == fingerprint and previous.rationale.strip() == rationale.strip()
+        for previous in history
+    ):
+        raise ValueError(f"An identical draft finding already exists for {requirement_id} in this source and requirement context. "
+                         "Use a distinct rationale for a separate finding.")
     citations = tuple(DemoCitation(
         f"Supplied {bound.source.evidence_kind}; {bound.source.service} · {bound.source.environment} · "
         f"{bound.source.account_scope}; observed {bound.source.observed_on}; captured {bound.source.captured_on}; "
@@ -227,7 +235,7 @@ def record_action(model, actions, requirement_id, action, rationale):
         source_role(bound).value, bound.source.origin, bound.source.document_id,
     ) for bound in row.review.evidence for segment in bound.document.segments) if row.review else ()
     return history + (DemoAction(
-        requirement_id, row_fingerprint(model, row), action, rationale.strip(),
+        requirement_id, fingerprint, action, rationale.strip(),
         datetime.now(timezone.utc).isoformat(),
         citations, row.presentation.customer_requirement if row.presentation else "Customer context unavailable",
         row.review.threshold_summary if row.review else row.threshold,

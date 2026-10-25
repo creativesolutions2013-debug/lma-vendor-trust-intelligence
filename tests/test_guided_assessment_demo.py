@@ -335,3 +335,32 @@ def test_completion_is_immutable_as_of_report_and_never_approves(scenario):
         with pytest.raises(ValueError, match='context changed'):
             report_bytes(revised, revised_actions, completion)
     assert completion.snapshot == before
+
+
+def test_identical_findings_are_rejected_without_rewriting_history_or_governance():
+    from dataclasses import replace
+    model = build_demo('exception')
+    tls = rows(model)['ENC-01']
+    dr = rows(model)['BCP-01']
+    reason = 'Validate the alternate production TLS listener.'
+    history = record_action(model, (), tls.requirement_id, 'Create Finding', reason)
+    original = history[0]
+    before = report_bytes(model, history)
+    for candidate in (reason, '  ' + reason + '\n'):
+        with pytest.raises(ValueError, match='identical draft finding already exists for ENC-02.TLS'):
+            record_action(model, history, tls.requirement_id, 'Create Finding', candidate)
+        assert report_bytes(model, history) == before
+    # Preserve already-recorded duplicate history; do not silently deduplicate exports.
+    legacy = (original, replace(original, recorded_at='2026-10-25T23:00:00+00:00'))
+    assert len(report_payload(model, legacy)['findings']) == 2
+    later = record_action(model, history, tls.requirement_id, 'Accept', 'Discussion only.')
+    with pytest.raises(ValueError, match='identical draft finding'):
+        record_action(model, later, tls.requirement_id, 'Create Finding', reason)
+    distinct = record_action(model, later, tls.requirement_id, 'Create Finding', 'Validate a distinct listener scope concern.')
+    distinct = record_action(model, distinct, dr.requirement_id, 'Create Finding', reason)
+    replayed = build_demo('exception', evidence_received=True)
+    distinct = record_action(replayed, distinct, dr.requirement_id, 'Create Finding', reason)
+    assert len(report_payload(replayed, distinct)['findings']) == 4
+    assert distinct[0] == original and distinct[0].citations == original.citations
+    assert all(not link.state.events and not link.state.fact_reviews for link in replayed.scenario.assurance_links)
+    assert report_payload(replayed, distinct)['risk']['residual_score'] is None
