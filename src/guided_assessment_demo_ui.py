@@ -10,13 +10,18 @@ import streamlit as st
 from src.control_assurance_presentation import render_assurance_summary
 from src.guided_assessment_demo import (
     ACTIONS, RISK_PROFILES, SCENARIOS, active_actions, build_demo, record_action,
-    report_bytes, report_payload, row_fingerprint,
+    report_bytes, report_payload, row_fingerprint, source_role, SourceRole,
 )
 
 
 PREFIX = "guided_demo:"
 STEPS = ("Start", "Evidence", "Assess", "Questions", "Analyst Review", "Results")
 SCENARIO_LABELS = {"gap": "Evidence gap", "exception": "Material TLS exception"}
+REVIEW_LIMIT = (
+    "Simulated Accept records a draft discussion annotation only; it does not confirm facts, "
+    "satisfy an evidence need or approve a control. Factual confirmation and independently "
+    "governed approval must happen outside this demo."
+)
 
 
 def _reset():
@@ -73,7 +78,12 @@ def _exceptions(model):
     return rows
 
 
+def _action_label(action):
+    return "Accept draft for discussion — does not verify or approve control" if action == "Accept" else action
+
+
 def _table(model, actions=()):
+    st.caption(REVIEW_LIMIT)
     current = {action.requirement_id: action for action in active_actions(model, actions)}
     st.dataframe([
         {
@@ -82,7 +92,7 @@ def _table(model, actions=()):
             "Provisional outcome": row.outcome,
             "Attention": row.presentation.attention[0].title if row.presentation and row.presentation.attention else "",
             "Workflow": row.intent,
-            "Simulated review": current[row.requirement_id].action if row.requirement_id in current else "Unreviewed",
+            "Simulated review": _action_label(current[row.requirement_id].action) if row.requirement_id in current else "Unreviewed",
             "Next action": row.next_action,
         } for row in model.worklist.rows
     ], use_container_width=True, hide_index=True)
@@ -90,6 +100,9 @@ def _table(model, actions=()):
 
 def _source(bound):
     source = bound.source
+    st.caption("Source role: " + source_role(bound).value)
+    if source_role(bound) == SourceRole.CUSTOMER_POLICY:
+        st.caption("Customer acceptance criteria only; not vendor implementation or operating proof.")
     st.caption(
         f"{source.evidence_kind} · {source.service} · {source.environment} · {source.account_scope} · "
         f"observed {source.observed_on} · captured {source.captured_on} · version {source.version}"
@@ -103,6 +116,7 @@ def _source(bound):
 
 
 def _detail(row):
+    st.caption("Confirmation-oriented next actions describe work outside this demo. " + REVIEW_LIMIT)
     if row.presentation:
         render_assurance_summary(replace(row.presentation, outcome=row.outcome, next_action=row.next_action))
     else:
@@ -160,21 +174,32 @@ def _start(model):
 
 def _evidence(model):
     st.subheader("Simulated vendor submission")
-    st.write("The vendor has shared an existing evidence package before receiving a questionnaire.")
+    st.write("The vendor has shared an existing evidence package before receiving a questionnaire. "
+             "Customer policy sources are shown separately by role: they define the assessment "
+             "criteria and are not vendor-supplied proof of implementation or operation.")
     links = {}
     for row in model.worklist.rows:
         if row.review:
             for bound in row.review.evidence:
                 links.setdefault(bound.fingerprint, []).append(row.requirement_id)
-    st.dataframe([
+    all_sources = model.documents + model.context_documents
+    vendor_sources = tuple(b for b in all_sources if source_role(b) != SourceRole.CUSTOMER_POLICY)
+    customer_sources = tuple(b for b in all_sources if source_role(b) == SourceRole.CUSTOMER_POLICY)
+    st.caption(f"Simulated vendor artifacts: {len(vendor_sources)} · Customer policy sources: {len(customer_sources)}. "
+               "Vendor context-only artifacts do not satisfy the selected requirements.")
+    for label, sources in (("Simulated vendor package", vendor_sources),
+                           ("Customer acceptance criteria — separate from vendor submission", customer_sources)):
+        st.markdown("**" + label + "**")
+        st.dataframe([
         {
             "Document": bound.document.filename,
+            "Source role": source_role(bound).value,
             "Kind": bound.source.evidence_kind,
             "Observed": str(bound.source.observed_on),
             "Service scope": f"{bound.source.service} · {bound.source.environment}",
             "Assessment use": ", ".join(links.get(bound.fingerprint, ())) or "Reference context only",
-        } for bound in model.documents + model.context_documents
-    ], use_container_width=True, hide_index=True)
+        } for bound in sources
+        ], use_container_width=True, hide_index=True)
     for bound in model.documents:
         with st.expander(bound.document.filename, expanded=False):
             _source(bound)
@@ -226,7 +251,7 @@ def _ledger(model, actions):
     st.dataframe([
         {
             "Requirement": action.requirement_id,
-            "Simulated action": action.action,
+            "Simulated action": _action_label(action.action),
             "Review context": ("Current" if action in current else "Superseded"
                                if contexts.get(action.requirement_id) == action.fingerprint
                                else "Stale — source or context changed"),
@@ -241,12 +266,12 @@ def _ledger(model, actions):
 
 def _review(model, actions):
     st.subheader("Simulate the analyst's judgment")
-    st.caption("Accept records acceptance of the draft for discussion. Every interpretation still needs factual confirmation and independently governed approval.")
+    st.caption(REVIEW_LIMIT)
     requirement_id = st.selectbox("Review requirement", [row.requirement_id for row in model.worklist.rows],
                                   key=PREFIX + "review_requirement", on_change=_clear_review_draft)
     row = next(row for row in model.worklist.rows if row.requirement_id == requirement_id)
     _detail(row)
-    action = st.radio("Simulated analyst action", ACTIONS, key=PREFIX + "action", horizontal=True)
+    action = st.radio("Simulated analyst action", ACTIONS, format_func=_action_label, key=PREFIX + "action", horizontal=True)
     rationale = st.text_area("Review rationale", key=PREFIX + "rationale", max_chars=1200,
                              placeholder="Explain your judgment using the source, requirement and unresolved uncertainty.")
     if st.button("Record simulated review", key=PREFIX + "record", disabled=not rationale.strip()):
@@ -257,6 +282,8 @@ def _review(model, actions):
         else:
             st.session_state[PREFIX + "actions"] = actions
             st.success("Simulated review recorded for this source and requirement context.")
+            if action == "Accept":
+                st.info(REVIEW_LIMIT)
     st.caption("Challenge, Request Evidence and Create Finding record draft reviewer intentions. They do not change evaluator outcomes or send vendor messages.")
     _ledger(model, actions)
 
@@ -283,7 +310,7 @@ def _results(model, actions):
                 st.write("Customer requirement: " + finding["customer_context"])
                 st.write("Threshold: " + finding["threshold"])
                 for citation in finding["citations"]:
-                    st.caption(citation["filename"] + " · " + citation["location"])
+                    st.caption(citation["source_role"] + " · " + citation["filename"] + " · " + citation["location"])
                     st.code(citation["quote"], language=None)
                 st.caption("Recorded source context: " + finding["fingerprint"])
     else:

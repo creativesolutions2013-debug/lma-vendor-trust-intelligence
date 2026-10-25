@@ -7,6 +7,7 @@ authentication, storage or vendor-delivery API is imported here.
 """
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
+from enum import Enum
 import json
 
 from src.assessment_worklist import AssessmentWorklist, WorklistRow, build_assessment_worklist
@@ -20,6 +21,36 @@ from src.scoring import InherentRiskInput, calculate_inherent_risk, rating_from_
 SCENARIOS = ("gap", "exception")
 RISK_PROFILES = ("Confidential production", "Limited test data")
 ACTIONS = ("Accept", "Challenge", "Request Evidence", "Create Finding")
+
+
+class SourceRole(str, Enum):
+    CUSTOMER_POLICY = "Customer requirement / policy context"
+    VENDOR_EVIDENCE = "Simulated vendor evidence"
+    VENDOR_CONTEXT = "Simulated vendor context only"
+
+
+# Explicit provenance for this closed fixture package, independent of filenames
+# and evidence kind (a vendor policy is not a customer acceptance threshold).
+SOURCE_ROLES = {
+    "tls-customer-policy": SourceRole.CUSTOMER_POLICY,
+    "customer-access-policy": SourceRole.CUSTOMER_POLICY,
+    "synthetic-soc2-overview": SourceRole.VENDOR_CONTEXT,
+    **{key: SourceRole.VENDOR_EVIDENCE for key in (
+        "approved-security-policy", "dr-plan", "dr-exercise", "tls-config",
+        "tls-scan", "tls-exception", "vm-exception-response", "vm-remediation-tickets",
+    )},
+}
+
+
+def source_role(bound):
+    return SOURCE_ROLES[bound.source.document_id]
+
+
+@dataclass(frozen=True)
+class DemoCitation(CitedInterpretation):
+    source_role: str = ""
+    provenance: str = ""
+    document_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -184,11 +215,12 @@ def record_action(model, actions, requirement_id, action, rationale):
             or any(ord(char) < 32 and char not in "\n\t" or ord(char) == 127 for char in rationale)):
         raise ValueError("Choose a current requirement and action, with a 1–1200 character review rationale.")
     row = rows[0]
-    citations = tuple(CitedInterpretation(
+    citations = tuple(DemoCitation(
         f"Supplied {bound.source.evidence_kind}; {bound.source.service} · {bound.source.environment} · "
         f"{bound.source.account_scope}; observed {bound.source.observed_on}; captured {bound.source.captured_on}; "
         "source consistency only, not confirmed meaning",
         bound.document.filename, segment.location, segment.text, bound.fingerprint, False,
+        source_role(bound).value, bound.source.origin, bound.source.document_id,
     ) for bound in row.review.evidence for segment in bound.document.segments) if row.review else ()
     return history + (DemoAction(
         requirement_id, row_fingerprint(model, row), action, rationale.strip(),
@@ -217,6 +249,7 @@ def _citations(row):
         document_id=bound.source.document_id, filename=bound.document.filename,
         location=segment.location, quote=segment.text,
         source_fingerprint=bound.fingerprint, evidence_kind=bound.source.evidence_kind,
+        source_role=source_role(bound).value,
         service=bound.source.service, environment=bound.source.environment,
         scope=bound.source.account_scope, observed_on=_date(bound.source.observed_on),
         captured_on=_date(bound.source.captured_on), provenance=bound.source.origin,
@@ -253,7 +286,9 @@ def report_payload(model, actions):
             "threshold_summary": row.review.threshold_summary if row.review else row.threshold,
             "presentation": asdict(row.presentation) if row.presentation else None,
             "specialist_available": row.specialist_available, "provisional": True,
-            "next_action": row.next_action, "citations": _citations(row),
+            "next_action": row.next_action,
+            "citations": [c for c in _citations(row) if c["source_role"] != SourceRole.CUSTOMER_POLICY],
+            "customer_policy_citations": [c for c in _citations(row) if c["source_role"] == SourceRole.CUSTOMER_POLICY],
             "needs": [asdict(match) for match in row.need_matches],
             "limitations": list(row.limitations),
         } for row in model.worklist.rows],
@@ -287,15 +322,26 @@ def report_payload(model, actions):
         } for action in history if action.action == "Create Finding"],
         "context_only_sources": [{
             "document_id": bound.source.document_id, "filename": bound.document.filename,
+            "source_role": source_role(bound).value, "provenance": bound.source.origin,
             "source_fingerprint": bound.fingerprint,
             "use": "Context only; not used to satisfy the four selected customer requirements",
             "segments": [{"location": segment.location, "quote": segment.text}
                          for segment in bound.document.segments],
-        } for bound in model.context_documents],
+        } for bound in model.context_documents if source_role(bound) != SourceRole.CUSTOMER_POLICY],
+        "customer_policy_sources": [{
+            "document_id": bound.source.document_id, "filename": bound.document.filename,
+            "source_role": source_role(bound).value, "provenance": bound.source.origin,
+            "source_fingerprint": bound.fingerprint,
+            "use": "Customer acceptance criteria only; not vendor implementation or operating proof",
+            "segments": [{"location": segment.location, "quote": segment.text}
+                         for segment in bound.document.segments],
+        } for bound in model.documents + model.context_documents
+           if source_role(bound) == SourceRole.CUSTOMER_POLICY],
         "limitations": [
             "Synthetic hand-authored evidence and supplied interpretations are not real vendor assurance.",
             "A source hash or quotation match proves consistency, not authenticity or semantic truth.",
             "Demo Accept/Challenge/Request Evidence/Create Finding annotations do not change M3D fact reviews or governed decisions.",
+            "Simulated Accept is a draft discussion annotation; it does not confirm facts, satisfy evidence needs or approve a control.",
             "The four selected requirements are a bounded demonstration, not a complete production assessment or standards certification.",
             "No vendor messages, confidential evidence, real authentication or authoritative risk updates are enabled.",
         ],

@@ -92,7 +92,9 @@ def test_annotations_invalidate_only_changed_context_and_history_remains_visible
     assert payload["findings"][0]["citations"] == [
         {"statement": citation.statement, "filename": citation.filename,
          "location": citation.location, "quote": citation.quote,
-         "fingerprint": citation.fingerprint, "confirmed": citation.confirmed}
+         "fingerprint": citation.fingerprint, "confirmed": citation.confirmed,
+         "source_role": citation.source_role, "provenance": citation.provenance,
+         "document_id": citation.document_id}
         for citation in actions[1].citations
     ]
     assert all(citation["filename"] != "dr-exercise.txt" for citation in payload["findings"][0]["citations"])
@@ -178,6 +180,43 @@ def test_context_only_sources_are_actual_excerpts_and_never_satisfy_selected_req
                                                 for segment in bound.document.segments)
     payload = report_payload(model, ())
     assert all("Context only" in source["use"] for source in payload["context_only_sources"])
+
+
+@pytest.mark.parametrize("scenario", ["gap", "exception"])
+@pytest.mark.parametrize("received", [False, True])
+def test_report_separates_customer_criteria_and_preserves_source_roles(scenario, received):
+    from dataclasses import replace
+    from src.guided_assessment_demo import SourceRole, source_role
+
+    model = build_demo(scenario, received)
+    target = rows(model)["ENC-01"]
+    history = record_action(model, (), target.requirement_id, "Create Finding", "Retain exact source roles.")
+    payload = report_payload(model, history)
+    policies = payload["customer_policy_sources"]
+    assert {s["document_id"] for s in policies} == {"tls-customer-policy", "customer-access-policy"}
+    assert all(s["source_role"] == SourceRole.CUSTOMER_POLICY for s in policies)
+    assert all(s["source_role"] != SourceRole.CUSTOMER_POLICY for s in payload["context_only_sources"])
+    sources = {b.source.document_id: b for b in model.documents + model.context_documents}
+    for source in policies:
+        bound = sources[source["document_id"]]
+        assert source["provenance"] == bound.source.origin
+        assert source["source_fingerprint"] == bound.fingerprint
+        assert source["segments"] == [{"location": s.location, "quote": s.text} for s in bound.document.segments]
+        # Role comes from fixture provenance, never the display filename.
+        renamed = replace(bound, document=replace(bound.document, filename="vendor-scan.txt"))
+        assert source_role(renamed) == SourceRole.CUSTOMER_POLICY
+    for row in payload["requirements"]:
+        assert all(c["source_role"] != SourceRole.CUSTOMER_POLICY for c in row["citations"])
+        assert all(c["source_role"] == SourceRole.CUSTOMER_POLICY for c in row["customer_policy_citations"])
+        for citation in row["citations"] + row["customer_policy_citations"]:
+            bound = sources[citation["document_id"]]
+            assert citation["provenance"] == bound.source.origin
+            assert (citation["location"], citation["quote"]) in {(s.location, s.text) for s in bound.document.segments}
+    for entry in payload["analyst_actions"] + payload["findings"]:
+        for citation in entry["citations"]:
+            bound = sources[citation["document_id"]]
+            assert citation["source_role"] == source_role(bound)
+            assert citation["provenance"] == bound.source.origin
     assert all(row["requirement_id"] != "IAM-01" for row in payload["requirements"])
 
 

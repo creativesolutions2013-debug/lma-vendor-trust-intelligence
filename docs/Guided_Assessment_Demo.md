@@ -31,7 +31,10 @@ data access. They are outside this isolated demo and are not tenant-safe routes.
    drivers shown. These inputs do not rewrite requirement or evidence scope.
 2. **Evidence:** Inspect the simulated vendor submission. Expand a source to
    see its actual parsed text, location, scope, observed/capture dates, provenance
-   and fingerprint. SOC 2 and IAM/MFA background are explicitly context-only;
+   and fingerprint. The **Source role** column distinguishes customer TLS and
+   access policies (assessment criteria, not vendor proof) from simulated vendor
+   artifacts, including the vendor's recovery plan and governance policy.
+   SOC 2 and IAM/MFA background are explicitly context-only;
    this four-requirement walkthrough produces no MFA or audit-opinion assurance.
 3. **Assess:** Review the single exception-first worklist. Select a requirement
    to see the actual M3D outcome, customer threshold, adverse statements, strongest
@@ -47,7 +50,9 @@ data access. They are outside this isolated demo and are not tenant-safe routes.
 5. **Analyst Review:** Choose a requirement and simulate **Accept**, **Challenge**,
    **Request Evidence** or **Create Finding**, with an explicit rationale.
    Accept records discussion of the draft; it does not confirm factual meaning or
-   approve a control. Source/threshold changes invalidate current annotations.
+   approve a control or satisfy an evidence need. Confirmation-oriented next
+   actions describe work outside this demo; simulated Accept cannot perform them.
+   Source/threshold changes invalidate current annotations.
    Earlier actions and original cited context remain in the session history.
    Draft findings require explicit re-review and cannot disappear behind a later
    Accept annotation or changed evidence.
@@ -90,10 +95,20 @@ conservatively returns **Needs Review**. Neither state establishes control failu
 All default whole-requirement outcomes remain Needs Review until the established
 factual-confirmation and governance processes are performed outside this demo.
 
-The initial gap package has seven requirement-linked documents and two context
-documents; replay adds one exercise document. The exception package adds the
-actual synthetic TLS-exception source, giving eight linked documents initially
-and nine after replay. Document counts establish inventory, not sufficiency.
+The initial gap inventory has seven simulated vendor artifacts (six requirement-
+linked documents and one context-only SOC 2 excerpt), plus two separate customer
+policy sources. Replay adds one vendor exercise document. The exception package
+adds one vendor TLS-exception source, giving eight vendor artifacts initially and
+nine after replay. The customer TLS and access policies define acceptance criteria;
+neither is counted as a vendor submission. Vendor recovery and governance policies
+remain vendor artifacts, without establishing operating effectiveness. Document
+counts establish inventory, not sufficiency.
+
+JSON exports retain exact quotations and original provenance. Customer policies
+are listed in `customer_policy_sources` and requirement `customer_policy_citations`,
+separately from vendor citations and context. Historical annotation/finding citations
+carry explicit source roles too. Roles are registered against fixture document IDs,
+independently of filenames and evidence kinds; evaluators and bound content are unchanged.
 
 ## Reused implementation and boundaries
 

@@ -264,6 +264,8 @@ def test_simulated_actions_require_reason_and_leave_actual_assurance_unchanged(n
     before = model_for(at)
     target = before.worklist.rows[0]
     step(at, "Analyst Review")
+    assert "does not confirm facts, satisfy an evidence need or approve a control" in shown(at)
+    assert "next actions describe work outside this demo" in shown(at)
     assert widget(at.button, "Record simulated review").disabled
     review(at, target.requirement_id, action, "Explicit synthetic reviewer reasoning for " + action)
     actions = at.session_state["guided_demo:actions"]
@@ -272,6 +274,40 @@ def test_simulated_actions_require_reason_and_leave_actual_assurance_unchanged(n
     assert [(row.requirement_id, row.outcome) for row in after.worklist.rows] == [
         (row.requirement_id, row.outcome) for row in before.worklist.rows]
     assert all(not link.state.events and not link.state.fact_reviews for link in after.scenario.assurance_links)
+    if action == "Accept":
+        assert any("does not confirm facts" in item.value for item in at.info)
+        assert "does not verify or approve control" in widget(at.radio, "Simulated analyst action").options[0]
+        for name in ("Assess", "Results"):
+            step(at, name)
+            table = worklist_table(at).set_index("Requirement")
+            assert table.loc[target.requirement_id, "Provisional outcome"] == "Needs Review"
+            assert table.loc[target.requirement_id, "Simulated review"] == (
+                "Accept draft for discussion — does not verify or approve control")
+            assert "does not confirm facts, satisfy an evidence need or approve a control" in shown(at)
+
+
+@pytest.mark.parametrize("scenario", ["gap", "exception"])
+def test_evidence_inventory_distinguishes_customer_criteria_from_vendor_sources(no_live_effects, scenario):
+    at = app()
+    widget(at.selectbox, "Demo scenario").set_value(scenario)
+    run(at)
+    step(at, "Evidence")
+    inventories = [item.value for item in at.dataframe if "Source role" in item.value.columns]
+    assert len(inventories) == 2
+    roles = {name: role for inventory in inventories
+             for name, role in inventory.set_index("Document")["Source role"].items()}
+    assert set(inventories[1]["Document"]) == {"tls-customer-policy.txt", "customer-access-policy.txt"}
+    assert not set(inventories[0]["Document"]) & set(inventories[1]["Document"])
+    assert f"Simulated vendor artifacts: {len(roles) - 2} · Customer policy sources: 2" in shown(at)
+    for name in ("tls-customer-policy.txt", "customer-access-policy.txt"):
+        assert roles[name] == "Customer requirement / policy context"
+    for name in ("tls-config.txt", "tls-scan.txt", "dr-plan.txt", "approved-security-policy.txt"):
+        assert roles[name] == "Simulated vendor evidence"
+    assert "not vendor-supplied proof of implementation or operation" in shown(at)
+    for bound in model_for(at).documents + model_for(at).context_documents:
+        assert bound.document.filename in roles
+        assert all(any(part.text in block.value for block in at.code)
+                   for part in bound.document.segments)
 
 
 def test_replay_invalidates_only_changed_requirement_review_and_preserves_history(no_live_effects):
