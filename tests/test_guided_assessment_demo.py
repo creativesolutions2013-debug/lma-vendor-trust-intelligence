@@ -89,12 +89,15 @@ def test_annotations_invalidate_only_changed_context_and_history_remains_visible
     assert payload["analyst_actions"][1]["status"] == "Stale context"
     assert payload["findings"][0]["context_status"] == "Stale context — re-review required"
     assert not payload["findings"][0]["resolved"]
+    attachments = {a["document_id"]: a for a in payload["evidence_manifest"]["artifacts"]}
     assert payload["findings"][0]["citations"] == [
         {"statement": citation.statement, "filename": citation.filename,
          "location": citation.location, "quote": citation.quote,
          "fingerprint": citation.fingerprint, "confirmed": citation.confirmed,
          "source_role": citation.source_role, "provenance": citation.provenance,
-         "document_id": citation.document_id}
+         "document_id": citation.document_id, "artifact_id": citation.document_id,
+         "archive_path": attachments[citation.document_id]["archive_path"],
+         "content_sha256": attachments[citation.document_id]["sha256"]}
         for citation in actions[1].citations
     ]
     assert all(citation["filename"] != "dr-exercise.txt" for citation in payload["findings"][0]["citations"])

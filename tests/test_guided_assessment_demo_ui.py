@@ -176,8 +176,9 @@ def test_actual_app_walkthrough_uses_no_live_services_and_downloads_current_repo
     review(at, requirement_id, "Create Finding", "Source scope remains unresolved; retain a simulated finding.")
     assert len(at.session_state["guided_demo:actions"]) == 1
     step(at, "Results")
-    assert len(at.get("download_button")) == 1
-    assert at.get("download_button")[0].proto.label == "Download synthetic assessment report"
+    assert len(at.get("download_button")) == 2
+    assert at.get("download_button")[0].proto.label == "Download complete assessment package (.zip)"
+    assert widget(at.get("download_button"), "Download synthetic assessment report")
     assert downloads
     assert downloads[-1][0] == report_bytes(received, at.session_state["guided_demo:actions"])
     payload = json.loads(downloads[-1][0])
@@ -531,3 +532,61 @@ def test_completion_cannot_survive_changed_context(no_live_effects, downloads, c
     finish(at)
     current = at.session_state['guided_demo:completion']
     assert current.snapshot['evidence_received'] == (change == 'replay')
+
+
+@pytest.fixture
+def packages(monkeypatch):
+    captured = []
+    original = MemoryMediaFileStorage.load_and_get_id
+    def load(self, path_or_data, mimetype, kind, filename=None):
+        if mimetype == 'application/zip':
+            captured.append(path_or_data)
+        return original(self, path_or_data, mimetype, kind, filename)
+    monkeypatch.setattr(MemoryMediaFileStorage, 'load_and_get_id', load)
+    return captured
+
+
+@pytest.mark.parametrize('replay', [False, True])
+def test_completed_walkthrough_downloads_original_artifacts_and_both_risk_positions(no_live_effects, downloads, packages, replay):
+    from io import BytesIO
+    from zipfile import ZipFile
+    from src.guided_assessment_demo import RISK_PROFILES
+    at = app(actual=True)
+    widget(at.selectbox, 'Demo scenario').set_value('exception')
+    run(at)
+    for name in ('Evidence', 'Assess', 'Questions'):
+        step(at, name)
+    if replay:
+        widget(at.button, 'Replay new evidence received').click()
+        run(at)
+    model = model_for(at)
+    target = next(row for row in model.worklist.rows if row.control_id == 'ENC-01')
+    review(at, target.requirement_id, 'Create Finding', 'Keep the TLS exception open.')
+    review(at, target.requirement_id, 'Accept', 'Discuss draft; no approval.')
+    finish(at)
+    assert widget(at.metric, 'Inherent risk').value == '58 · High'
+    assert widget(at.metric, 'Residual risk').value == 'Pending — no numeric score'
+    assert 'Pending verified inputs / risk-owner decision' in shown(at)
+    assert 'Provisional High hold' in shown(at)
+    assert 'Attached evidence/artifacts' in shown(at)
+    inventory = next(table.value for table in at.dataframe if 'Original SHA-256' in table.value.columns)
+    assert set(inventory['Document ID']) == {b.source.document_id for b in model.documents + model.context_documents}
+    download = widget(at.get('download_button'), 'Download complete assessment package (.zip)')
+    assert download.proto.type == 'primary'
+    # Download bytes are captured from Streamlit's real media registration.
+    with ZipFile(BytesIO(packages[-1])) as archive:
+        report = json.loads(archive.read('report.json'))
+        assert report == json.loads(downloads[-1][0])
+        assert report['review_completion']['vendor_approved'] is False
+        assert ('dr-exercise' in {a['document_id'] for a in report['evidence_manifest']['artifacts']}) is replay
+        assert report['findings'] and report['findings'][0]['resolved'] is False
+    original = packages[-1]
+    run(at)
+    assert packages[-1] == original
+    widget(at.selectbox, 'Risk context').set_value(RISK_PROFILES[1])
+    run(at)
+    assert 'guided_demo:completion' not in at.session_state
+    finish(at)
+    assert widget(at.metric, 'Inherent risk').value == '36 · Moderate'
+    assert widget(at.metric, 'Residual risk').value == 'Pending — no numeric score'
+    assert 'Provisional Moderate hold' in shown(at)

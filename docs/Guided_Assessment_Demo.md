@@ -82,6 +82,27 @@ changes reset the walkthrough as before. **Start another assessment** clears the
 current session's demo state and returns to Start. Completion is session-only and
 is not shared between browsers or written to a database.
 
+The final screen presents **Inherent risk** and **Residual risk** side by side.
+The existing inherent-risk engine returns 58/High or 36/Moderate for the two
+profiles. Residual status is **Pending verified inputs / risk-owner decision**:
+the residual score and assessed rating remain null. The provisional hold retains
+the inherent rating, with unresolved evidence and exception drivers shown. It is
+not an RR-2.0 calculation; no control-effectiveness or external-risk inputs are
+invented, and simulated Accept cannot reduce risk.
+
+Use **Download complete assessment package (.zip)** for the assessment deliverable.
+It contains printable `summary.html`, `report.json`, `manifest.json`, and exact
+original `BoundEvidence.source.content` bytes. The manifest includes stable document
+IDs, source roles, scope, dates, provenance, hashes, requirement links and exact
+citation locations/quotes. Its SHA-256 and matching archive paths are included in
+the report and frozen completion snapshot. Originals are deduplicated by document
+ID, verified against their bound content digests and stored under safe unique paths
+in `vendor-evidence/`, `vendor-context/`, or `customer-policy/`. Both customer policy
+sources and the context-only SOC 2 excerpt are included; the DR exercise is present
+only after replay. Summary links are relative to the archive and reviewer text is
+escaped. Standalone JSON remains available. Packages are generated in memory from
+fixed synthetic fixtures, with no uploads, permanent custody or external calls.
+
 **Reset demo** restores the initial scenario and clears only this demo's state.
 Changing scenarios starts a fresh walkthrough; independent browser sessions do
 not share review state.

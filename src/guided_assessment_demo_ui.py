@@ -12,6 +12,7 @@ from src.guided_assessment_demo import (
     ACTIONS, RISK_PROFILES, SCENARIOS, active_actions, build_demo, record_action,
     report_bytes, report_payload, row_fingerprint, source_role, SourceRole,
     complete_review, completion_is_current,
+    package_bytes,
 )
 
 
@@ -75,8 +76,7 @@ def _completed_summary(completion):
         statuses[row["outcome"]] = statuses.get(row["outcome"], 0) + 1
     st.write("**Requirement status summary:** " + "; ".join(f"{status}: {count}" for status, count in statuses.items()))
     actions = snapshot["analyst_actions"]
-    st.write(f"**Inherent risk:** {snapshot['risk']['inherent_score']} · {snapshot['risk']['inherent_rating']}")
-    st.info(snapshot["risk"]["residual_recommendation"])
+    _risk_positions(snapshot["risk"])
     st.write(f"Simulated annotations: {sum(a['active'] for a in actions)} active; "
              f"{sum(a['status'] == 'Superseded' for a in actions)} superseded; "
              f"{sum(a['status'] == 'Stale context' for a in actions)} stale.")
@@ -93,6 +93,20 @@ def _completed_summary(completion):
 
 def _matches(model):
     return tuple(match for row in model.worklist.rows for match in row.need_matches)
+
+
+def _risk_positions(risk):
+    inherent, residual = st.columns(2)
+    inherent.metric("Inherent risk", f"{risk['inherent_score']} · {risk['inherent_rating']}")
+    inherent.caption(risk["inherent_tier"])
+    for driver in risk["drivers"]:
+        inherent.caption(driver)
+    residual.metric("Residual risk", "Pending — no numeric score")
+    residual.write(risk["residual_status"])
+    residual.write(f"Provisional {risk['residual_hold_rating']} hold — not an approved residual rating")
+    residual.info(risk["residual_recommendation"])
+    for driver in risk["residual_drivers"]:
+        residual.caption(driver)
 
 
 def _counts(model):
@@ -332,6 +346,7 @@ def _review(model, actions):
 
 
 def _results(model, actions, completion=None):
+    report = report_payload(model, actions, completion)
     if completion is not None:
         _completed_summary(completion)
     else:
@@ -342,12 +357,10 @@ def _results(model, actions, completion=None):
     st.subheader("Draft assessment results")
     _exceptions(model)
     _table(model, actions)
-    st.write(f"**Inherent risk:** {model.inherent_score} · {model.inherent_rating}")
-    st.info(model.residual_recommendation)
-    for driver in model.residual_drivers:
-        st.caption(driver)
+    if completion is None:
+        _risk_positions(report["risk"])
     current = active_actions(model, actions)
-    findings = report_payload(model, actions)["findings"]
+    findings = report["findings"]
     st.markdown("**Simulated findings**")
     if findings:
         for finding in findings:
@@ -366,6 +379,22 @@ def _results(model, actions, completion=None):
     else:
         st.write("No simulated finding recorded. Open exceptions remain visible regardless of reviewer actions.")
     _ledger(model, actions)
+    st.subheader("Attached evidence/artifacts")
+    st.dataframe([
+        {
+            "Filename": a["filename"], "Role": a["source_role"], "Document ID": a["document_id"],
+            "Source scope": f"{a['service']} · {a['environment']} · {a['scope']}",
+            "Observed": a["observed_on"], "Captured": a["captured_on"], "Original SHA-256": a["sha256"],
+            "Requirement links / citations": "; ".join(
+                link["requirement_id"] + ": " + ", ".join(c["location"] for c in link["citations"])
+                for link in a["requirement_links"]), "Assessment use": a["use"],
+        } for a in report["evidence_manifest"]["artifacts"]
+    ], use_container_width=True, hide_index=True)
+    st.download_button("Download complete assessment package (.zip)", data=package_bytes(model, actions, completion),
+                       file_name="lma_synthetic_assessment_package.zip", mime="application/zip",
+                       key=PREFIX + "package", type="primary")
+    st.caption("Includes a printable HTML summary, report.json, hashed manifest.json and exact original synthetic artifacts. "
+               "Customer policy criteria are separate from vendor evidence. This is not production evidence custody.")
     st.download_button("Download synthetic assessment report", data=report_bytes(model, actions, completion),
                        file_name="lma_synthetic_assessment_report.json", mime="application/json",
                        key=PREFIX + "report")

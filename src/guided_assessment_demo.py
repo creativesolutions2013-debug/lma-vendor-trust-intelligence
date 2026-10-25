@@ -8,6 +8,7 @@ authentication, storage or vendor-delivery API is imported here.
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
+from hashlib import sha256
 import json
 
 from src.assessment_worklist import AssessmentWorklist, WorklistRow, build_assessment_worklist
@@ -16,6 +17,7 @@ from src.control_assurance_presentation import CitedInterpretation
 from src.evidence_source_validation import BoundEvidence, EvidenceInput, _digest, bind_evidence
 from src.mfa_review_pilot import pilot_cases
 from src.scoring import InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
+from src.guided_assessment_package import artifact_manifest, assessment_package, json_bytes
 
 
 SCENARIOS = ("gap", "exception")
@@ -73,6 +75,8 @@ class DemoAssessment:
             f"Illustrative, non-authoritative recommendation: retain {self.inherent_rating} "
             "pending independent governance. Unconfirmed interpretations, evidence gaps and "
             "retained exceptions do not establish a defensible risk reduction. "
+            "Verified control effectiveness and authorized external-risk inputs are unavailable. "
+            "This provisional hold is not an RR-2.0 numeric calculation or vendor approval. "
             "No residual score or approved control-effectiveness value is calculated."
         )
 
@@ -275,6 +279,8 @@ def _assessment_payload(model, actions):
             "residual_recommendation": model.residual_recommendation,
             "residual_drivers": list(model.residual_drivers),
             "residual_score": None, "approved_risk": False,
+            "residual_status": "Pending verified inputs / risk-owner decision",
+            "residual_rating": None, "residual_hold_rating": model.inherent_rating,
         },
         "requirements": [{
             "control_id": row.control_id, "requirement_id": row.requirement_id,
@@ -346,6 +352,34 @@ def _assessment_payload(model, actions):
             "No vendor messages, confidential evidence, real authentication or authoritative risk updates are enabled.",
         ],
     }
+    links = {}
+    for row in model.worklist.rows:
+        if row.review:
+            for bound in row.review.evidence:
+                links.setdefault(bound.source.document_id, []).append({
+                    "requirement_id": row.requirement_id,
+                    "citations": [{"location": s.location, "quote": s.text} for s in bound.document.segments],
+                })
+    manifest = artifact_manifest(_package_sources(model), links)
+    payload["evidence_manifest"] = {
+        "path": "manifest.json", "sha256": sha256(json_bytes(manifest)).hexdigest(),
+        "artifacts": manifest["artifacts"],
+    }
+    artifacts = {a["document_id"]: a for a in manifest["artifacts"]}
+    cited_sources = payload["context_only_sources"] + payload["customer_policy_sources"]
+    for row in payload["requirements"]:
+        cited_sources += row["citations"] + row["customer_policy_citations"]
+    for entry in payload["analyst_actions"] + payload["findings"]:
+        cited_sources += entry["citations"]
+    for citation in cited_sources:
+        artifact = artifacts.get(citation["document_id"])
+        fingerprint = citation.get("source_fingerprint", citation.get("fingerprint"))
+        if artifact is not None and fingerprint == artifact["source_fingerprint"]:
+            citation.update(artifact_id=artifact["document_id"], archive_path=artifact["archive_path"],
+                            content_sha256=artifact["sha256"])
+        else:
+            citation.update(artifact_id=None, archive_path=None, content_sha256=None,
+                            attachment_status="Historical source not attached to current evidence set")
     # Ensure this public payload has only JSON-native values (including lists
     # rather than dataclass tuples), matching the downloaded report exactly.
     return json.loads(json.dumps(payload, ensure_ascii=False))
@@ -395,3 +429,11 @@ def report_payload(model, actions, completion=None):
 
 def report_bytes(model, actions, completion=None):
     return (json.dumps(report_payload(model, actions, completion), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def _package_sources(model):
+    return [(bound, source_role(bound).value) for bound in model.documents + model.context_documents]
+
+
+def package_bytes(model, actions, completion=None):
+    return assessment_package(report_payload(model, actions, completion), _package_sources(model))
