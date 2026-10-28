@@ -31,6 +31,12 @@ class SourceRole(str, Enum):
     VENDOR_CONTEXT = "Simulated vendor context only"
 
 
+@dataclass(frozen=True)
+class RoleEvidenceInput(EvidenceInput):
+    """Explicit provenance for session uploads; existing fixture hashes stay unchanged."""
+    role: SourceRole
+
+
 # Explicit provenance for this closed fixture package, independent of filenames
 # and evidence kind (a vendor policy is not a customer acceptance threshold).
 SOURCE_ROLES = {
@@ -45,6 +51,10 @@ SOURCE_ROLES = {
 
 
 def source_role(bound):
+    if isinstance(bound.source, RoleEvidenceInput):
+        if not isinstance(bound.source.role, SourceRole):
+            raise ValueError("Supply an explicit source role.")
+        return bound.source.role
     return SOURCE_ROLES[bound.source.document_id]
 
 
@@ -200,6 +210,7 @@ def row_fingerprint(model: DemoAssessment, row: WorklistRow):
         "bundle": row.review.bundle_fingerprint if row.review else None,
         "needs": [asdict(need) for need in mapping.needs] if mapping else [],
         "need_matches": [asdict(match) for match in row.need_matches],
+        "customer_context": getattr(model, "customer_context", None),
     })
 
 
@@ -280,6 +291,7 @@ def _assessment_payload(model, actions):
         "session_only": True, "scenario_id": model.scenario_id,
         "evidence_received": model.evidence_received,
         "scope": {**asdict(model.worklist.scope), "as_of": model.worklist.scope.as_of.isoformat()},
+        "assessment_context": getattr(model, "customer_context", None),
         "risk": {
             "profile": model.risk_profile, "inherent_score": model.inherent_score,
             "inherent_rating": model.inherent_rating, "inherent_tier": model.inherent_tier,
@@ -338,7 +350,7 @@ def _assessment_payload(model, actions):
             "document_id": bound.source.document_id, "filename": bound.document.filename,
             "source_role": source_role(bound).value, "provenance": bound.source.origin,
             "source_fingerprint": bound.fingerprint,
-            "use": "Context only; not used to satisfy the four selected customer requirements",
+            "use": "Context only; not used to satisfy the selected customer requirements",
             "segments": [{"location": segment.location, "quote": segment.text}
                          for segment in bound.document.segments],
         } for bound in model.context_documents if source_role(bound) != SourceRole.CUSTOMER_POLICY],
@@ -356,7 +368,9 @@ def _assessment_payload(model, actions):
             "A source hash or quotation match proves consistency, not authenticity or semantic truth.",
             "Demo Accept/Challenge/Request Evidence/Create Finding annotations do not change M3D fact reviews or governed decisions.",
             "Simulated Accept is a draft discussion annotation; it does not confirm facts, satisfy evidence needs or approve a control.",
-            "The four selected requirements are a bounded demonstration, not a complete production assessment or standards certification.",
+            ("The selected requirements are synthetic examples; workflow coverage is not automated technical coverage or a complete production assessment."
+             if getattr(model, "customer_context", None) else
+             "The four selected requirements are a bounded demonstration, not a complete production assessment or standards certification."),
             "No vendor messages, confidential evidence, real authentication or authoritative risk updates are enabled.",
         ],
     }

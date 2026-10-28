@@ -74,6 +74,9 @@ def summary_html(report):
              f'<p>{e(risk["residual_recommendation"])}</p>',
              '<p>This package does not approve a vendor, confirm control operation or accept risk.</p>',
              '<h2>Risk drivers and open conditions</h2><ul>']
+    context = report.get('assessment_context')
+    if context:
+        parts.insert(3, f'<p>Vendor: {e(context["vendor"])} · Service: {e(context["service"])} · Use case: {e(context["use_case"])}</p><p>{e(context["limitations"])}</p><p>{e(context["criteria_basis"])}</p>')
     for driver in risk['drivers'] + risk['residual_drivers']:
         parts.append(f'<li>{e(driver)}</li>')
     parts.append('</ul><h2>Requirement outcomes and policy thresholds</h2>')
@@ -92,6 +95,13 @@ def summary_html(report):
     parts.append('<h2>Simulated annotation history (no confirmations or approvals)</h2>')
     for action in report['analyst_actions']:
         parts.append(f'<p>{e(action["requirement_id"])} · {e(action["action"])} · {e(action["status"])} · {e(action["recorded_at"])}: {e(action["rationale"])}</p>')
+    if context:
+        parts.append('<h2>Unverified deterministic text screening (not control assurance)</h2>')
+        for screening in context['screening']:
+            if screening['citations']:
+                parts.append(f'<p>{e(screening["reason"])}</p>')
+                for citation in screening['citations']:
+                    parts.append(f'<p>{e(citation["filename"])} · {e(citation["location"])}</p><blockquote>{e(citation["excerpt"])}</blockquote>')
     parts.append('<h2>Attached evidence/artifacts</h2><ul>')
     for artifact in report['evidence_manifest']['artifacts']:
         parts.append(f'<li><a href="{e(artifact["archive_path"])}">{e(artifact["filename"])}</a> · {e(artifact["document_id"])} · {e(artifact["source_role"])} · SHA-256 {e(artifact["sha256"])} · {e(artifact["use"])}</li>')

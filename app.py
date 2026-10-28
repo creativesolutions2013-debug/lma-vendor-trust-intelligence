@@ -16,6 +16,11 @@ st.set_page_config(
 )
 
 page = select_app_page(CURRENT_USER)
+if page == "New Assessment":
+    from src.upload_assessment_ui import render_upload_assessment
+
+    render_upload_assessment()
+    st.stop()
 if page == "Guided Assessment Demo":
     from src.guided_assessment_demo_ui import render_guided_assessment_demo
 
