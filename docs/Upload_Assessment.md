@@ -50,7 +50,9 @@ only. Production authentication still refuses startup. PR #21 is not included.
 ## What was reused and what is not implemented
 
 - Existing PDF/DOCX/TXT parser and `bind_evidence`, preserving original bytes and
-  bound source hashes; no surrogate original artifacts are generated.
+  bound source hashes; no surrogate original artifacts are generated. Assessment
+  construction reuses the exact bounded bindings through relevance and worklist
+  services, scoped to that build rather than a shared or persistent cache.
 - Existing tier/applicability and TLS/DR threshold descriptions; no second policy
   or risk engine. Requirements are predefined synthetic examples, not a claim of
   approval by a real organization or complete standards mapping.

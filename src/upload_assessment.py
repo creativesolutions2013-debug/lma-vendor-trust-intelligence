@@ -5,14 +5,15 @@ from hashlib import sha256
 from io import BytesIO
 import re
 import zlib
-from zipfile import ZipFile, BadZipFile
+from lzma import LZMAError
+from zipfile import ZipFile, BadZipFile, ZIP_BZIP2
 
 from src.applicability import VendorRiskContext, evaluate_applicability
 from src.assessment_worklist import AssessmentScope, AssuranceLink, EvidenceNeed, RequirementMapping, build_assessment_worklist
 from src.assessment_worklist_pilot import WorklistScenario
 from src.control_assurance import ControlCase, CustomerThreshold, EvidenceExpectation, RequirementContext, Observation, bind_relevance
 from src.evidence_intelligence_mvp import evaluate_pilot_requirements
-from src.evidence_source_validation import bind_evidence, segment_id
+from src.evidence_source_validation import bind_evidence, segment_id, reuse_evidence_bindings
 from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole
 from src.scoring import InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
 from src.tiering import get_tier_profile
@@ -96,14 +97,21 @@ def read_upload(intake, filename, content, requirements=(), *, kind='assertion',
                 info = archive.getinfo('word/document.xml')
                 if info.file_size > MAX_UPLOAD_BYTES:
                     raise ValueError('DOCX text exceeds the local parser limit.')
-                with archive.open(info) as member:
-                    xml = member.read(MAX_UPLOAD_BYTES + 1)
+                try:
+                    with archive.open(info) as member:
+                        xml = member.read(MAX_UPLOAD_BYTES + 1)
+                except OSError as exc:
+                    # BytesIO has no filesystem I/O. BZIP2 reports corrupt streams
+                    # as this specific OSError; preserve unrelated server faults.
+                    if info.compress_type != ZIP_BZIP2 or str(exc) != 'Invalid data stream':
+                        raise
+                    raise BadZipFile('Corrupt BZIP2 document stream.') from exc
                 if len(xml) > MAX_UPLOAD_BYTES:
                     raise ValueError('DOCX text exceeds the local parser limit.')
                 structural_xml = xml.replace(b'\x00', b'').upper()  # Also catches UTF-16/32 XML declarations.
                 if b'<!DOCTYPE' in structural_xml or b'<!ENTITY' in structural_xml:
                     raise ValueError('DOCX entity declarations are not supported.')
-        except (BadZipFile, KeyError, RuntimeError, NotImplementedError, EOFError, zlib.error) as exc:
+        except (BadZipFile, KeyError, RuntimeError, NotImplementedError, EOFError, zlib.error, LZMAError) as exc:
             raise ValueError('Upload a readable, unencrypted DOCX using supported ZIP compression; re-save it locally and try again.') from exc
     if name.lower().endswith('.pdf') and not content.startswith(b'%PDF-'):
         raise ValueError('The file is not a PDF document.')
@@ -136,6 +144,13 @@ def suggested_requirements(document, applicable):
 
 
 def build_assessment(intake, uploads=()):
+    # Relevance and worklist services rebind sources. Supply the already bounded
+    # bindings for this build so neither path reparses untrusted original bytes.
+    with reuse_evidence_bindings(u.evidence for u in uploads):
+        return _build_assessment(intake, uploads)
+
+
+def _build_assessment(intake, uploads):
     if len(uploads) > MAX_FILES or sum(len(u.evidence.source.content) for u in uploads) > MAX_TOTAL_BYTES:
         raise ValueError('Keep at most 10 files and 10 MB total in this local assessment.')
     if len({u.evidence.source.document_id for u in uploads}) != len(uploads):

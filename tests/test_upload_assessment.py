@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from hashlib import sha256
 from io import BytesIO
 import json
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED, ZIP_BZIP2, ZIP_LZMA
 
 import pytest
 from pypdf import PdfWriter
@@ -176,6 +176,16 @@ def test_applicability_risk_and_export_do_not_depend_on_fixture_builders(intake,
 def malformed_docx(mode):
     """Real ZIP headers exercising stdlib extraction errors, not mocked exceptions."""
     import struct
+    if mode in ('bzip2', 'lzma'):
+        out = BytesIO()
+        with ZipFile(out, 'w', ZIP_BZIP2 if mode == 'bzip2' else ZIP_LZMA) as archive:
+            archive.writestr('word/document.xml', b'<document>Synthetic text</document>')
+        raw = bytearray(out.getvalue())
+        # Destroy compressed payload while keeping valid ZIP headers/directory.
+        start = 30 + struct.unpack_from('<H', raw, 26)[0] + struct.unpack_from('<H', raw, 28)[0]
+        length = struct.unpack_from('<I', raw, 18)[0]
+        raw[start:start+length] = b'\xff' * length
+        return bytes(raw)
     raw = bytearray(docx_bytes('Synthetic text'))
     local = raw.index(b'PK\x03\x04')
     central = raw.index(b'PK\x01\x02')
@@ -189,7 +199,7 @@ def malformed_docx(mode):
     return bytes(raw)
 
 
-@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt'])
+@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt', 'bzip2', 'lzma'])
 def test_docx_extraction_failures_are_actionable(intake, mode):
     with pytest.raises(ValueError, match='readable, unencrypted DOCX'):
         read_upload(intake, 'bad.docx', malformed_docx(mode))
@@ -242,3 +252,37 @@ def test_pdf_timeout_is_actionable_and_original_source_binding_is_unchanged(inta
     monkeypatch.setattr(parser.subprocess, 'run', timeout)
     with pytest.raises(ValueError, match='resource limits'):
         read_upload(intake, 'timeout.pdf', pdf_bytes('Synthetic text'))
+
+
+def test_assessment_reuses_bounded_bindings_in_all_downstream_services(intake, monkeypatch):
+    from src.evidence_source_validation import bind_evidence
+    import src.evidence_source_validation as bindings
+    import src.bounded_document_parser as parser
+    uploaded = read_upload(intake, 'shared.pdf', pdf_bytes('TLS 1.0 exception; recovery test failed.'),
+                           ('ENC-01', 'BCP-01'), observed_on=intake.as_of)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Accepted evidence was reparsed during assessment/review/export')
+    monkeypatch.setattr(bindings, 'read_evidence_document', forbidden)
+    monkeypatch.setattr(parser, 'read_bounded_document', forbidden)
+    model = build_assessment(intake, (uploaded,))
+    for row in model.worklist.rows:
+        if row.requirement_id in uploaded.requirements:
+            assert row.review.evidence[0] is uploaded.evidence
+    history = record_action(model, (), 'ENC-01', 'Create Finding', 'Investigate source concern.')
+    package_bytes(model, history, complete_review(model, history))
+    # The cache is scoped to construction; it neither leaks into another session
+    # nor turns source ID equality into stale-metadata reuse.
+    with pytest.raises(AssertionError): bind_evidence(uploaded.evidence.source)
+    changed = replace(uploaded.evidence.source, service='Changed scope')
+    from src.evidence_source_validation import reuse_evidence_bindings
+    with reuse_evidence_bindings((uploaded.evidence,)):
+        with pytest.raises(AssertionError): bind_evidence(changed)
+
+
+def test_docx_rejection_does_not_hide_unrelated_server_io_faults(intake, monkeypatch):
+    content = docx_bytes('Synthetic document')
+    def unexpected_fault(*args, **kwargs):
+        raise OSError('Synthetic server fault, not a corrupt decompressor stream')
+    monkeypatch.setattr(ZipFile, 'open', unexpected_fault)
+    with pytest.raises(OSError, match='Synthetic server fault'):
+        read_upload(intake, 'server-fault.docx', content)

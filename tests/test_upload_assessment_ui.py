@@ -168,7 +168,7 @@ def test_unsaved_metadata_survives_every_stage_and_cannot_restore_old_export(no_
         assert all(r.outcome == 'Evidence Missing' for r in at.session_state['customer_assessment:model'].worklist.rows)
 
 
-@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt'])
+@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt', 'bzip2', 'lzma'])
 def test_bad_docx_upload_stays_usable_and_allows_retry(no_live_effects, mode):
     from test_upload_assessment import malformed_docx
     at = start()
