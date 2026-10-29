@@ -1,5 +1,6 @@
 """Real file-uploader AppTests with all live effects denied."""
 from io import BytesIO
+from datetime import date
 from zipfile import ZipFile
 import json
 from pathlib import Path
@@ -125,3 +126,58 @@ def test_pending_bytes_remain_in_memory_across_navigation_and_clear(no_live_effe
     widget(at.button,'Discard new file selections').click();run(at)
     assert not at.multiselect
     assert not at.session_state.get('customer_assessment:pending_files')
+
+
+def test_unsaved_metadata_survives_every_stage_and_cannot_restore_old_export(no_live_effects, packages):
+    at = start()
+    at.get('file_uploader')[0].upload('retained.txt', b'TLS 1.2 is enabled.')
+    run(at); widget(at.button, 'Evaluate attached evidence').click(); run(at)
+    stage(at, 'Report'); widget(at.button, 'Finish assessment review').click(); run(at)
+    assert 'customer_assessment:completion' in at.session_state
+    stage(at, 'Upload evidence')
+    at.get('file_uploader')[0].upload('pending.txt', b'Synthetic recovery exercise.')
+    run(at)
+    expected = []
+    for i in range(2):
+        at.multiselect[i].set_value(['BCP-01'])
+        [f for f in at.selectbox if f.label == 'Document kind (your declaration)'][i].set_value('test')
+        at.date_input[i].set_value('2026-10-01')
+        [f for f in at.text_input if f.label == 'Service stated by this document'][i].set_value('Different scope '+str(i))
+        [f for f in at.text_input if f.label == 'Environment stated by this document'][i].set_value('test')
+        expected.append('Different scope '+str(i))
+    run(at)
+    assert 'customer_assessment:completion' not in at.session_state
+    for target in ('Evaluate', 'Review gaps', 'Report'):
+        stage(at, target)
+        assert at.warning and not at.get('download_button')
+        stage(at, 'Upload evidence')
+        assert [f.value for f in at.multiselect] == [['BCP-01'], ['BCP-01']]
+        assert [f.value for f in at.date_input] == [date(2026,10,1)]*2
+        assert [f.value for f in at.selectbox if f.label == 'Document kind (your declaration)'] == ['test']*2
+        assert [f.value for f in at.text_input if f.label == 'Service stated by this document'] == expected
+        assert [f.value for f in at.text_input if f.label == 'Environment stated by this document'] == ['test']*2
+        assert at.session_state['customer_assessment:uploads_dirty']
+    widget(at.button, 'Evaluate attached evidence').click(); run(at)
+    uploads = at.session_state['customer_assessment:uploads']
+    assert [u.evidence.source.service for u in uploads] == expected
+    assert all(u.requirements == ('BCP-01',) for u in uploads)
+    stage(at, 'Report'); widget(at.button, 'Finish assessment review').click(); run(at)
+    with ZipFile(BytesIO(packages[-1])) as archive:
+        manifest = json.loads(archive.read('manifest.json'))
+        assert len(manifest['artifacts']) == 2
+        assert all(r.outcome == 'Evidence Missing' for r in at.session_state['customer_assessment:model'].worklist.rows)
+
+
+@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt'])
+def test_bad_docx_upload_stays_usable_and_allows_retry(no_live_effects, mode):
+    from test_upload_assessment import malformed_docx
+    at = start()
+    at.get('file_uploader')[0].upload('unsupported.docx', malformed_docx(mode)); run(at)
+    assert not at.exception and at.error
+    assert 're-save it locally' in shown(at)
+    assert widget(at.button, 'Evaluate attached evidence').disabled
+    widget(at.button, 'Discard new file selections').click(); run(at)
+    at.get('file_uploader')[0].upload('retry.docx', docx_bytes('Synthetic recovery test.')); run(at)
+    assert not at.exception and not at.error
+    widget(at.button, 'Evaluate attached evidence').click(); run(at)
+    assert len(at.session_state['customer_assessment:model'].documents) == 1

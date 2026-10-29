@@ -4,6 +4,7 @@ from datetime import date
 from hashlib import sha256
 from io import BytesIO
 import re
+import zlib
 from zipfile import ZipFile, BadZipFile
 
 from src.applicability import VendorRiskContext, evaluate_applicability
@@ -95,11 +96,15 @@ def read_upload(intake, filename, content, requirements=(), *, kind='assertion',
                 info = archive.getinfo('word/document.xml')
                 if info.file_size > MAX_UPLOAD_BYTES:
                     raise ValueError('DOCX text exceeds the local parser limit.')
-                xml = archive.read(info)
+                with archive.open(info) as member:
+                    xml = member.read(MAX_UPLOAD_BYTES + 1)
+                if len(xml) > MAX_UPLOAD_BYTES:
+                    raise ValueError('DOCX text exceeds the local parser limit.')
                 structural_xml = xml.replace(b'\x00', b'').upper()  # Also catches UTF-16/32 XML declarations.
                 if b'<!DOCTYPE' in structural_xml or b'<!ENTITY' in structural_xml:
                     raise ValueError('DOCX entity declarations are not supported.')
-        except (BadZipFile, KeyError) as exc: raise ValueError('Upload a readable DOCX document.') from exc
+        except (BadZipFile, KeyError, RuntimeError, NotImplementedError, EOFError, zlib.error) as exc:
+            raise ValueError('Upload a readable, unencrypted DOCX using supported ZIP compression; re-save it locally and try again.') from exc
     if name.lower().endswith('.pdf') and not content.startswith(b'%PDF-'):
         raise ValueError('The file is not a PDF document.')
     digest = sha256(name.encode() + b'\0' + content).hexdigest()
@@ -111,11 +116,9 @@ def read_upload(intake, filename, content, requirements=(), *, kind='assertion',
         intake.as_of, source_service, source_environment, scope,
         observed_on, kind, SourceRole.VENDOR_EVIDENCE if requirements else SourceRole.VENDOR_CONTEXT)
     try:
-        bound = bind_evidence(source)
-    except Exception as exc:
-        raise ValueError('Not attached: no readable/valid text. For scans, perform OCR locally and upload readable synthetic text.') from exc
-    if len(bound.document.segments) > 2000 or sum(len(s.text) for s in bound.document.segments) > 250000:
-        raise ValueError('Extracted text exceeds the local 250,000-character / 2,000-section limit.')
+        bound = bind_evidence(source, bounded_upload=True)
+    except ValueError as exc:
+        raise ValueError(f'Not attached: {exc} For scans, perform OCR locally and upload readable synthetic text.') from exc
     allowed = {c.control_id for c in risk_and_applicability(intake)[2].controls}
     if any(r not in allowed for r in requirements):
         raise ValueError('Select applicable requirements for this assessment.')

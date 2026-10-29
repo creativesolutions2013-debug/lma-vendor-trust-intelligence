@@ -171,3 +171,74 @@ def test_applicability_risk_and_export_do_not_depend_on_fixture_builders(intake,
         summary = archive.read('summary.html').decode()
         assert '<script>' not in summary and '<img' not in summary
         assert '&lt;script&gt;vendor' in summary
+
+
+def malformed_docx(mode):
+    """Real ZIP headers exercising stdlib extraction errors, not mocked exceptions."""
+    import struct
+    raw = bytearray(docx_bytes('Synthetic text'))
+    local = raw.index(b'PK\x03\x04')
+    central = raw.index(b'PK\x01\x02')
+    if mode == 'encrypted':
+        for offset in (local + 6, central + 8):
+            struct.pack_into('<H', raw, offset, struct.unpack_from('<H', raw, offset)[0] | 1)
+    elif mode == 'compression':
+        for offset in (local + 8, central + 10): struct.pack_into('<H', raw, offset, 99)
+    elif mode == 'corrupt':
+        struct.pack_into('<I', raw, central + 16, 0)  # Wrong CRC.
+    return bytes(raw)
+
+
+@pytest.mark.parametrize('mode', ['encrypted', 'compression', 'corrupt'])
+def test_docx_extraction_failures_are_actionable(intake, mode):
+    with pytest.raises(ValueError, match='readable, unencrypted DOCX'):
+        read_upload(intake, 'bad.docx', malformed_docx(mode))
+
+
+def test_txt_and_docx_limits_stop_before_binding_fingerprint(intake, monkeypatch):
+    import src.evidence_source_validation as bindings
+    import src.evidence_intelligence_mvp as parser
+    def forbidden(*args, **kwargs): raise AssertionError('Oversized parse reached fingerprinting')
+    monkeypatch.setattr(bindings, '_digest', forbidden)
+    original = parser.EvidenceSegment
+    calls = []
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(parser, 'EvidenceSegment', counted)
+    for name, content in [('lines.txt', b'x\n' * 200000),
+                          ('chars.txt', b'x' * 250001),
+                          ('paragraphs.docx', docx_bytes('</w:t></w:r></w:p><w:p><w:r><w:t>'.join(['x']*10000)))]:
+        calls.clear()
+        with pytest.raises(ValueError, match='2,000-section'):
+            read_upload(intake, name, content)
+        assert len(calls) <= 2000
+
+
+def test_pdf_expansion_is_contained_before_parent_binding(intake, monkeypatch):
+    import src.evidence_source_validation as bindings
+    def forbidden(*args, **kwargs): raise AssertionError('Oversized PDF reached fingerprinting')
+    monkeypatch.setattr(bindings, '_digest', forbidden)
+    writer = PdfWriter(clone_from=BytesIO(pdf_bytes('Synthetic text')))
+    page = writer.pages[0]
+    stream = DecodedStreamObject()
+    stream.set_data(b'BT /F1 12 Tf 20 300 Td (' + b'x'* (12*1024*1024) + b') Tj ET')
+    page[NameObject('/Contents')] = writer._add_object(stream.flate_encode())
+    out = BytesIO(); writer.write(out)
+    assert len(out.getvalue()) < MAX_UPLOAD_BYTES
+    with pytest.raises(ValueError, match='limit'):
+        read_upload(intake, 'compressed.pdf', out.getvalue())
+
+
+def test_pdf_timeout_is_actionable_and_original_source_binding_is_unchanged(intake, monkeypatch):
+    import subprocess
+    import src.bounded_document_parser as parser
+    from src.evidence_source_validation import bind_evidence
+    upload = read_upload(intake, 'original.txt', 'First\r\n\r\nThird\u2028Fourth'.encode())
+    assert upload.evidence == bind_evidence(upload.evidence.source)
+    def timeout(*args, **kwargs):
+        assert kwargs['timeout'] == parser.WALL_SECONDS
+        raise subprocess.TimeoutExpired(args[0], kwargs['timeout'])
+    monkeypatch.setattr(parser.subprocess, 'run', timeout)
+    with pytest.raises(ValueError, match='resource limits'):
+        read_upload(intake, 'timeout.pdf', pdf_bytes('Synthetic text'))

@@ -17,7 +17,8 @@ only. Production authentication still refuses startup. PR #21 is not included.
    enter this path. The file details expose parse result, role, declared scope,
    SHA-256 and suggested requirement routing, which you can correct. Supply an
    observation/test date if known; upload date is never substituted for it.
-   Accepted and pending files survive navigation; new selections add files.
+   Accepted and pending files and unsaved routing/date/kind/scope edits survive
+   navigation; only Evaluate attached evidence applies those edits. New selections add files.
    Discard pending selections if a file is invalid. Clear the assessment to remove
    accepted files and start over. Reusing a filename for different content requires
    renaming the new version to avoid ambiguous screening citations.
@@ -64,9 +65,14 @@ only. Production authentication still refuses startup. PR #21 is not included.
   database writes, migrations or authorization changes are claimed.
 
 Application-held uploads are capped at 10 files, 2 MB/file and 10 MB total.
-Extracted text is capped at 250,000 characters/2,000 sections per file; DOCX XML
-and expansion are bounded before parsing, and the existing PDF page limit applies.
-These limits are not production parser isolation or a document security review.
+Extracted text is capped during parsing at 250,000 characters/2,000 sections per
+file, before source fingerprinting. DOCX XML/expansion are bounded before parsing;
+encrypted, corrupt or unsupported ZIP entries are rejected with a re-save message.
+PDF parsing runs in a disposable process with a 384 MB address-space limit,
+3 CPU seconds and 10 seconds wall time, plus the existing 300-page limit. PDF
+uploads require a host with POSIX resource limits (the Linux development host);
+unavailable limits fail closed. These are local resource guards, not malware
+scanning or a production document security review.
 Legacy global-record pages and the scripted fixture demo are hidden behind the
 internal-development checkbox and receive no uploaded assessment data.
 
