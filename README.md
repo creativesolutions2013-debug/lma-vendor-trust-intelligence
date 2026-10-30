@@ -10,14 +10,22 @@ Our goal is to reduce assessment time by analyzing security evidence vendors alr
 
 The existing application provides a working foundation for vendor risk management. The complete AI-powered assessment experience described below is the product direction, not a claim that every capability is currently implemented.
 
-## Try the guided synthetic assessment
+## Try an assessment with your own synthetic files
 
-Run `AUTH_MODE=development streamlit run app.py` and open **Guided Assessment Demo**.
-One session takes an industry reviewer from relationship context through synthetic
-evidence, the cited assessment worklist, targeted questions, simulated analyst
-actions and a downloadable provisional report. Replay a recovery exercise or
-inspect a persistent TLS exception. No database, external API or real vendor data
-is required for this journey. See the [demo runbook and limitations](docs/Guided_Assessment_Demo.md).
+Run `AUTH_MODE=development streamlit run app.py`. **New Assessment** opens by default:
+About vendor → Upload evidence → Evaluate → Review gaps → Report. Enter your own
+synthetic vendor/service context, attach local synthetic PDF/DOCX/TXT documents,
+review exact source quotations and gaps, record draft findings, then finish and
+export the original uploaded bytes in a source-traceable ZIP.
+
+This local, memory-only first slice uses the existing applicability engine and
+source-bound manual review workflow. Deterministic TLS text screening is limited;
+recovery and other technical interpretations require human review. No arbitrary
+standards assurance, real vendor custody, external AI calls or risk approvals are
+provided. See [scope, limits and walkthrough](docs/Upload_Assessment.md).
+
+The old scripted scenarios and legacy global-record pages are available only
+under **Show internal development tools**; they are not the primary customer path.
 
 ## Official Product Blueprint
 

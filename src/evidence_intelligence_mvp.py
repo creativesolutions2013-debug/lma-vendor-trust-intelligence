@@ -47,20 +47,31 @@ class RequirementEvaluation:
     citations: tuple[EvidenceCitation, ...] = ()
 
 
-def read_evidence_document(filename: str, content: bytes) -> EvidenceDocument:
+def read_evidence_document(filename: str, content: bytes, *, max_segments=None, max_chars=None, max_xml_bytes=None) -> EvidenceDocument:
     """Read PDF, DOCX, or text into separately citable source locations."""
     if not content or len(content) > MAX_FILE_BYTES:
         raise ValueError("Evidence file is empty or exceeds the 15 MB pilot limit.")
+    segments = []
+    characters = 0
+
+    def retain(location, text, *, keep_empty=False):
+        nonlocal characters
+        if not keep_empty and not text.strip():
+            return
+        characters += len(text)
+        if ((max_segments is not None and len(segments) >= max_segments)
+                or (max_chars is not None and characters > max_chars)):
+            raise ValueError("Extracted text exceeds the local 250,000-character / 2,000-section limit.")
+        segments.append(EvidenceSegment(location, text))
+
     suffix = Path(filename).suffix.lower()
     if suffix == ".pdf":
         try:
             reader = PdfReader(BytesIO(content))
             if len(reader.pages) > MAX_DOCUMENT_PAGES:
                 raise ValueError("PDF exceeds the 300-page pilot limit.")
-            segments = tuple(
-                EvidenceSegment(f"Page {i}", page.extract_text() or "")
-                for i, page in enumerate(reader.pages, 1)
-            )
+            for i, page in enumerate(reader.pages, 1):
+                retain(f"Page {i}", page.extract_text() or "", keep_empty=True)
         except ValueError:
             raise
         except Exception as exc:
@@ -68,30 +79,30 @@ def read_evidence_document(filename: str, content: bytes) -> EvidenceDocument:
     elif suffix == ".docx":
         try:
             with ZipFile(BytesIO(content)) as archive:
-                xml = archive.read("word/document.xml")
+                if max_xml_bytes is None:
+                    xml = archive.read("word/document.xml")
+                else:
+                    with archive.open("word/document.xml") as member:
+                        xml = member.read(max_xml_bytes + 1)
+                    if len(xml) > max_xml_bytes:
+                        raise ValueError("DOCX text exceeds the local parser limit.")
             root = ElementTree.fromstring(xml)
             ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-            paras = [
-                "".join(t.text or "" for t in p.iter(f"{ns}t"))
-                for p in root.iter(f"{ns}p")
-            ]
-            segments = tuple(
-                EvidenceSegment(f"Paragraph {i}", p)
-                for i, p in enumerate(paras, 1) if p.strip()
-            )
+            for i, paragraph in enumerate(root.iter(f"{ns}p"), 1):
+                retain(f"Paragraph {i}", "".join(t.text or "" for t in paragraph.iter(f"{ns}t")))
         except (BadZipFile, KeyError, ElementTree.ParseError) as exc:
             raise ValueError("Unable to read DOCX document text.") from exc
     elif suffix == ".txt":
-        segments = tuple(
-            EvidenceSegment(f"Line {i}", line)
-            for i, line in enumerate(content.decode("utf-8-sig", errors="replace").splitlines(), 1)
-            if line.strip()
-        )
+        # Iterate line matches rather than materializing a potentially million-line list.
+        text = content.decode("utf-8-sig", errors="replace")
+        for i, match in enumerate(re.finditer(r"[^\n\r\v\f\x1c-\x1e\x85\u2028\u2029]*(?:\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]|$)", text), 1):
+            line = match.group().rstrip("\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029")
+            retain(f"Line {i}", line)
     else:
         raise ValueError("Pilot analysis supports PDF, DOCX and TXT evidence only.")
     if not any(part.text.strip() for part in segments):
         raise ValueError("No readable text found; scanned evidence needs human review/OCR.")
-    return EvidenceDocument(filename=Path(filename).name, segments=segments)
+    return EvidenceDocument(filename=Path(filename).name, segments=tuple(segments))
 
 
 def _lines(documents):

@@ -14,7 +14,9 @@ AUTH_MODE=development streamlit run app.py
 ```
 
 Open the local Streamlit address (normally port 8501), or the Codespaces forwarded
-port. **Guided Assessment Demo** is the default navigation entry. It runs before
+port. The primary entry is now **New Assessment** for user-selected synthetic files.
+Enable **Show internal development tools** to open **Guided Assessment Demo**
+for fixture regression only. It runs before
 database initialization, seeding, storage or legacy service imports. No hosting
 service, IdP, API key, external evidence access or database setup is needed for
 the journey. `AUTH_MODE=production` retains its existing startup refusal.

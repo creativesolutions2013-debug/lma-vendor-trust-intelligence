@@ -6,6 +6,8 @@ semantics nor authenticate a document, analyst or caller. Domain evaluators
 remain responsible for technical rules and governed approval stays separate.
 """
 from dataclasses import asdict, dataclass, field
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date
 from hashlib import sha256
 import json
@@ -52,7 +54,24 @@ def _digest(value) -> str:
                              separators=(",", ":"), default=encode).encode()).hexdigest()
 
 
-def bind_evidence(source: EvidenceInput) -> BoundEvidence:
+_BINDINGS = ContextVar('assessment_evidence_bindings', default=None)
+
+
+@contextmanager
+def reuse_evidence_bindings(bindings):
+    """Reuse exact immutable source bindings only within this assessment build.
+
+    Full source equality (bytes and metadata), never document ID alone, prevents
+    reusing a stale declaration. Context-local lifetime avoids cross-session cache.
+    """
+    token = _BINDINGS.set({bound.source: bound for bound in bindings})
+    try:
+        yield
+    finally:
+        _BINDINGS.reset(token)
+
+
+def bind_evidence(source: EvidenceInput, *, bounded_upload=False) -> BoundEvidence:
     """Reuse M1 parsing; source IDs do not depend on potentially duplicate names."""
     if not isinstance(source.document_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", source.document_id):
         raise ValueError("A unique, simple document ID is required.")
@@ -61,7 +80,14 @@ def bind_evidence(source: EvidenceInput) -> BoundEvidence:
     for value in (source.captured_on, source.observed_on):
         if value is not None and type(value) is not date:
             raise ValueError("Source dates must be dates or None.")
-    document = read_evidence_document(source.filename, source.content)
+    bindings = _BINDINGS.get()
+    if bindings is not None and source in bindings:
+        return bindings[source]
+    if bounded_upload:
+        from src.bounded_document_parser import read_bounded_document
+        document = read_bounded_document(source.filename, source.content)
+    else:
+        document = read_evidence_document(source.filename, source.content)
     metadata = {key: value for key, value in asdict(source).items() if key != "content"}
     content_hash = sha256(source.content).hexdigest()
     fingerprint = _digest({"metadata": metadata, "content_sha256": content_hash,

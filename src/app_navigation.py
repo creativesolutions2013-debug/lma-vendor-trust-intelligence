@@ -26,11 +26,13 @@ def select_app_page(principal):
     st.sidebar.title("LMA Vendor Trust Intelligence")
     st.sidebar.caption("Development identity — not production authentication")
     st.sidebar.write({"User": principal.display_name, "Role": principal.role})
-    pages = ["Guided Assessment Demo"] + [
-        name for name, permission in LEGACY_PAGE_PERMISSIONS.items()
-        if can(principal, permission)
-    ]
+    pages = ["New Assessment"]
+    if st.sidebar.checkbox("Show internal development tools", value=False):
+        pages += ["Guided Assessment Demo"] + [
+            name for name, permission in LEGACY_PAGE_PERMISSIONS.items()
+            if can(principal, permission)
+        ]
     selected = st.sidebar.radio("Navigation", pages)
-    if selected != "Guided Assessment Demo":
+    if selected not in {"New Assessment", "Guided Assessment Demo"}:
         st.sidebar.caption("Legacy development pages use global records. Synthetic data only.")
     return selected

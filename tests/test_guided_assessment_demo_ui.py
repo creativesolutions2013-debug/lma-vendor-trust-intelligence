@@ -35,7 +35,13 @@ def run(at):
 def app(*, actual=False):
     instance = (AppTest.from_file(str(ROOT / "app.py"), default_timeout=35) if actual
                 else AppTest.from_string(PILOT, default_timeout=35))
-    return run(instance)
+    run(instance)
+    if actual:
+        widget(instance.sidebar.checkbox, "Show internal development tools").check()
+        run(instance)
+        widget(instance.sidebar.radio, "Navigation").set_value("Guided Assessment Demo")
+        run(instance)
+    return instance
 
 
 def step(at, name):
