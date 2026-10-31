@@ -286,3 +286,48 @@ def test_current_document_date_cannot_redate_historical_achieved_metrics(intake,
     assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
     assert all(not f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('condition', ['if compatibility mode is selected', 'when compatibility mode is selected', 'unless compatibility mode is disabled'])
+def test_ordinary_tls_conditions_do_not_assert_current_activation(intake,condition):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+condition+'.'),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'No dependencies were excluded from the exercise.',
+    'Identity provider was never excluded from the exercise.',
+    'None of the dependencies were excluded from the exercise.',
+    'Identity provider was not excluded from the exercise.',
+])
+def test_negated_exclusions_never_become_exercise_deficiencies(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('separator', ['; ', '. ', ' but '])
+def test_negated_exclusion_does_not_suppress_separately_stated_exclusion(intake,separator):
+    body='Identity provider was not excluded from the exercise'+separator+'database was excluded from the exercise.'
+    source=upload(intake,body,'BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    exclusions=[f for f in result['facts'] if f['dimension']=='scope_complete']
+    assert len(exclusions)==1 and 'database was excluded' in exclusions[0]['quote']
+    assert exclusions[0]['eligible_for_preview'] and result['preview']['outcome_if_confirmed']=='Risk Identified'
+    assert all(f['quote'] in source.evidence.document.segments[int(f['source_id'].rsplit(':',1)[1])-1].text for f in result['facts'])
+
+
+@pytest.mark.parametrize('duration', ['4 hr. 30 minutes', '4 hrs. and 30 minutes', '240 min. plus 30 minutes', '240 mins. (30 minutes extra)'])
+def test_duration_abbreviation_punctuation_does_not_discard_compound_tail(intake,duration):
+    result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO '+duration+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('body', ['No TLS 1.0 is enabled on listener 443.', 'Neither TLS 1.0 nor TLS 1.1 is enabled on listener 443.'])
+def test_prefix_negation_also_blocks_current_tls_comparison(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'

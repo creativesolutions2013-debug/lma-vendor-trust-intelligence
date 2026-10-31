@@ -14,10 +14,11 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-4'
+VERSION = 'M5B-candidates-5'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
+CLAUSE_BREAKS = r';|(?<!\bhr\.)(?<!\bhrs\.)(?<!\bmin\.)(?<!\bmins\.)(?<=[.!?])\s+|\s+but\s+'
 LIMITATION = ('Conservative English/ISO-date candidate extraction for TLS listener configuration/scan statements '
     'and achieved DR exercise metrics only. Every fact and comparison is unconfirmed. '
     'Other controls and unsupported wording need manual review. No vendor approval, authoritative control outcome, '
@@ -130,10 +131,15 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                           'eligible_for_preview': not limitation})
             if not limitation and (direction != 'unknown' or dimension in ('enabled_version', 'disabled_version')): eligible.append((observation, direction_source))
 
-        for ordinal, location, line in rows:
+        for ordinal, location, line in _clauses(rows):
             line_uncertainty = _line_uncertainties(line, intake.environment)
             # Keep limitations and exclusions even when metric extraction is unavailable.
-            excluded = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I)) and not re.search(r'\b(no exclusions?|none excluded|not excluded)\b', line, re.I)
+            scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
+            negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
+            excluded = scope_marker and not negated_scope
+            if negated_scope:
+                add('unresolved_exclusion', line, ordinal, location, line, 'unresolved scope statement',
+                    ('Negated or ambiguous exclusion clause; it cannot establish an exercise deficiency or full coverage.',))
             if requirement_id == 'ENC-01':
                 versions = list(re.finditer(r'\bTLS\s*v?\s*1\.([0-3])\b', line, re.I))
                 if not versions: continue
@@ -205,6 +211,14 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
     }
 
 
+def _clauses(rows):
+    """Keep independent assertions/negations separate; retain exact source spans."""
+    for ordinal, location, line in rows:
+        for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
+            if clause.strip():
+                yield ordinal, location, clause.strip()
+
+
 def _line_uncertainties(line, assessed_environment):
     """Every fact type inherits local scope/time limitations, not just metrics."""
     issues = []
@@ -212,10 +226,10 @@ def _line_uncertainties(line, assessed_environment):
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
             or re.search(r'\bnon-production\b', line, re.I)):
         issues.append('Source clause states an environment outside the assessed environment or an unspecified non-production scope.')
-    if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|unless)\b|\bonly (?:if|when)\b', line, re.I):
+    if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|unless|if|when)\b|\bonly (?:if|when)\b', line, re.I):
         issues.append('Historical, hypothetical, conditional or ambiguous source clause; establish its own date and current meaning.')
-    if re.search(r'\b(?:not supported|not disabled|not rejected)\b', line, re.I):
-        issues.append('Unsupported negated source clause; verify protocol meaning explicitly.')
+    if re.search(r"\b(?:no|none|never|neither|nor|cannot|without|not supported|not disabled|not rejected)\b|n't\b", line, re.I):
+        issues.append('Negated source clause; verify its meaning explicitly before any current comparison.')
     return tuple(issues)
 
 
@@ -241,7 +255,7 @@ def _dr_metrics(line, kind):
     Compound/range durations and unsupported negation are unresolved, never a
     partially parsed favourable duration. Quote remains the complete original line.
     """
-    for clause in re.split(r';|(?<=[.!?])\s+', line):
+    for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
         matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
         inherited = False
         for i, metric in enumerate(matches):
