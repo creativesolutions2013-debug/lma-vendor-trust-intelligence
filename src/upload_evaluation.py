@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-9'
+VERSION = 'M5B-candidates-10'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -46,6 +46,8 @@ def _context(bound, intake, family, age):
     fields = {'service': [], 'environment': [], 'date': []}
     traces = []
     kinds = set()
+    type_denials = []
+    denied_kinds = set()
     for ordinal, location, line in rows:
         for field, pattern in (
             ('service', r'^Service\s*:\s*(.+?)\s*[.;]?$'),
@@ -62,18 +64,26 @@ def _context(bound, intake, family, age):
                 traces.append({**_citation(bound, ordinal, location, line), 'field': field, 'value': value})
         # Source wording, not the uploader's label, must identify technical material.
         prior_kinds = set(kinds)
-        if re.search(r'\b(policy|recovery plan|plan objectives?|planned exercise|proposed test)\b', line, re.I): kinds.add('policy')
-        if re.search(r'\b(configuration|config export)\b', line, re.I): kinds.add('configuration')
-        if re.search(r'\b(scan results?|scan report|exercise results?|test results?|completed (?:recovery |DR )?(?:exercise|test)|(?:exercise|test) (?:was )?completed)\b', line, re.I): kinds.add('test')
+        denial = re.search(r"(?:\b(?:not|never|no|neither)|n't)\s+(?:(?:a|an|the|actual|real)\s+)*(?:configuration|config export|scan (?:results?|report)|exercise results?|test results?)\b", line, re.I)
+        if denial:
+            type_denials.append(line)
+            denied_kinds.add('configuration' if re.search(r'configuration|config export', denial.group(), re.I) else 'test')
+            traces.append({**_citation(bound, ordinal, location, line), 'field': 'kind', 'value': 'negated source-type declaration'})
+        else:
+            genre = re.sub(r'^(?:(?:document|evidence|artifact)(?: type)?\s*:\s*|this is (?:a |an )?|these are )', '', line, flags=re.I)
+            if re.fullmatch(r'(?:(?:synthetic|vendor|customer|security|DR|recovery)\s+)*(?:policy|plan)(?:\s+(?:statement|objectives?))?[.!]?', genre, re.I): kinds.add('policy')
+            if re.fullmatch(r'(?:(?:synthetic|TLS)\s+)*(?:configuration|config)(?:\s+(?:export|report|record))?[.!]?', genre, re.I): kinds.add('configuration')
+            if re.fullmatch(r'(?:(?:synthetic|DR|recovery|disaster recovery|TLS)\s+)*(?:exercise|test|scan)\s+(?:results?|report|record)[.!]?', genre, re.I): kinds.add('test')
         for kind in kinds - prior_kinds:
             traces.append({**_citation(bound, ordinal, location, line), 'field': 'kind', 'value': kind})
     extracted = {k: values[0] if len(set(v.casefold() for v in values)) == 1 else None for k, values in fields.items()}
-    extracted['kind'] = next(iter(kinds)) if len(kinds) == 1 else None
+    extracted['kind'] = next(iter(kinds)) if len(kinds) == 1 and not kinds.intersection(denied_kinds) else None
     declared = dict(service=bound.source.service, environment=bound.source.environment,
                     date=bound.source.observed_on.isoformat() if bound.source.observed_on else None,
                     kind=bound.source.evidence_kind)
     issues = (['Candidate extraction is incomplete: line/context budget exceeded; manually review the full original.']
               if truncated or len(traces) > MAX_FACTS else [])
+    if kinds.intersection(denied_kinds) or (not kinds and bound.source.evidence_kind in denied_kinds): issues.append('Source explicitly denies its technical document type; declarations cannot establish operating evidence.')
     traces = traces[:MAX_FACTS]
     for field in ('service', 'environment', 'date', 'kind'):
         value = extracted[field]
@@ -136,6 +146,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             line_uncertainty = _line_uncertainties(line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
             if re.search(r'\b(?:except|or|while|until|alternatively|otherwise|instead|rather)\b|\bbut\s+not\b|;\s*not\b|\?', source_line, re.I):
                 line_uncertainty += ('Enclosing source line contains an exception, alternative, qualification or question; verify the complete context before a current comparison.',)
+            line_uncertainty += _enclosing_qualifications(source_line, line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
@@ -155,37 +166,28 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if not (re.fullmatch(r'\s*', heading) or re.fullmatch(known_heading + r'(?:enabled(?: protocols?)?\s*[:=]\s*)?', heading, re.I)
                         or re.fullmatch(r'\s*enabled(?: protocols?)?\s*[:=]\s*', heading, re.I)):
                     uncertainty.append('Unrecognized protocol-clause prefix; validate its qualification before comparing current activation.')
-                enabled, disabled = [], []
+                enabled, disabled, unresolved, pending = [], [], [], []
                 for i, match in enumerate(versions):
-                    # Restrict verb association to this version's clause. Unknown is not enabled.
                     tail = line[match.end():versions[i+1].start() if i+1 < len(versions) else len(line)]
-                    head = line[:match.start()]
-                    version = 10 + int(match.group(1))
-                    state = _tls_state(tail, head)
-                    if state == 'disabled': disabled.append(version)
-                    elif state == 'enabled': enabled.append(version)
+                    pending.append((i, 10 + int(match.group(1))))
+                    if i+1 < len(versions) and re.fullmatch(r'[\s,]*(?:and)?[\s,]*', tail, re.I):
+                        continue  # A contiguous subgroup shares its next explicit state.
+                    group_head = line[:versions[pending[0][0]].start()]
+                    state = _tls_state(tail, group_head)
+                    target = disabled if state == 'disabled' else enabled if state == 'enabled' else unresolved
+                    target.extend(value for _, value in pending)
+                    pending = []
+                unresolved.extend(value for _,value in pending)
                 if len(list(re.finditer(r'\b(listener|endpoint)\s+[a-z0-9][a-z0-9_.:/-]*', line, re.I))) > 1:
                     subject = 'ambiguous endpoints'
                     uncertainty.append('Multiple endpoint identities in one clause; review protocol-to-endpoint association.')
-                # Share a state only across a bare protocol list. A support-only
-                # clause beside an enabled clause must not become enabled evidence.
-                bare_list = all(re.fullmatch(r'[\s,]*(?:and)?[\s,]*', line[a.end():b.start()], re.I)
-                                for a,b in zip(versions, versions[1:]))
-                if len(versions) > 1 and bare_list:
-                    trailing = line[versions[-1].end():]
-                    leading = line[:versions[0].start()]
-                    shared_state = _tls_state(trailing, leading)
-                    if shared_state == 'enabled':
-                        enabled = [10 + int(m.group(1)) for m in versions]
-                    elif shared_state == 'disabled':
-                        disabled = [10 + int(m.group(1)) for m in versions]
                 for version in enabled:
                     add('enabled_version', version, ordinal, location, line, subject, uncertainty)
                 for version in disabled:
                     add('disabled_version', version, ordinal, location, line, subject, uncertainty)
                 if {10,11} <= set(disabled): add('legacy_rejected', True, ordinal, location, line, subject, uncertainty)
-                if not enabled and not disabled:
-                    add('reported_versions', ', '.join('TLS 1.'+m.group(1) for m in versions), ordinal, location, line, subject,
+                if unresolved:
+                    add('reported_versions', ', '.join('TLS 1.'+str(v-10) for v in unresolved), ordinal, location, line, subject,
                         (*uncertainty, 'Supported-version wording is not enabled configuration or operating evidence.'))
                 if excluded:
                     add('unresolved_exclusion', line, ordinal, location, line, subject, (*uncertainty, 'TLS inventory/scan coverage effect requires manual source interpretation.'))
@@ -232,6 +234,19 @@ def _clauses(rows):
                 yield ordinal, location, clause.strip(), line
 
 
+def _enclosing_qualifications(parent, assertion, environment, observed, as_of, max_age):
+    """Import qualifying fragments, not separately asserted opposing observations."""
+    issues = []
+    for fragment in re.split(CLAUSE_BREAKS, parent, flags=re.I):
+        fragment = fragment.strip()
+        if not fragment or fragment == assertion:
+            continue
+        independent = re.search(r'\bTLS\s*v?\s*1\.[0-3]\s+(?:(?:is|are|was|were)\s+)?(?:not\s+)?(?:enabled|disabled|allowed|accepted|rejected|blocked)\b|\b(?:RTO|RPO)\s*(?::|=|was|of)?\s*\d|\b(?:was|were|is|are)\s+(?:not\s+)?excluded\b|\b(?:exercise|test)\s+(?:was\s+)?completed\b', fragment, re.I)
+        if not independent:
+            issues.extend(_line_uncertainties(fragment, environment, observed, as_of, max_age))
+    return tuple(dict.fromkeys(issues))
+
+
 def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_days):
     """Every fact type inherits local scope/time limitations, not just metrics."""
     issues = []
@@ -264,7 +279,7 @@ def _affirmative_exclusion(clause):
     Only direct passive/active occurrence wording is eligible for comparison;
     other scope mentions remain source-cited unresolved observations.
     """
-    entity = r'[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}'
+    entity = r'(?P<object>[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}?)'
     exercise = r'(?:the\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
     suffix = (r'(?:\s+on\s+\d{4}-\d{2}-\d{2})?'
               r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment)?'
@@ -272,7 +287,12 @@ def _affirmative_exclusion(clause):
     passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+from\s+' + exercise + suffix, clause, re.I)
     active = re.fullmatch(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\s+' + entity + suffix, clause, re.I)
 
-    return bool(passive or active)
+    match = passive or active
+    if not match: return False
+    # Entity slots are identifiers/noun labels, not a place for omitted predicates,
+    # report associations or adverbial occurrence qualifications.
+    object_text = match.group('object')
+    return not re.search(r'\b(?:only|from|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):

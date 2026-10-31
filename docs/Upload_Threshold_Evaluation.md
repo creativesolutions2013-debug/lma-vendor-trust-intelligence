@@ -48,8 +48,10 @@ Upload date is never substituted for observation date. All candidate kinds
 (metrics, completion and exclusions) inherit clause-local scope and temporal
 uncertainty, including ordinary if/when conditions and clause-local ISO dates or
 explicit year qualifications; a current document date cannot re-date explicitly historical results. TLS uses 90 days; recovery
-uses the typed customer test interval. Source type uses explicit configuration,
-scan/test/exercise-results and policy/plan wording; unknown/mixed types or mismatch
+uses the typed customer test interval. Source type uses affirmative configuration,
+scan/test/exercise-results and policy/plan genre declarations; keyword mentions
+or negated declarations cannot promote an artifact to operating evidence. Policy
+references inside an exercise record do not reclassify it as policy intent; unknown/mixed types or mismatch
 with the uploader label block eligibility. These are textual candidates, not
 verified artifact authenticity or semantic classification.
 
@@ -132,3 +134,9 @@ objectives, exclusions, policy-only/ambiguous units, reclassification/challenge,
 no unbounded reparsing and actual-app upload/review/export/reevaluation. No real
 vendor corpus, external AI, estimated accuracy or time-savings claims are used.
 Owner hands-on acceptance and separate merge authorization remain required.
+
+Enclosing qualifying fragments carry scope/date uncertainty to the assertion they
+qualify; independently asserted opposing observations remain separate. Contiguous
+TLS protocol subgroups retain shared enabled/disabled states even inside mixed
+lists. Active exclusion objects must be unqualified entity labels, not occurrence
+adverbs or report associations.

@@ -453,3 +453,61 @@ def test_unsupported_negation_placement_is_not_an_affirmative_exclusion(intake,b
     result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
     assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('family,body', [
+    ('ENC-01','Listener 443: TLS 1.0 is enabled; this applies only in the test environment.'),
+    ('BCP-01','Achieved RTO 300 minutes; this result was observed on 2024-01-01.'),
+    ('BCP-01','Identity provider was excluded from the exercise; this applied only in the test environment.'),
+])
+def test_consequential_enclosing_qualifications_reach_the_asserted_fact(intake,family,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family),)),family)
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded the identity provider only hypothetically.', 'The exercise excluded the identity provider from its report.'])
+def test_active_exclusion_object_cannot_absorb_nonoperating_qualification(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('state', ['disabled','rejected'])
+def test_shared_protocol_state_subgroups_inside_mixed_lists_preserve_conflicts(intake,state):
+    body='Listener 443: TLS 1.0 and TLS 1.1 are '+state+', TLS 1.2 is enabled.\nListener 443: TLS 1.0 is enabled.'
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert {f['value'] for f in result['facts'] if f['dimension']=='disabled_version'}=={10,11}
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+
+
+@pytest.mark.parametrize('family,kind,body', [
+    ('ENC-01','This is not a configuration export.','Listener 443: TLS 1.0 is enabled.'),
+    ('ENC-01',"This isn't a configuration export.",'Listener 443: TLS 1.0 is enabled.'),
+    ('BCP-01','These are not exercise results.','Recovery exercise completed. Achieved RTO 300 minutes.'),
+    ('BCP-01',"These aren't exercise results.",'Recovery exercise completed. Achieved RTO 300 minutes.'),
+])
+def test_explicit_source_type_denials_cannot_become_operating_evidence(intake,family,kind,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family,type=kind),)),family)
+    assert all(s['extracted']['kind'] is None for s in result['sources'])
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_mentioning_configuration_is_not_an_affirmative_artifact_type(intake):
+    source=upload(intake,'We discuss configuration export concepts.\nListener 443: TLS 1.0 is enabled.',type='Vendor assertion')
+    result=evaluation(build_assessment(intake,(source,)))
+    assert result['sources'][0]['extracted']['kind'] is None
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+def test_policy_references_do_not_reclassify_an_actual_exercise_record(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Customer policy requires RTO 240 minutes.\nAchieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['sources'][0]['extracted']['kind']=='test'
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+def test_denial_of_another_genre_is_not_denial_of_configuration(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'These are not exercise results.\nListener 443: TLS 1.0 is enabled.'),)))
+    assert result['sources'][0]['extracted']['kind']=='configuration'
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
