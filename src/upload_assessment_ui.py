@@ -169,11 +169,15 @@ def _details(row):
     st.info(row.outcome)
     st.text('Next action: ' + row.next_action)
     if row.review:
+        displayed = set()
         for fact in row.review.facts:
-            if fact.direction == 'adverse':
+            if fact.direction == 'adverse' and (fact.proposal.source_id, fact.proposal.quote) not in displayed:
                 st.warning('Unverified text concern'); st.code(fact.proposal.quote, language=None)
+                displayed.add((fact.proposal.source_id, fact.proposal.quote))
         for signal in row.review.signals:
-            st.warning('Unverified exception text'); st.code(signal.quote, language=None)
+            if (signal.source_id, signal.quote) not in displayed:
+                st.warning('Unverified exception text'); st.code(signal.quote, language=None)
+                displayed.add((signal.source_id, signal.quote))
     with st.expander('Sources and limitations'):
         if row.review:
             for bound in row.review.evidence:
@@ -184,22 +188,46 @@ def _details(row):
         st.caption('No specialist technical interpretation is supplied for arbitrary uploaded documents. Quotation matches and uploader routing do not establish meaning, operating effectiveness or compliance.')
 
 
+def _evaluation(evaluation):
+    st.markdown('**' + evaluation['requirement_id'] + ' · ' + evaluation['status'] + '**')
+    st.text('Customer example threshold: ' + evaluation['threshold'])
+    facts = evaluation['facts']
+    if facts:
+        st.dataframe([{'Proposed comparison (unconfirmed)': f['comparison'], 'Source': f['filename'] + ' · ' + f['location'],
+                       'Uncertainty': '; '.join(f['uncertainties']) or 'Meaning, scope and source authenticity require confirmation'} for f in facts], hide_index=True)
+    else:
+        st.info('No supported technical fact phrase extracted; this is an evidence gap, not a failed control.')
+    for source in evaluation['sources']:
+        for uncertainty in source['uncertainties']: st.caption(source['filename'] + ': ' + uncertainty)
+    if evaluation['preview']['conflicts']:
+        st.warning('Conflicting candidate observations; reconcile the retained sources.')
+    st.text('Next action: ' + evaluation['next_action'])
+    with st.expander('Source quotes and candidate details: ' + evaluation['requirement_id']):
+        seen = set()
+        for fact in facts:
+            key = (fact['source_id'], fact['quote'])
+            if key not in seen:
+                st.caption(fact['filename'] + ' · ' + fact['location']); st.code(fact['quote'], language=None)
+                seen.add(key)
+        for source in evaluation['sources']:
+            st.text('Source-stated vs uploader-declared metadata: ' + source['filename'])
+            st.json({'source_stated': source['extracted'], 'uploader_declared': source['declared']})
+            for citation in source['context_citations']:
+                st.caption(citation['location']); st.code(citation['quote'], language=None)
+        st.caption(evaluation['limitations'])
+
+
 def _evaluate(model):
     st.subheader('What LMA evaluated')
     st.write('The existing applicability engine selected the requirements below. Your source text is parsed and routed to source-bound manual reviews. No uploaded control is automatically satisfied. Example criteria are supplied for synthetic testing, not your organization’s approved policies.')
     st.dataframe([{'Requirement': r.requirement_id, 'Title': r.title, 'Status': r.outcome,
                    'Next action': r.next_action} for r in model.worklist.rows], hide_index=True)
-    st.markdown('**Limited deterministic text screening**')
-    for result in model.customer_context['screening']:
-        if result['citations']:
-            st.write(result['requirement_id'] + ' · Unverified text screening: ' + result['draft_text_signal'])
-            st.write(result['reason'])
-            for citation in result['citations']:
-                st.caption(citation['filename'] + ' · ' + citation['location'])
-                st.code(citation['excerpt'], language=None)
-    st.caption('TLS screening compares statements to TLS 1.2; it does not verify enabled configuration or reject historical/out-of-scope text automatically. Recovery RTO/RPO and other technical/control thresholds require human interpretation. AI is off; no external calls are enabled.')
+    for evaluation in model.customer_context['evaluations']:
+        _evaluation(evaluation)
+    st.caption('Candidate meanings require analyst confirmation. Draft review annotations do not confirm facts. TLS cipher suites, encryption at rest and other control families remain manual; AI and external calls are off.')
     selected = st.selectbox('Requirement details', [r.requirement_id for r in model.worklist.rows], key=PREFIX + 'detail')
-    _details(next(r for r in model.worklist.rows if r.requirement_id == selected))
+    with st.expander('Full requirement and source review'):
+        _details(next(r for r in model.worklist.rows if r.requirement_id == selected))
 
 
 def _review(model):
