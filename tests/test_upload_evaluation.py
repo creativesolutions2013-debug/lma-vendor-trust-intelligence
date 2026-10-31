@@ -539,3 +539,30 @@ def test_declaration_and_denial_share_the_same_genre_modifier_grammar(intake,fam
     assert all(s['extracted']['kind'] is None for s in result['sources'])
     assert not any(f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Listener 443: TLS 1.0 is enabled on the test endpoints.',
+    'Test primary listener 443: TLS 1.0 is enabled.',
+    'Test alternate endpoint 443: TLS 1.0 is enabled.',
+    'Primary test listener 443: TLS 1.0 is enabled.',
+    'Listener 443: TLS 1.0 is enabled; Environment: test.',
+])
+def test_scope_validation_covers_plural_and_modifier_grammar(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Nothing was excluded from the exercise.',
+    'Nobody was excluded from the exercise.',
+    'Zero dependencies were excluded from the exercise.',
+    'The exercise excluded zero dependencies.',
+    'The exercise excluded 0 dependencies.',
+])
+def test_negative_or_zero_exclusion_quantities_are_not_deficiencies_or_coverage_proof(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed'] not in ('Risk Identified','Met')

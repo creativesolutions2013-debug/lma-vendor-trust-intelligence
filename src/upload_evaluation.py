@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-11'
+VERSION = 'M5B-candidates-12'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -266,7 +266,9 @@ def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_
             issues.append('Clause-local date differs from the source observation date or is stale/future; do not re-date this fact from the document header.')
     if re.search(r'\b(?:in|during|from|year)\s+(?:19|20)\d{2}\b(?!-\d)|\b(?:19|20)\d{2}\s+(?:exercise|test|results)\b', line, re.I):
         issues.append('Clause-local year does not establish its own complete current observation date; verify the exercise/date binding.')
-    environments = re.findall(r'\b(production|test|staging|development|sandbox)\s+(?:environment|listener|endpoint)\b', line, re.I)
+    modifier_groups = re.findall(r'\b((?:(?:production|test|staging|development|sandbox|primary|alternate)\s+){1,2})(?:environments?|listeners?|endpoints?)\b', line, re.I)
+    environments = [value for group in modifier_groups for value in re.findall(r'\b(production|test|staging|development|sandbox)\b', group, re.I)]
+    environments += re.findall(r'\benvironment\s*:\s*(production|test|staging|development|sandbox)\b', line, re.I)
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
             or re.search(r'\bnon-production\b', line, re.I)):
         issues.append('Source clause states an environment outside the assessed environment or an unspecified non-production scope.')
@@ -297,7 +299,7 @@ def _affirmative_exclusion(clause):
     # Entity slots are identifiers/noun labels, not a place for omitted predicates,
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
-    return not re.search(r'\b(?:only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):

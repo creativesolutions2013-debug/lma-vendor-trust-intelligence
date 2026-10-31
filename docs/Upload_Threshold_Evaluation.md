@@ -145,3 +145,7 @@ Service comparison/grouping uses the same case-insensitive key while retaining
 original service metadata and quotes. Genre declarations and denials share one
 modifier grammar; contradictory modified type declarations block eligibility.
 Exclusion object labels cannot absorb prepositional occurrence qualifications.
+
+Scope validation follows the accepted singular/plural endpoint and modifier
+grammar. Negative pronouns and zero-quantity exclusion objects stay unresolved;
+absence-of-exclusion wording does not establish full tested coverage.
