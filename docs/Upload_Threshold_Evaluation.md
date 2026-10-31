@@ -140,3 +140,8 @@ qualify; independently asserted opposing observations remain separate. Contiguou
 TLS protocol subgroups retain shared enabled/disabled states even inside mixed
 lists. Active exclusion objects must be unqualified entity labels, not occurrence
 adverbs or report associations.
+
+Service comparison/grouping uses the same case-insensitive key while retaining
+original service metadata and quotes. Genre declarations and denials share one
+modifier grammar; contradictory modified type declarations block eligibility.
+Exclusion object labels cannot absorb prepositional occurrence qualifications.

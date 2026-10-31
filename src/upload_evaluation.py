@@ -14,11 +14,17 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-10'
+VERSION = 'M5B-candidates-11'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
 CLAUSE_BREAKS = r';|(?<!\bhr\.)(?<!\bhrs\.)(?<!\bmin\.)(?<!\bmins\.)(?<=[.!?])\s+|\s+but\s+'
+GENRES = {
+    'policy': r'(?:(?:synthetic|vendor|customer|security|DR|recovery)\s+)*(?:policy|plan)(?:\s+(?:statement|objectives?))?',
+    'configuration': r'(?:(?:synthetic|TLS)\s+)*(?:configuration|config)(?:\s+(?:export|report|record))?',
+    'test': r'(?:(?:synthetic|DR|recovery|disaster recovery|TLS)\s+)*(?:exercise|test|scan)\s+(?:results?|report|record)',
+}
+
 LIMITATION = ('Conservative English/ISO-date candidate extraction for TLS listener configuration/scan statements '
     'and achieved DR exercise metrics only. Every fact and comparison is unconfirmed. '
     'Other controls and unsupported wording need manual review. No vendor approval, authoritative control outcome, '
@@ -64,16 +70,15 @@ def _context(bound, intake, family, age):
                 traces.append({**_citation(bound, ordinal, location, line), 'field': field, 'value': value})
         # Source wording, not the uploader's label, must identify technical material.
         prior_kinds = set(kinds)
-        denial = re.search(r"(?:\b(?:not|never|no|neither)|n't)\s+(?:(?:a|an|the|actual|real)\s+)*(?:configuration|config export|scan (?:results?|report)|exercise results?|test results?)\b", line, re.I)
-        if denial:
-            type_denials.append(line)
-            denied_kinds.add('configuration' if re.search(r'configuration|config export', denial.group(), re.I) else 'test')
-            traces.append({**_citation(bound, ordinal, location, line), 'field': 'kind', 'value': 'negated source-type declaration'})
-        else:
-            genre = re.sub(r'^(?:(?:document|evidence|artifact)(?: type)?\s*:\s*|this is (?:a |an )?|these are )', '', line, flags=re.I)
-            if re.fullmatch(r'(?:(?:synthetic|vendor|customer|security|DR|recovery)\s+)*(?:policy|plan)(?:\s+(?:statement|objectives?))?[.!]?', genre, re.I): kinds.add('policy')
-            if re.fullmatch(r'(?:(?:synthetic|TLS)\s+)*(?:configuration|config)(?:\s+(?:export|report|record))?[.!]?', genre, re.I): kinds.add('configuration')
-            if re.fullmatch(r'(?:(?:synthetic|DR|recovery|disaster recovery|TLS)\s+)*(?:exercise|test|scan)\s+(?:results?|report|record)[.!]?', genre, re.I): kinds.add('test')
+        genre = re.sub(r'^(?:(?:document|evidence|artifact)(?: type)?\s*:\s*|this is (?:a |an )?|these are )', '', line, flags=re.I)
+        for kind, pattern in GENRES.items():
+            denial = re.search(r"(?:\b(?:not|never|no|neither)|n't)\s+(?:(?:a|an|the|actual|real)\s+)*" + pattern + r'(?=$|[\s.!?;:,])', line, re.I)
+            if denial:
+                type_denials.append(line)
+                denied_kinds.add(kind)
+                traces.append({**_citation(bound, ordinal, location, line), 'field': 'kind', 'value': 'negated ' + kind + ' source-type declaration'})
+            elif re.fullmatch(pattern + r'[.!]?', genre, re.I):
+                kinds.add(kind)
         for kind in kinds - prior_kinds:
             traces.append({**_citation(bound, ordinal, location, line), 'field': 'kind', 'value': kind})
     extracted = {k: values[0] if len(set(v.casefold() for v in values)) == 1 else None for k, values in fields.items()}
@@ -192,7 +197,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if excluded:
                     add('unresolved_exclusion', line, ordinal, location, line, subject, (*uncertainty, 'TLS inventory/scan coverage effect requires manual source interpretation.'))
             else:
-                subject = 'exercise for ' + (extracted['service'] or 'unspecified service')
+                subject = 'exercise for ' + (extracted['service'].casefold() if extracted['service'] else 'unspecified service')
                 if excluded:
                     exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
                     if extracted['kind'] == 'test' and exercise_scope and _affirmative_exclusion(line):
@@ -292,7 +297,7 @@ def _affirmative_exclusion(clause):
     # Entity slots are identifiers/noun labels, not a place for omitted predicates,
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
-    return not re.search(r'\b(?:only|from|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    return not re.search(r'\b(?:only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):

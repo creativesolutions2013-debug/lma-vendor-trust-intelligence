@@ -511,3 +511,31 @@ def test_denial_of_another_genre_is_not_denial_of_configuration(intake):
     result=evaluation(build_assessment(intake,(upload(intake,'These are not exercise results.\nListener 443: TLS 1.0 is enabled.'),)))
     assert result['sources'][0]['extracted']['kind']=='configuration'
     assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+def test_case_equivalent_service_names_share_a_dr_conflict_key(intake):
+    first=upload(intake,'Achieved RTO 300 minutes.','BCP-01')
+    second=read_upload(intake,'second-result.txt',source_text(intake,'Achieved RTO 120 minutes.','BCP-01',service=intake.service.lower()).encode(),('BCP-01',),kind='test',observed_on=date(2026,10,20))
+    result=evaluation(build_assessment(intake,(first,second)),'BCP-01')
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+    assert len({f['subject'] for f in result['facts']})==1
+    assert {s['extracted']['service'] for s in result['sources']}=={intake.service,intake.service.lower()}
+
+
+@pytest.mark.parametrize('qualifier', ['in theory', 'in principle', 'under a hypothetical assumption'])
+def test_exclusion_objects_do_not_absorb_prepositional_occurrence_qualifications(intake,qualifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'The exercise excluded the identity provider '+qualifier+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('family,denial,body', [
+    ('BCP-01','These are not DR exercise results.','Achieved RTO 300 minutes.'),
+    ('BCP-01','These are not synthetic DR exercise results.','Achieved RTO 300 minutes.'),
+    ('ENC-01','This is not a TLS configuration export.','Listener 443: TLS 1.0 is enabled.'),
+])
+def test_declaration_and_denial_share_the_same_genre_modifier_grammar(intake,family,denial,body):
+    result=evaluation(build_assessment(intake,(upload(intake,denial+'\n'+body,family),)),family)
+    assert all(s['extracted']['kind'] is None for s in result['sources'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
