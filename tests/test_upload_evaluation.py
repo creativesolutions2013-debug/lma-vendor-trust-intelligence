@@ -419,3 +419,37 @@ def test_direct_affirmative_exercise_exclusions_still_compare(intake,body):
     result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
     assert any(f['dimension']=='scope_complete' and f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise except in the production environment.',
+    'Identity provider was excluded from the exercise only while compatibility mode was selected.',
+    'The exercise excluded the identity provider except in the production environment.',
+    'Identity provider was excluded from the exercise; except in production.',
+    'Identity provider was excluded from the exercise but not in production.',
+])
+def test_exclusion_qualification_cannot_be_lost_at_the_predicate_or_clause_boundary(intake,body):
+    source=upload(intake,body,'BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+    assert all(f['quote'] in source.evidence.document.segments[int(f['source_id'].rsplit(':',1)[1])-1].text for f in result['facts'])
+
+
+@pytest.mark.parametrize('family,body', [
+    ('ENC-01','Listener 443: TLS 1.0 is enabled?'),
+    ('BCP-01','Achieved RTO 300 minutes?'),
+    ('BCP-01','Identity provider was excluded from the exercise?'),
+    ('BCP-01','Recovery exercise completed?'),
+])
+def test_questions_are_not_affirmative_source_observations(intake,family,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family),)),family)
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded not the identity provider from testing.', 'Identity provider was excluded from the exercise, not in production.'])
+def test_unsupported_negation_placement_is_not_an_affirmative_exclusion(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'

@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-8'
+VERSION = 'M5B-candidates-9'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -110,6 +110,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
 
         first_fact = len(facts)
         line_uncertainty = ()
+        source_line = None
 
         def add(dimension, value, ordinal, location, quote, subject, uncertainty=()):
             if len(facts) - first_fact >= MAX_FACTS:
@@ -118,7 +119,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 return
             direction_source = replace(bound.source, evidence_kind=extracted['kind'] or 'assertion', observed_on=observed)
             observation = Observation(f'{requirement_id}-{bound.source.document_id}-{len(observations)}', dimension,
-                value, segment_id(bound.source.document_id, ordinal), bound.fingerprint, location, quote, subject,
+                value, segment_id(bound.source.document_id, ordinal), bound.fingerprint, location, source_line or quote, subject,
                 True, '')
             direction = evaluator.direction(threshold, observation, direction_source)
             observation = replace(observation, concern='potential_exception' if direction == 'adverse' else '')
@@ -131,8 +132,10 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                           'eligible_for_preview': not limitation})
             if not limitation and (direction != 'unknown' or dimension in ('enabled_version', 'disabled_version')): eligible.append((observation, direction_source))
 
-        for ordinal, location, line in _clauses(rows):
+        for ordinal, location, line, source_line in _clauses(rows):
             line_uncertainty = _line_uncertainties(line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
+            if re.search(r'\b(?:except|or|while|until|alternatively|otherwise|instead|rather)\b|\bbut\s+not\b|;\s*not\b|\?', source_line, re.I):
+                line_uncertainty += ('Enclosing source line contains an exception, alternative, qualification or question; verify the complete context before a current comparison.',)
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
@@ -226,12 +229,14 @@ def _clauses(rows):
     for ordinal, location, line in rows:
         for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
             if clause.strip():
-                yield ordinal, location, clause.strip()
+                yield ordinal, location, clause.strip(), line
 
 
 def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_days):
     """Every fact type inherits local scope/time limitations, not just metrics."""
     issues = []
+    if '?' in line:
+        issues.append('Interrogative source clause is not an affirmative observation.')
     for match in re.finditer(r'\b\d{4}-\d{2}-\d{2}\b', line):
         try: clause_date = date.fromisoformat(match.group())
         except ValueError:
@@ -247,7 +252,8 @@ def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_
         issues.append('Source clause states an environment outside the assessed environment or an unspecified non-production scope.')
     if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|can|could|would|may|might|unless|if|when|potential|possible|potentially|possibly|maybe|perhaps|pending)\b|\bonly (?:if|when)\b', line, re.I):
         issues.append('Historical, hypothetical, conditional or ambiguous source clause; establish its own date and current meaning.')
-    if re.search(r"\b(?:no|none|never|neither|nor|cannot|without|not supported|not disabled|not rejected)\b|n't\b", line, re.I):
+    other_negations = re.sub(r'\bnot (?:enabled|allowed|accepted|tested)\b', '', line, flags=re.I)
+    if re.search(r"\b(?:no|none|never|neither|nor|cannot|without|not)\b|n't\b", other_negations, re.I):
         issues.append('Negated source clause; verify its meaning explicitly before any current comparison.')
     return tuple(issues)
 
@@ -258,8 +264,14 @@ def _affirmative_exclusion(clause):
     Only direct passive/active occurrence wording is eligible for comparison;
     other scope mentions remain source-cited unresolved observations.
     """
-    passive = re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\b.*', clause, re.I)
-    active = re.match(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\b|^excluded\b', clause, re.I)
+    entity = r'[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}'
+    exercise = r'(?:the\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
+    suffix = (r'(?:\s+on\s+\d{4}-\d{2}-\d{2})?'
+              r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment)?'
+              r'\s*[.,!]?\s*')
+    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+from\s+' + exercise + suffix, clause, re.I)
+    active = re.fullmatch(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\s+' + entity + suffix, clause, re.I)
+
     return bool(passive or active)
 
 
@@ -276,14 +288,14 @@ def _tls_state(tail, head=''):
              r'(?:\s+[A-Za-z0-9][A-Za-z0-9_.:/-]*)?)?')
     state = re.fullmatch(r'\s*(?:(?:is|are|was|were|remains?)\s+)?(not\s+)?'
                          r'(enabled|allowed|accepted|disabled|rejected|blocked|prohibited)'
-                         + scope + r'\s*[.,:!?]?\s*(?:and\s*)?', clause, re.I)
+                         + scope + r'\s*[.,:!]?\s*(?:and\s*)?', clause, re.I)
     if state:
         negative, word = state.groups()
         if negative:
             return 'disabled' if word.lower() in ('enabled','allowed','accepted') else None
         return 'enabled' if word.lower() in ('enabled','allowed','accepted') else 'disabled'
     if (re.search(r'(?:^|:)\s*enabled(?: protocols?)?\s*[:=]\s*$', head, re.I)
-            and re.fullmatch(r'[\s.,:!?]*(?:and[\s.,:!?]*)?', clause, re.I)):
+            and re.fullmatch(r'[\s.,:!]*(?:and[\s.,:!]*)?', clause, re.I)):
         if re.search(r"\b(?:not|never|no|none|neither|without|cannot)\b|n't\b", head, re.I):
             return None
         return 'enabled'
@@ -314,7 +326,7 @@ def _dr_metrics(line, kind):
             uncertain = bool(re.search(r"\b(?:not|never|unmeasured|unobserved|target|objective|planned|example|hypothetical|goal|historical|previously|formerly|past|old|approximately|approximate|about|around|no longer|without)\b|n't\b", prefix + ' ' + suffix, re.I))
             compound = bool(re.match(r'\s*[,+]?\s*(?:and\s+)?\d', suffix)
                             or re.search(r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)\b|\b(?:half|quarter|plus)\b', suffix, re.I))
-            simple_suffix = bool(re.fullmatch(r'\s*(?:(?:was|is)\s+)?(?:(?:achieved|measured|observed)\s*)?(?:and\s*)?[.,:!?\s]*', suffix, re.I))
+            simple_suffix = bool(re.fullmatch(r'\s*(?:(?:was|is)\s+)?(?:(?:achieved|measured|observed)\s*)?(?:and\s*)?[.,:!\s]*', suffix, re.I))
             unit = metric.group(3)
             value = Decimal(metric.group(2)) * (60 if unit and unit.lower().startswith('h') else 1)
             resolved = actual and kind == 'test' and simple_suffix and not uncertain and not compound and unit and value == value.to_integral_value()

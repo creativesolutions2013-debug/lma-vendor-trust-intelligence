@@ -94,7 +94,10 @@ exclusion clauses stay unresolved and cannot establish a deficiency or full cove
 DR exclusion comparisons require explicit association with exercise/testing scope
 and direct affirmative occurrence wording (for example, “was excluded” or
 “the exercise excluded”); modal/unknown occurrence descriptions remain unresolved;
-report redactions/omitted contact details remain unresolved. TLS coverage effects
+report redactions/omitted contact details remain unresolved. Exclusion expressions
+must be complete supported assertions; exceptions, alternatives, questions and
+unknown suffixes stay unresolved/ineligible. Full enclosing source lines remain
+quoted so splitting assertions cannot hide a consequential qualification. TLS coverage effects
 from exclusion wording remain manual. Default synthetic example policy: test within 365 days,
 RTO ≤240 minutes and RPO ≤60 minutes. The typed thresholds can vary in backend
 regressions; this change adds no policy editor or claim of organizational approval.
