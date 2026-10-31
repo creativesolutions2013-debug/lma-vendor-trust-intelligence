@@ -44,7 +44,9 @@ Alternate production listener 9443: TLS 1.0 is enabled.
 declared context. ISO dates use Observation/Observed/Test/Exercise/Scan/Configuration
 `date:` labels. Multiple different values, invalid/future/old dates and disagreements
 with uploader declarations remain visible with exact source context quotations.
-Upload date is never substituted for observation date. TLS uses 90 days; recovery
+Upload date is never substituted for observation date. All candidate kinds
+(metrics, completion and exclusions) inherit clause-local scope and temporal
+uncertainty; a current document date cannot re-date explicitly historical results. TLS uses 90 days; recovery
 uses the typed customer test interval. Source type uses explicit configuration,
 scan/test/exercise-results and policy/plan wording; unknown/mixed types or mismatch
 with the uploader label block eligibility. These are textual candidates, not

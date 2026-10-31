@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-3'
+VERSION = 'M5B-candidates-4'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -108,6 +108,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
         sources.append(source_record)
 
         first_fact = len(facts)
+        line_uncertainty = ()
 
         def add(dimension, value, ordinal, location, quote, subject, uncertainty=()):
             if len(facts) - first_fact >= MAX_FACTS:
@@ -121,7 +122,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             direction = evaluator.direction(threshold, observation, direction_source)
             observation = replace(observation, concern='potential_exception' if direction == 'adverse' else '')
             observations.append(observation)
-            limitation = tuple(dict.fromkeys((*issues, *uncertainty)))
+            limitation = tuple(dict.fromkeys((*issues, *line_uncertainty, *uncertainty)))
             facts.append({**asdict(observation), 'document_id': bound.source.document_id,
                           'filename': bound.document.filename, 'confirmed': False, 'direction': direction,
                           'confidence': 'explicit phrase candidate; meaning unverified', 'uncertainties': list(limitation),
@@ -130,6 +131,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             if not limitation and (direction != 'unknown' or dimension in ('enabled_version', 'disabled_version')): eligible.append((observation, direction_source))
 
         for ordinal, location, line in rows:
+            line_uncertainty = _line_uncertainties(line, intake.environment)
             # Keep limitations and exclusions even when metric extraction is unavailable.
             excluded = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I)) and not re.search(r'\b(no exclusions?|none excluded|not excluded)\b', line, re.I)
             if requirement_id == 'ENC-01':
@@ -138,11 +140,6 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
                 subject = listener.group(1).lower() + ' ' + listener.group(2).rstrip(':,.') if listener else 'unspecified endpoint'
                 uncertainty = [] if listener else ['Listener/endpoint identity is missing; do not infer fleet coverage.']
-                if re.search(r'\b(?:historical|previously|formerly|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|not supported|not disabled|not rejected)\b', line, re.I):
-                    uncertainty.append('Historical, negated, hypothetical or ambiguous statement; validate current technical meaning.')
-                environments = re.findall(r'\b(production|test|staging|development|sandbox)\s+(?:environment|listener|endpoint)\b', line, re.I)
-                if any(value.casefold() != intake.environment.casefold() for value in environments):
-                    uncertainty.append('Endpoint clause states an environment outside the assessed environment.')
                 enabled, disabled = [], []
                 for i, match in enumerate(versions):
                     # Restrict verb association to this version's clause. Unknown is not enabled.
@@ -178,7 +175,6 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if excluded: add('scope_complete', False, ordinal, location, line, subject, uncertainty)
             else:
                 subject = 'exercise for ' + (extracted['service'] or 'unspecified service')
-                line_scope = ('Metric/exercise wording identifies a non-production environment.',) if intake.environment == 'production' and re.search(r'\b(?:test|staging|development|sandbox) environment\b', line, re.I) else ()
                 if excluded:
                     add('scope_complete', False, ordinal, location, line, subject,
                         () if extracted['kind'] == 'test' else ('Exclusion is not tied to a recognized actual exercise record.',))
@@ -186,7 +182,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
                 for dimension, value, uncertainty in _dr_metrics(line, extracted['kind']):
-                    add(dimension, value, ordinal, location, line, subject, (*line_scope, *uncertainty))
+                    add(dimension, value, ordinal, location, line, subject, uncertainty)
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
                 fact['eligible_for_preview'] = False
@@ -207,6 +203,20 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                     'missing_dimensions': [c.dimension for c in missing]},
         'next_action': next_action, 'limitations': LIMITATION,
     }
+
+
+def _line_uncertainties(line, assessed_environment):
+    """Every fact type inherits local scope/time limitations, not just metrics."""
+    issues = []
+    environments = re.findall(r'\b(production|test|staging|development|sandbox)\s+(?:environment|listener|endpoint)\b', line, re.I)
+    if (any(value.casefold() != assessed_environment.casefold() for value in environments)
+            or re.search(r'\bnon-production\b', line, re.I)):
+        issues.append('Source clause states an environment outside the assessed environment or an unspecified non-production scope.')
+    if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|unless)\b|\bonly (?:if|when)\b', line, re.I):
+        issues.append('Historical, hypothetical, conditional or ambiguous source clause; establish its own date and current meaning.')
+    if re.search(r'\b(?:not supported|not disabled|not rejected)\b', line, re.I):
+        issues.append('Unsupported negated source clause; verify protocol meaning explicitly.')
+    return tuple(issues)
 
 
 def _tls_state(tail, head=''):
@@ -241,7 +251,7 @@ def _dr_metrics(line, kind):
             actual = bool(re.search(r'\b(?:achieved|actual|measured|observed)\s*$', prefix, re.I)
                           or re.match(r'\s*(?:(?:was|is)\s+)?(?:achieved|measured|observed)\b', suffix, re.I)
                           or (i and inherited and coordinated))
-            uncertain = bool(re.search(r"\b(?:not|never|unmeasured|unobserved|target|objective|planned|example|hypothetical|goal|approximately|approximate|about|around|no longer|without)\b|n't\b", prefix + ' ' + suffix, re.I))
+            uncertain = bool(re.search(r"\b(?:not|never|unmeasured|unobserved|target|objective|planned|example|hypothetical|goal|historical|previously|formerly|past|old|approximately|approximate|about|around|no longer|without)\b|n't\b", prefix + ' ' + suffix, re.I))
             compound = bool(re.match(r'\s*[,+]?\s*(?:and\s+)?\d', suffix)
                             or re.search(r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)\b|\b(?:half|quarter|plus)\b', suffix, re.I))
             simple_suffix = bool(re.fullmatch(r'\s*(?:(?:was|is)\s+)?(?:(?:achieved|measured|observed)\s*)?(?:and\s*)?[.,:!?\s]*', suffix, re.I))

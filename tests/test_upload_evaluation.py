@@ -264,3 +264,25 @@ def test_bare_tls_disabled_lists_preserve_each_protocol_and_conflict(intake,stat
     result=evaluation(build_assessment(intake,(upload(intake,body),)))
     assert {f['value'] for f in result['facts'] if f['dimension']=='disabled_version'}=={10,11}
     assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise in the test environment.',
+    'Identity provider was excluded from the exercise in the staging environment.',
+    'Recovery exercise completed in the test environment.',
+    'Previously completed recovery exercise.',
+    'Historical identity provider was excluded from the exercise.',
+])
+def test_all_dr_fact_types_inherit_scope_and_temporal_qualification(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert all(f['uncertainties'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('qualification', ['Historical','Previously','Formerly'])
+def test_current_document_date_cannot_redate_historical_achieved_metrics(intake,qualification):
+    result=evaluation(build_assessment(intake,(upload(intake,qualification+' achieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
