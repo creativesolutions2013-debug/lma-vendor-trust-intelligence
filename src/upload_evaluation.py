@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-5'
+VERSION = 'M5B-candidates-6'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -132,7 +132,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             if not limitation and (direction != 'unknown' or dimension in ('enabled_version', 'disabled_version')): eligible.append((observation, direction_source))
 
         for ordinal, location, line in _clauses(rows):
-            line_uncertainty = _line_uncertainties(line, intake.environment)
+            line_uncertainty = _line_uncertainties(line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
@@ -178,12 +178,16 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if not enabled and not disabled:
                     add('reported_versions', ', '.join('TLS 1.'+m.group(1) for m in versions), ordinal, location, line, subject,
                         (*uncertainty, 'Supported-version wording is not enabled configuration or operating evidence.'))
-                if excluded: add('scope_complete', False, ordinal, location, line, subject, uncertainty)
+                if excluded:
+                    add('unresolved_exclusion', line, ordinal, location, line, subject, (*uncertainty, 'TLS inventory/scan coverage effect requires manual source interpretation.'))
             else:
                 subject = 'exercise for ' + (extracted['service'] or 'unspecified service')
                 if excluded:
-                    add('scope_complete', False, ordinal, location, line, subject,
-                        () if extracted['kind'] == 'test' else ('Exclusion is not tied to a recognized actual exercise record.',))
+                    exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
+                    if extracted['kind'] == 'test' and exercise_scope:
+                        add('scope_complete', False, ordinal, location, line, subject)
+                    else:
+                        add('unresolved_exclusion', line, ordinal, location, line, subject, ('Exclusion is not explicitly associated with actual exercise/testing scope; report omissions are not operating deficiencies.',))
                 if re.search(r'\b(?:exercise|test) (?:was )?completed|\bcompleted (?:recovery |DR )?(?:exercise|test)', line, re.I):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
@@ -219,9 +223,18 @@ def _clauses(rows):
                 yield ordinal, location, clause.strip()
 
 
-def _line_uncertainties(line, assessed_environment):
+def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_days):
     """Every fact type inherits local scope/time limitations, not just metrics."""
     issues = []
+    for match in re.finditer(r'\b\d{4}-\d{2}-\d{2}\b', line):
+        try: clause_date = date.fromisoformat(match.group())
+        except ValueError:
+            issues.append('Clause-local date is invalid; establish the observation date.')
+            continue
+        if clause_date != source_date or not 0 <= (as_of-clause_date).days <= max_age_days:
+            issues.append('Clause-local date differs from the source observation date or is stale/future; do not re-date this fact from the document header.')
+    if re.search(r'\b(?:in|during|from|year)\s+(?:19|20)\d{2}\b(?!-\d)|\b(?:19|20)\d{2}\s+(?:exercise|test|results)\b', line, re.I):
+        issues.append('Clause-local year does not establish its own complete current observation date; verify the exercise/date binding.')
     environments = re.findall(r'\b(production|test|staging|development|sandbox)\s+(?:environment|listener|endpoint)\b', line, re.I)
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
             or re.search(r'\bnon-production\b', line, re.I)):
@@ -245,6 +258,8 @@ def _tls_state(tail, head=''):
             return 'disabled' if word.lower() in ('enabled','allowed','accepted') else None
         return 'enabled' if word.lower() in ('enabled','allowed','accepted') else 'disabled'
     if re.search(r'\benabled(?: protocols?)?\s*[:=]\s*$', head, re.I):
+        if re.search(r"\b(?:not|never|no|none|neither|without|cannot)\b|n't\b", head, re.I):
+            return None
         return 'enabled'
     return None
 

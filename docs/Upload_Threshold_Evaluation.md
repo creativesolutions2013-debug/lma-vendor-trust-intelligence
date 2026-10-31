@@ -46,7 +46,8 @@ declared context. ISO dates use Observation/Observed/Test/Exercise/Scan/Configur
 with uploader declarations remain visible with exact source context quotations.
 Upload date is never substituted for observation date. All candidate kinds
 (metrics, completion and exclusions) inherit clause-local scope and temporal
-uncertainty, including ordinary if/when conditions; a current document date cannot re-date explicitly historical results. TLS uses 90 days; recovery
+uncertainty, including ordinary if/when conditions and clause-local ISO dates or
+explicit year qualifications; a current document date cannot re-date explicitly historical results. TLS uses 90 days; recovery
 uses the typed customer test interval. Source type uses explicit configuration,
 scan/test/exercise-results and policy/plan wording; unknown/mixed types or mismatch
 with the uploader label block eligibility. These are textual candidates, not
@@ -83,7 +84,10 @@ inherit another clause’s achieved RTO. Completed-exercise phrases and explicit
 excluded/untested/incomplete statements are candidates, never proof that excluded
 dependencies were covered. Independent semicolon/sentence/“but” clauses keep
 negated exclusions separate from affirmative exclusions. Negated or ambiguous
-exclusion clauses stay unresolved and cannot establish a deficiency or full coverage. Default synthetic example policy: test within 365 days,
+exclusion clauses stay unresolved and cannot establish a deficiency or full coverage.
+DR exclusion comparisons require explicit association with exercise/testing scope;
+report redactions/omitted contact details remain unresolved. TLS coverage effects
+from exclusion wording remain manual. Default synthetic example policy: test within 365 days,
 RTO ≤240 minutes and RPO ≤60 minutes. The typed thresholds can vary in backend
 regressions; this change adds no policy editor or claim of organizational approval.
 

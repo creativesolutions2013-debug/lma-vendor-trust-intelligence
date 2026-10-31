@@ -120,7 +120,7 @@ def test_dr_plans_targets_missing_units_and_negation_are_not_achieved_metrics(in
 
 
 def test_dr_units_thresholds_exclusions_and_no_complete_scope_inference(intake):
-    source = upload(intake,'Completed recovery exercise.\nAchieved RTO 1.5 hours and RPO 0.5 hours.\nIdentity service was excluded.','BCP-01')
+    source = upload(intake,'Completed recovery exercise.\nAchieved RTO 1.5 hours and RPO 0.5 hours.\nIdentity service was excluded from the exercise.','BCP-01')
     model = build_assessment(intake,(source,))
     facts=evaluation(model,'BCP-01')['facts']
     assert {f['value'] for f in facts if f['dimension'].startswith('achieved_')}=={90,30}
@@ -331,3 +331,39 @@ def test_prefix_negation_also_blocks_current_tls_comparison(intake,body):
     result=evaluation(build_assessment(intake,(upload(intake,body),)))
     assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('header', ['Not enabled protocols', 'Never enabled protocols', 'No enabled protocols'])
+def test_negated_enabled_protocol_headers_cannot_enable_a_version(intake,header):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: '+header+': TLS 1.0.'),)))
+    assert result['facts'] and not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise on 2024-01-01.',
+    'In 2024, achieved RTO 300 minutes.',
+    'In 2024, recovery exercise completed.',
+    'Achieved RTO 300 minutes on 2024-01-01.',
+])
+def test_clause_local_old_dates_cannot_inherit_current_document_date(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert all(any('date' in u for u in f['uncertainties']) for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['Exercise results report excludes confidential contact details.', 'Report excludes the identity provider contact details.', 'The document excludes sensitive appendix material.', 'Contact details were excluded from the exercise report.', 'The appendix was excluded from the test results.'])
+def test_document_omissions_are_not_exercise_scope_deficiencies(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_matching_clause_date_keeps_an_explicit_exercise_scope_candidate(intake):
+    source=upload(intake,'Identity provider was excluded from the exercise on 2026-10-20.','BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    assert result['facts'][0]['eligible_for_preview']
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
