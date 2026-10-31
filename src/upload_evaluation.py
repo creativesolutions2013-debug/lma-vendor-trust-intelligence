@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-6'
+VERSION = 'M5B-candidates-7'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -146,6 +146,12 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
                 subject = listener.group(1).lower() + ' ' + listener.group(2).rstrip(':,.') if listener else 'unspecified endpoint'
                 uncertainty = [] if listener else ['Listener/endpoint identity is missing; do not infer fleet coverage.']
+                heading = line[:versions[0].start()]
+                known_heading = (r'\s*(?:(?:primary|alternate|production|test|staging|development|sandbox)\s+){0,2}'
+                                 r'(?:listener|endpoint)\s+[A-Za-z0-9][A-Za-z0-9_.:/-]*\s*:?\s*')
+                if not (re.fullmatch(r'\s*', heading) or re.fullmatch(known_heading + r'(?:enabled(?: protocols?)?\s*[:=]\s*)?', heading, re.I)
+                        or re.fullmatch(r'\s*enabled(?: protocols?)?\s*[:=]\s*', heading, re.I)):
+                    uncertainty.append('Unrecognized protocol-clause prefix; validate its qualification before comparing current activation.')
                 enabled, disabled = [], []
                 for i, match in enumerate(versions):
                     # Restrict verb association to this version's clause. Unknown is not enabled.
@@ -251,13 +257,22 @@ def _tls_state(tail, head=''):
     clause = re.split(r';|(?<=[.!?])\s+', tail, maxsplit=1)[0]
     if re.search(r"\b(?:never|neither|nor|cannot|without|no longer)\b|n't\b", clause, re.I):
         return None
-    state = re.match(r'\s*(?:(?:is|are|was|were|remains?)\s+)?(not\s+)?(enabled|allowed|accepted|disabled|rejected|blocked|prohibited)\b', clause, re.I)
+    # Accept the whole state expression, not an enabled prefix followed by an
+    # unknown condition, alternative or exception. Explicit local scope is allowed.
+    scope = (r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment'
+             r'|\s+on\s+(?:(?:a|an|the)\s+)?(?:(?:primary|alternate)\s+)?'
+             r'(?:(?:production|test|staging|development|sandbox)\s+)?(?:listeners?|endpoints?)'
+             r'(?:\s+[A-Za-z0-9][A-Za-z0-9_.:/-]*)?)?')
+    state = re.fullmatch(r'\s*(?:(?:is|are|was|were|remains?)\s+)?(not\s+)?'
+                         r'(enabled|allowed|accepted|disabled|rejected|blocked|prohibited)'
+                         + scope + r'\s*[.,:!?]?\s*(?:and\s*)?', clause, re.I)
     if state:
         negative, word = state.groups()
         if negative:
             return 'disabled' if word.lower() in ('enabled','allowed','accepted') else None
         return 'enabled' if word.lower() in ('enabled','allowed','accepted') else 'disabled'
-    if re.search(r'\benabled(?: protocols?)?\s*[:=]\s*$', head, re.I):
+    if (re.search(r'(?:^|:)\s*enabled(?: protocols?)?\s*[:=]\s*$', head, re.I)
+            and re.fullmatch(r'[\s.,:!?]*(?:and[\s.,:!?]*)?', clause, re.I)):
         if re.search(r"\b(?:not|never|no|none|neither|without|cannot)\b|n't\b", head, re.I):
             return None
         return 'enabled'
@@ -277,9 +292,14 @@ def _dr_metrics(line, kind):
             prefix = clause[matches[i-1].end() if i else 0:metric.start()]
             suffix = clause[metric.end():matches[i+1].start() if i+1<len(matches) else len(clause)]
             coordinated = bool(re.fullmatch(r'[\s,]*(?:and)?[\s,]*', prefix, re.I))
-            actual = bool(re.search(r'\b(?:achieved|actual|measured|observed)\s*$', prefix, re.I)
-                          or re.match(r'\s*(?:(?:was|is)\s+)?(?:achieved|measured|observed)\b', suffix, re.I)
-                          or (i and inherited and coordinated))
+            # Only known affirmative achievement syntax may qualify a metric.
+            # Unknown actors/modals/qualifiers before the verb are not actual results.
+            actor = r'(?:(?:a|the)\s+)?(?:completed\s+)?(?:(?:recovery|DR|disaster recovery)\s+)?(?:exercise|test)'
+            subject = r'(?:(?:we|' + actor + r')\s+)?'
+            lead = r'[\s,]*(?:and\s+)?' + subject
+            direct = bool(re.fullmatch(lead + r'(?:achieved|actual|measured|observed)\s*', prefix, re.I))
+            postfix = bool(re.fullmatch(lead, prefix, re.I) and re.match(r'\s*(?:(?:was|is)\s+)?(?:achieved|measured|observed)\b', suffix, re.I))
+            actual = direct or postfix or bool(i and inherited and coordinated)
             uncertain = bool(re.search(r"\b(?:not|never|unmeasured|unobserved|target|objective|planned|example|hypothetical|goal|historical|previously|formerly|past|old|approximately|approximate|about|around|no longer|without)\b|n't\b", prefix + ' ' + suffix, re.I))
             compound = bool(re.match(r'\s*[,+]?\s*(?:and\s+)?\d', suffix)
                             or re.search(r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)\b|\b(?:half|quarter|plus)\b', suffix, re.I))

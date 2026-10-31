@@ -57,7 +57,11 @@ TLS recognizes explicit `listener/endpoint <identity>`, TLS 1.0–1.3 and
 `enabled/allowed/accepted` versus `disabled/rejected/blocked/prohibited/not enabled`
 wording, including a shared enabled or disabled state on a bare protocol list.
 Clause-local non-production environment qualifiers block production comparisons.
-Support-only statements are not enabled protocols. Historical,
+Support-only statements are not enabled protocols. State expressions must be
+unqualified or carry an explicit simple environment/listener scope. Unrecognized
+state suffixes, unrecognized protocol-clause prefixes and noncanonical headers
+stay unresolved; a recognized prefix alone
+cannot make a protocol currently enabled. Historical,
 hypothetical, negated or ambiguous clauses, multiple endpoints in one clause and
 missing identity stay uncertain. Unseen grammar, cipher suites, deployment
 verification, complete inventory and real protocol testing remain unsupported.
@@ -77,7 +81,9 @@ or hours/hrs; hours convert to exact whole minutes (including fractional hours).
 Compound durations (such as 4 hours 30 minutes), plan targets, mixed objective
 wording, unspecified/unsupported units or fractional minutes require manual
 interpretation; a first component is never compared as the whole duration.
-Only simple scalar/coordinated clauses are accepted; unrecognized trailing
+Achievement prefixes accept direct achieved/actual/measured/observed wording,
+optionally with an explicit we/exercise/test subject; unknown modal or qualified
+prefixes remain unresolved. Only simple scalar/coordinated clauses are accepted; unrecognized trailing
 modifiers (for example, “or more” or “rounded”) stay unresolved.
 Achievement qualifiers are bound to each metric clause; an unmeasured RPO cannot
 inherit another clause’s achieved RTO. Completed-exercise phrases and explicit

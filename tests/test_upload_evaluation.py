@@ -367,3 +367,40 @@ def test_matching_clause_date_keeps_an_explicit_exercise_scope_candidate(intake)
     result=evaluation(build_assessment(intake,(source,)),'BCP-01')
     assert result['facts'][0]['eligible_for_preview']
     assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('qualification', ['or disabled', 'except in the production environment', 'only while compatibility mode is selected', 'under a compatibility condition'])
+def test_unrecognized_tls_state_suffix_never_becomes_unconditional_current_state(intake,qualification):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+qualification+'.'),)))
+    assert result['facts'] and not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('header', ['Non-enabled protocols', 'Currently enabled protocols'])
+def test_noncanonical_protocol_header_is_not_promoted_by_suffix_matching(intake,header):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: '+header+': TLS 1.0.'),)))
+    assert not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('prefix', ['We could have achieved', 'We would have achieved', 'We hypothetically achieved', 'The planned exercise achieved'])
+def test_unknown_or_modal_achievement_prefix_is_not_an_actual_dr_result(intake,prefix):
+    result=evaluation(build_assessment(intake,(upload(intake,prefix+' RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('prefix', ['Hypothetically, ', 'We could have configured ', 'Earlier, '])
+def test_unknown_tls_prefix_does_not_assert_current_activation(intake,prefix):
+    result=evaluation(build_assessment(intake,(upload(intake,prefix+'Listener 443: TLS 1.0 is enabled.'),)))
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('actor', ['We', 'The completed recovery exercise'])
+def test_known_affirmative_dr_actors_still_reach_typed_comparison(intake,actor):
+    result=evaluation(build_assessment(intake,(upload(intake,actor+' achieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert any(f['dimension']=='achieved_rto_minutes' and f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
