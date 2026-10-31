@@ -194,3 +194,57 @@ def test_dr_metric_scope_conflict_remains_unconfirmed_and_ineligible(intake):
     result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO 300 minutes and RPO 90 minutes for the test environment.','BCP-01'),)),'BCP-01')
     assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Achieved RTO 4 hours 30 minutes and RPO 1 hour 30 minutes.',
+    'Achieved RTO 4 hours and 30 minutes; achieved RPO 1 hour and 30 minutes.',
+    'Achieved RTO 4 hours, 30 minutes; actual RPO 1 hour, 30 minutes.',
+    'Achieved RTO 4 hours plus 30 minutes; actual RPO 1 hour plus 30 minutes.',
+    'Achieved RTO 4 hours (30 minutes extra); actual RPO 1 hour (30 minutes extra).',
+    'Achieved RTO 4 hours and a half; actual RPO 1 hour and a half.',
+])
+def test_compound_dr_durations_never_compare_only_the_first_component(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('body', [
+    'Listener 443: TLS 1.0 is supported; logging is enabled.',
+    'Listener 443: TLS 1.0 is supported. Logging is enabled.',
+    'Listener 443: TLS 1.0 is supported and logging is enabled.',
+    'Listener 443: TLS 1.0 is never enabled.',
+    "Listener 443: TLS 1.0 isn't enabled.",
+    'Listener 443: TLS 1.0 is no longer enabled.',
+])
+def test_tls_unrelated_states_and_unhandled_negations_stay_unresolved(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Achieved RTO 120 minutes; RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes and RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes. RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes; RPO 90 minutes.',
+])
+def test_dr_achievement_cannot_cross_into_unmeasured_or_separate_metric(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert not any(f['dimension']=='achieved_rpo_minutes' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_protocol_conflicts_normalize_label_but_not_case_sensitive_identity(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled.\nlistener 443: TLS 1.0 is disabled.'),)))
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+    other=evaluation(build_assessment(intake,(upload(intake,'Endpoint HostA: TLS 1.0 is enabled.\nendpoint hosta: TLS 1.0 is disabled.'),)))
+    assert {f['subject'] for f in other['facts']}=={'endpoint HostA','endpoint hosta'}
+
+
+@pytest.mark.parametrize('modifier', ['or more', 'or less', 'minimum', '(rounded)'])
+def test_modified_dr_duration_is_not_assumed_to_be_an_exact_scalar(intake,modifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO 4 hours '+modifier+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])

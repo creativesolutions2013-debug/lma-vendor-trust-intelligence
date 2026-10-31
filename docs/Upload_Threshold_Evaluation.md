@@ -69,8 +69,13 @@ Identity provider was excluded from the exercise.
 
 DR recognizes achieved/actual/measured/observed RTO/RPO with explicit minutes/mins
 or hours/hrs; hours convert to exact whole minutes (including fractional hours).
-Plan targets, mixed objective wording, unspecified/unsupported units or fractional
-minutes require manual interpretation. Completed-exercise phrases and explicit
+Compound durations (such as 4 hours 30 minutes), plan targets, mixed objective
+wording, unspecified/unsupported units or fractional minutes require manual
+interpretation; a first component is never compared as the whole duration.
+Only simple scalar/coordinated clauses are accepted; unrecognized trailing
+modifiers (for example, “or more” or “rounded”) stay unresolved.
+Achievement qualifiers are bound to each metric clause; an unmeasured RPO cannot
+inherit another clause’s achieved RTO. Completed-exercise phrases and explicit
 excluded/untested/incomplete statements are candidates, never proof that excluded
 dependencies were covered. Default synthetic example policy: test within 365 days,
 RTO ≤240 minutes and RPO ≤60 minutes. The typed thresholds can vary in backend

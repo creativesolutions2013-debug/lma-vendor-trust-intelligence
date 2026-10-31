@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-1'
+VERSION = 'M5B-candidates-2'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -136,7 +136,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 versions = list(re.finditer(r'\bTLS\s*v?\s*1\.([0-3])\b', line, re.I))
                 if not versions: continue
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
-                subject = listener.group(0).rstrip(':,.') if listener else 'unspecified endpoint'
+                subject = listener.group(1).lower() + ' ' + listener.group(2).rstrip(':,.') if listener else 'unspecified endpoint'
                 uncertainty = [] if listener else ['Listener/endpoint identity is missing; do not infer fleet coverage.']
                 if re.search(r'\b(?:historical|previously|formerly|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|not enabled|not supported|not allowed|not accepted|not disabled|not rejected)\b', line, re.I):
                     uncertainty.append('Historical, negated, hypothetical or ambiguous statement; validate current technical meaning.')
@@ -148,9 +148,9 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                     tail = line[match.end():versions[i+1].start() if i+1 < len(versions) else len(line)]
                     head = line[:match.start()]
                     version = 10 + int(match.group(1))
-                    if re.search(r'\bnot (?:disabled|rejected|blocked)\b', tail, re.I): continue
-                    if re.search(r'\b(disabled|rejected|blocked|prohibited|not enabled|not allowed|not accepted)\b', tail, re.I): disabled.append(version)
-                    elif re.search(r'\b(enabled|allowed|accepted)\b', tail, re.I) or re.search(r'\benabled(?: protocols?)?\s*[:=]\s*$', head, re.I): enabled.append(version)
+                    state = _tls_state(tail, head)
+                    if state == 'disabled': disabled.append(version)
+                    elif state == 'enabled': enabled.append(version)
                 if len(list(re.finditer(r'\b(listener|endpoint)\s+[a-z0-9][a-z0-9_.:/-]*', line, re.I))) > 1:
                     subject = 'ambiguous endpoints'
                     uncertainty.append('Multiple endpoint identities in one clause; review protocol-to-endpoint association.')
@@ -161,7 +161,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if len(versions) > 1 and bare_list and not disabled:
                     trailing = line[versions[-1].end():]
                     leading = line[:versions[0].start()]
-                    if re.search(r'\b(?:enabled|allowed|accepted)\b', trailing, re.I) or re.search(r'\benabled(?: protocols?)?\s*[:=]\s*$', leading, re.I):
+                    if _tls_state(trailing, leading) == 'enabled':
                         enabled = [10 + int(m.group(1)) for m in versions]
                 for version in enabled:
                     add('enabled_version', version, ordinal, location, line, subject, uncertainty)
@@ -181,16 +181,8 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if re.search(r'\b(?:exercise|test) (?:was )?completed|\bcompleted (?:recovery |DR )?(?:exercise|test)', line, re.I):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
-                actual = bool(re.search(r'\b(achieved|actual|measured|observed)\b', line, re.I))
-                ambiguous = (not actual or extracted['kind'] != 'test' or bool(re.search(r'\b(target|objective|planned|example|hypothetical|goal|not achieved|did not achieve)\b', line, re.I)))
-                for metric in re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', line, re.I):
-                    unit = metric.group(3)
-                    value = Decimal(metric.group(2)) * (60 if unit and unit.lower().startswith(('h',)) else 1)
-                    if ambiguous or not unit or value != value.to_integral_value():
-                        add('unresolved_metric', metric.group(0), ordinal, location, line, subject,
-                            ('Achieved metric, actual exercise context or unambiguous units are missing; plan objectives are not achieved results.',))
-                    else:
-                        add('achieved_'+metric.group(1).lower()+'_minutes', int(value), ordinal, location, line, subject, line_scope)
+                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind']):
+                    add(dimension, value, ordinal, location, line, subject, (*line_scope, *uncertainty))
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
                 fact['eligible_for_preview'] = False
@@ -211,6 +203,52 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                     'missing_dimensions': [c.dimension for c in missing]},
         'next_action': next_action, 'limitations': LIMITATION,
     }
+
+
+def _tls_state(tail, head=''):
+    """Associate a state with the protocol itself, never another feature's verb."""
+    clause = re.split(r';|(?<=[.!?])\s+', tail, maxsplit=1)[0]
+    if re.search(r"\b(?:never|neither|nor|cannot|without|no longer)\b|n't\b", clause, re.I):
+        return None
+    state = re.match(r'\s*(?:(?:is|are|was|were|remains?)\s+)?(not\s+)?(enabled|allowed|accepted|disabled|rejected|blocked|prohibited)\b', clause, re.I)
+    if state:
+        negative, word = state.groups()
+        if negative:
+            return 'disabled' if word.lower() in ('enabled','allowed','accepted') else None
+        return 'enabled' if word.lower() in ('enabled','allowed','accepted') else 'disabled'
+    if re.search(r'\benabled(?: protocols?)?\s*[:=]\s*$', head, re.I):
+        return 'enabled'
+    return None
+
+
+def _dr_metrics(line, kind):
+    """Qualify each metric locally; simple coordinated achieved pairs may inherit.
+
+    Compound/range durations and unsupported negation are unresolved, never a
+    partially parsed favourable duration. Quote remains the complete original line.
+    """
+    for clause in re.split(r';|(?<=[.!?])\s+', line):
+        matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
+        inherited = False
+        for i, metric in enumerate(matches):
+            prefix = clause[matches[i-1].end() if i else 0:metric.start()]
+            suffix = clause[metric.end():matches[i+1].start() if i+1<len(matches) else len(clause)]
+            coordinated = bool(re.fullmatch(r'[\s,]*(?:and)?[\s,]*', prefix, re.I))
+            actual = bool(re.search(r'\b(?:achieved|actual|measured|observed)\s*$', prefix, re.I)
+                          or re.match(r'\s*(?:(?:was|is)\s+)?(?:achieved|measured|observed)\b', suffix, re.I)
+                          or (i and inherited and coordinated))
+            uncertain = bool(re.search(r"\b(?:not|never|unmeasured|unobserved|target|objective|planned|example|hypothetical|goal|approximately|approximate|about|around|no longer|without)\b|n't\b", prefix + ' ' + suffix, re.I))
+            compound = bool(re.match(r'\s*[,+]?\s*(?:and\s+)?\d', suffix)
+                            or re.search(r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)\b|\b(?:half|quarter|plus)\b', suffix, re.I))
+            simple_suffix = bool(re.fullmatch(r'\s*(?:(?:was|is)\s+)?(?:(?:achieved|measured|observed)\s*)?(?:and\s*)?[.,:!?\s]*', suffix, re.I))
+            unit = metric.group(3)
+            value = Decimal(metric.group(2)) * (60 if unit and unit.lower().startswith('h') else 1)
+            resolved = actual and kind == 'test' and simple_suffix and not uncertain and not compound and unit and value == value.to_integral_value()
+            inherited = bool(resolved)
+            if resolved:
+                yield 'achieved_'+metric.group(1).lower()+'_minutes', int(value), ()
+            else:
+                yield 'unresolved_metric', metric.group(0), ('Achieved metric, actual exercise context, full duration or unambiguous units are missing; confirm the entire metric clause.',)
 
 
 def _comparison(fact, threshold, direction):
