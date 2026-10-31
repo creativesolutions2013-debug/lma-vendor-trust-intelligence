@@ -404,3 +404,18 @@ def test_known_affirmative_dr_actors_still_reach_typed_comparison(intake,actor):
     result=evaluation(build_assessment(intake,(upload(intake,actor+' achieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
     assert any(f['dimension']=='achieved_rto_minutes' and f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('modal', ['could have been','would have been','might have been','may have been','was possibly'])
+def test_exercise_scope_association_does_not_promote_modal_exclusions(intake,modal):
+    result=evaluation(build_assessment(intake,(upload(intake,'Identity provider '+modal+' excluded from the exercise.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert not any(f['dimension']=='scope_complete' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded the identity provider.', 'Identity provider was excluded from the exercise.'])
+def test_direct_affirmative_exercise_exclusions_still_compare(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert any(f['dimension']=='scope_complete' and f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'

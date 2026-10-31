@@ -91,7 +91,9 @@ excluded/untested/incomplete statements are candidates, never proof that exclude
 dependencies were covered. Independent semicolon/sentence/“but” clauses keep
 negated exclusions separate from affirmative exclusions. Negated or ambiguous
 exclusion clauses stay unresolved and cannot establish a deficiency or full coverage.
-DR exclusion comparisons require explicit association with exercise/testing scope;
+DR exclusion comparisons require explicit association with exercise/testing scope
+and direct affirmative occurrence wording (for example, “was excluded” or
+“the exercise excluded”); modal/unknown occurrence descriptions remain unresolved;
 report redactions/omitted contact details remain unresolved. TLS coverage effects
 from exclusion wording remain manual. Default synthetic example policy: test within 365 days,
 RTO ≤240 minutes and RPO ≤60 minutes. The typed thresholds can vary in backend

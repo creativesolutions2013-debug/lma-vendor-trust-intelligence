@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-7'
+VERSION = 'M5B-candidates-8'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -190,7 +190,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 subject = 'exercise for ' + (extracted['service'] or 'unspecified service')
                 if excluded:
                     exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
-                    if extracted['kind'] == 'test' and exercise_scope:
+                    if extracted['kind'] == 'test' and exercise_scope and _affirmative_exclusion(line):
                         add('scope_complete', False, ordinal, location, line, subject)
                     else:
                         add('unresolved_exclusion', line, ordinal, location, line, subject, ('Exclusion is not explicitly associated with actual exercise/testing scope; report omissions are not operating deficiencies.',))
@@ -245,11 +245,22 @@ def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
             or re.search(r'\bnon-production\b', line, re.I)):
         issues.append('Source clause states an environment outside the assessed environment or an unspecified non-production scope.')
-    if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|unless|if|when)\b|\bonly (?:if|when)\b', line, re.I):
+    if re.search(r'\b(?:historical|previously|formerly|past|old|example|hypothetical|planned|proposed|scheduled|will|should|target|can|could|would|may|might|unless|if|when|potential|possible|potentially|possibly|maybe|perhaps|pending)\b|\bonly (?:if|when)\b', line, re.I):
         issues.append('Historical, hypothetical, conditional or ambiguous source clause; establish its own date and current meaning.')
     if re.search(r"\b(?:no|none|never|neither|nor|cannot|without|not supported|not disabled|not rejected)\b|n't\b", line, re.I):
         issues.append('Negated source clause; verify its meaning explicitly before any current comparison.')
     return tuple(issues)
+
+
+def _affirmative_exclusion(clause):
+    """A test-labelled file is not evidence that every mentioned exclusion occurred.
+
+    Only direct passive/active occurrence wording is eligible for comparison;
+    other scope mentions remain source-cited unresolved observations.
+    """
+    passive = re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\b.*', clause, re.I)
+    active = re.match(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\b|^excluded\b', clause, re.I)
+    return bool(passive or active)
 
 
 def _tls_state(tail, head=''):
