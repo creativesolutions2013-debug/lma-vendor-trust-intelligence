@@ -248,3 +248,19 @@ def test_modified_dr_duration_is_not_assumed_to_be_an_exact_scalar(intake,modifi
     result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO 4 hours '+modifier+'.','BCP-01'),)),'BCP-01')
     assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
     assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('qualifier', ['in the test environment', 'in the staging environment', 'in the development environment', 'in the sandbox environment', 'on the test endpoint'])
+def test_tls_clause_local_nonproduction_qualifiers_block_production_preview(intake,qualifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+qualifier+'.'),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert any('outside the assessed environment' in u for f in result['facts'] for u in f['uncertainties'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('state', ['disabled','rejected','not enabled'])
+def test_bare_tls_disabled_lists_preserve_each_protocol_and_conflict(intake,state):
+    body='Listener 443: TLS 1.0 and TLS 1.1 are '+state+'.\nListener 443: TLS 1.0 is enabled.'
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert {f['value'] for f in result['facts'] if f['dimension']=='disabled_version'}=={10,11}
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'

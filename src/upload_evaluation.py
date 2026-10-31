@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-2'
+VERSION = 'M5B-candidates-3'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -138,10 +138,11 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
                 subject = listener.group(1).lower() + ' ' + listener.group(2).rstrip(':,.') if listener else 'unspecified endpoint'
                 uncertainty = [] if listener else ['Listener/endpoint identity is missing; do not infer fleet coverage.']
-                if re.search(r'\b(?:historical|previously|formerly|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|not enabled|not supported|not allowed|not accepted|not disabled|not rejected)\b', line, re.I):
+                if re.search(r'\b(?:historical|previously|formerly|example|hypothetical|planned|proposed|scheduled|will|should|target|may|might|not supported|not disabled|not rejected)\b', line, re.I):
                     uncertainty.append('Historical, negated, hypothetical or ambiguous statement; validate current technical meaning.')
-                if re.search(r'\b(?:test|staging|development) (?:listener|endpoint)\b', line, re.I) and intake.environment == 'production':
-                    uncertainty.append('Endpoint wording is outside the production environment.')
+                environments = re.findall(r'\b(production|test|staging|development|sandbox)\s+(?:environment|listener|endpoint)\b', line, re.I)
+                if any(value.casefold() != intake.environment.casefold() for value in environments):
+                    uncertainty.append('Endpoint clause states an environment outside the assessed environment.')
                 enabled, disabled = [], []
                 for i, match in enumerate(versions):
                     # Restrict verb association to this version's clause. Unknown is not enabled.
@@ -158,11 +159,14 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 # clause beside an enabled clause must not become enabled evidence.
                 bare_list = all(re.fullmatch(r'[\s,]*(?:and)?[\s,]*', line[a.end():b.start()], re.I)
                                 for a,b in zip(versions, versions[1:]))
-                if len(versions) > 1 and bare_list and not disabled:
+                if len(versions) > 1 and bare_list:
                     trailing = line[versions[-1].end():]
                     leading = line[:versions[0].start()]
-                    if _tls_state(trailing, leading) == 'enabled':
+                    shared_state = _tls_state(trailing, leading)
+                    if shared_state == 'enabled':
                         enabled = [10 + int(m.group(1)) for m in versions]
+                    elif shared_state == 'disabled':
+                        disabled = [10 + int(m.group(1)) for m in versions]
                 for version in enabled:
                     add('enabled_version', version, ordinal, location, line, subject, uncertainty)
                 for version in disabled:

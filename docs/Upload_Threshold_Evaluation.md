@@ -52,7 +52,9 @@ verified artifact authenticity or semantic classification.
 
 TLS recognizes explicit `listener/endpoint <identity>`, TLS 1.0–1.3 and
 `enabled/allowed/accepted` versus `disabled/rejected/blocked/prohibited/not enabled`
-wording. Support-only statements are not enabled protocols. Historical,
+wording, including a shared enabled or disabled state on a bare protocol list.
+Clause-local non-production environment qualifiers block production comparisons.
+Support-only statements are not enabled protocols. Historical,
 hypothetical, negated or ambiguous clauses, multiple endpoints in one clause and
 missing identity stay uncertain. Unseen grammar, cipher suites, deployment
 verification, complete inventory and real protocol testing remain unsupported.
