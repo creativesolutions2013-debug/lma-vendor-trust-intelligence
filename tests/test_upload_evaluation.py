@@ -1,0 +1,568 @@
+"""Real synthetic uploaded sources, not prefilled/confirmed assurance facts."""
+from dataclasses import replace
+from datetime import date
+from hashlib import sha256
+from io import BytesIO
+import json
+from zipfile import ZipFile
+
+import pytest
+
+from src.upload_assessment import Intake, read_upload, build_assessment
+from src.guided_assessment_demo import record_action, complete_review, completion_is_current, package_bytes, report_payload
+from src.tls_assurance import TlsThreshold
+from src.dr_assurance import DrThreshold
+from test_upload_assessment import pdf_bytes, docx_bytes
+
+@pytest.fixture
+def intake():
+    return Intake('m5b-case', 'Cedarline Synthetic', 'Cedarline Analytics', 'Synthetic reporting', as_of=date(2026,10,30))
+
+
+def source_text(intake, body, family='ENC-01', **changes):
+    context = {'service': intake.service, 'environment': intake.environment, 'date': '2026-10-20',
+               'type': 'Configuration export' if family=='ENC-01' else 'DR exercise results'}
+    context.update(changes)
+    return f"{context['type']}\nService: {context['service']}\nEnvironment: {context['environment']}\nTest date: {context['date']}\n{body}"
+
+
+def upload(intake, body, family='ENC-01', fmt='txt', **changes):
+    text = source_text(intake, body, family, **changes)
+    content = text.encode() if fmt=='txt' else docx_bytes(text) if fmt=='docx' else pdf_bytes(text.replace('\n', ') Tj 0 -14 Td ('))
+    return read_upload(intake, 'independent.'+fmt, content, (family,),
+                       kind='configuration' if family=='ENC-01' else 'test', observed_on=date(2026,10,20))
+
+
+def evaluation(model, family='ENC-01'):
+    return next(x for x in model.customer_context['evaluations'] if x['requirement_id']==family)
+
+
+@pytest.mark.parametrize('fmt', ['txt','pdf','docx'])
+@pytest.mark.parametrize('family,body,expected', [
+    ('ENC-01', 'Primary listener 443: TLS 1.2 is enabled.\nAlternate production listener 9443: TLS 1.0 is enabled.', ('enabled_version',10)),
+    ('BCP-01', 'Recovery exercise completed.\nAchieved RTO 300 minutes and RPO 90 minutes.\nIdentity provider was excluded from the exercise.', ('achieved_rto_minutes',300)),
+])
+def test_real_upload_exception_candidates_exact_quotes_and_export(intake, fmt, family, body, expected):
+    bound = upload(intake,body,family,fmt)
+    model = build_assessment(intake,(bound,))
+    result = evaluation(model,family)
+    assert result['status']=='Unverified threshold concern'
+    assert any((f['dimension'],f['value'])==expected and f['direction']=='adverse' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+    if family=='ENC-01': assert any(f['subject']=='listener 9443' and f['value']==10 for f in result['facts'])
+    else: assert any(f['dimension']=='scope_complete' and f['value'] is False and 'Identity provider' in f['quote'] for f in result['facts'])
+    for fact in result['facts']:
+        assert not fact['confirmed']
+        segment = bound.evidence.document.segments[int(fact['source_id'].rsplit(':',1)[1])-1]
+        assert fact['location']==segment.location and fact['quote'] in segment.text
+        assert fact['source_fingerprint']==bound.evidence.fingerprint
+    assert all(r.outcome not in ('Met','Partially Met','Risk Identified') for r in model.worklist.rows)
+    assert all(not f.confirmed for r in model.worklist.rows for f in r.review.facts)
+    history = record_action(model,(),family,'Create Finding','Validate the cited technical exception.')
+    completed = complete_review(model,history)
+    with ZipFile(BytesIO(package_bytes(model,history,completed))) as archive:
+        report = json.loads(archive.read('report.json'))
+        item = json.loads(archive.read('manifest.json'))['artifacts'][0]
+        assert archive.read(item['archive_path'])==bound.evidence.source.content
+        assert sha256(archive.read(item['archive_path'])).hexdigest()==item['sha256']
+        assert report['risk']['residual_score'] is None and not report['review_completion']['vendor_approved']
+        assert report['assessment_context']['evaluations']==model.customer_context['evaluations']
+        assert b'Unconfirmed source-cited threshold comparisons' in archive.read('summary.html')
+
+
+@pytest.mark.parametrize('body', [
+    'Listener 443: TLS 1.0 is disabled; TLS 1.2 is enabled.',
+    'Listener 443: TLS 1.0 is rejected; TLS 1.1 is blocked; TLS 1.2 is enabled.',
+    'We use TLS 1.2.', 'TLS 1.0 may be enabled.',
+])
+def test_disabled_or_ambiguous_tls_never_becomes_current_failure_or_pass(intake, body):
+    result = evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert result['preview']['outcome_if_confirmed'] not in ('Met','Risk Identified')
+    if 'disabled' in body or 'rejected' in body:
+        assert not any(f['direction']=='adverse' for f in result['facts'])
+    else: assert any(f['uncertainties'] for f in result['facts'])
+
+
+def test_customer_threshold_rules_and_conflicts_are_reused(intake):
+    uploaded = upload(intake,'Listener 8443: TLS 1.2 is enabled.')
+    assert not any(f['direction']=='adverse' for f in evaluation(build_assessment(intake,(uploaded,)))['facts'])
+    strict = evaluation(build_assessment(intake,(uploaded,),tls_threshold=TlsThreshold(13)))
+    assert any(f['direction']=='adverse' for f in strict['facts'])
+    contrary = upload(intake,'Listener 8443: TLS 1.0 is enabled.\nListener 8443: TLS 1.0 is disabled.')
+    assert evaluation(build_assessment(intake,(contrary,)))['preview']['conflicts']
+    both = upload(intake,'Listener 8443: TLS 1.0 and TLS 1.2 are enabled.')
+    assert any(f['direction']=='adverse' and f['value']==10 for f in evaluation(build_assessment(intake,(both,)))['facts'])
+
+
+@pytest.mark.parametrize('change,needle', [
+    ({'date':'2024-01-01'}, 'date'), ({'date':'2030-01-01'}, 'date'), ({'date':'unknown'}, 'date'),
+    ({'service':'Another service'}, 'service'), ({'environment':'test'}, 'environment'),
+    ({'type':'Vendor policy'}, 'type'),
+])
+@pytest.mark.parametrize('family,body', [('ENC-01','Listener 9443: TLS 1.0 is enabled.'),('BCP-01','Completed recovery exercise. Achieved RTO 300 minutes and RPO 90 minutes.')])
+def test_source_metadata_discrepancies_block_current_preview(intake, change, needle, family, body):
+    result = evaluation(build_assessment(intake,(upload(intake,body,family,**change),)),family)
+    assert any(needle in s.lower() for x in result['sources'] for s in x['uncertainties'])
+    assert all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed'] not in ('Met','Risk Identified')
+
+
+@pytest.mark.parametrize('body,kind', [
+    ('Plan objectives: RTO 300 minutes and RPO 90 minutes.','Recovery plan'),
+    ('Achieved RTO 300 and RPO 90.','DR exercise results'),
+    ('Target RTO 300 minutes and target RPO 90 minutes.','DR exercise results'),
+    ('RTO was not achieved: 300 minutes.','DR exercise results'),
+])
+def test_dr_plans_targets_missing_units_and_negation_are_not_achieved_metrics(intake,body,kind):
+    result = evaluation(build_assessment(intake,(upload(intake,body,'BCP-01',type=kind),)),'BCP-01')
+    assert not any(f['dimension'].startswith('achieved_') for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed'] not in ('Met','Risk Identified')
+
+
+def test_dr_units_thresholds_exclusions_and_no_complete_scope_inference(intake):
+    source = upload(intake,'Completed recovery exercise.\nAchieved RTO 1.5 hours and RPO 0.5 hours.\nIdentity service was excluded from the exercise.','BCP-01')
+    model = build_assessment(intake,(source,))
+    facts=evaluation(model,'BCP-01')['facts']
+    assert {f['value'] for f in facts if f['dimension'].startswith('achieved_')}=={90,30}
+    assert any(f['dimension']=='scope_complete' and f['direction']=='adverse' for f in facts)
+    strict=build_assessment(intake,(source,),dr_threshold=DrThreshold(90,60,5))
+    assert len([f for f in evaluation(strict,'BCP-01')['facts'] if f['dimension'].startswith('achieved_') and f['direction']=='adverse'])==2
+    assert all(f['subject']!='complete scope' for f in facts)
+
+
+def test_unrelated_sources_and_all_other_requirements_remain_visible(intake):
+    source=upload(intake,'Synthetic lunch menu.')
+    model=build_assessment(intake,(source,))
+    assert not evaluation(model)['facts']
+    assert len(model.worklist.rows)>2
+    assert all(r.outcome!='Met' for r in model.worklist.rows)
+
+
+def test_reclassification_reupload_threshold_change_and_challenge_preserve_history(intake):
+    source=upload(intake,'Listener 9443: TLS 1.0 is enabled.')
+    model=build_assessment(intake,(source,))
+    history=record_action(model,(),'ENC-01','Create Finding','Validate the noncompliant listener.')
+    completion=complete_review(model,history)
+    changed=read_upload(intake,source.evidence.source.filename,source.evidence.source.content,('ENC-01',),kind='policy',observed_on=date(2026,10,21))
+    for updated in (build_assessment(intake,(changed,)),build_assessment(intake,(source,),tls_threshold=TlsThreshold(13))):
+        assert not completion_is_current(updated,history,completion)
+        assert report_payload(updated,history)['findings'][0]['context_status'].startswith('Stale')
+    challenged=record_action(model,history,'ENC-01','Challenge','The endpoint scope needs validation.')
+    assert not completion_is_current(model,challenged,completion)
+    assert all(not f['confirmed'] for f in evaluation(model)['facts'])
+
+
+def test_no_parser_calls_during_candidate_extraction_worklist_review_or_export(intake,monkeypatch):
+    import src.evidence_source_validation as bindings
+    import src.bounded_document_parser as parser
+    source=upload(intake,'Listener 9443: TLS 1.0 is enabled.',fmt='pdf')
+    def forbidden(*args,**kwargs): raise AssertionError('Unexpected parsing')
+    monkeypatch.setattr(bindings,'read_evidence_document',forbidden)
+    monkeypatch.setattr(parser,'read_bounded_document',forbidden)
+    model=build_assessment(intake,(source,)); package_bytes(model,(),complete_review(model,()))
+
+
+@pytest.mark.parametrize('phrase', ['TLS 1.0 is not allowed.', 'TLS 1.0 is not accepted.', 'TLS 1.0 is not enabled.', 'TLS 1.0 is not disabled.'])
+def test_negated_tls_states_are_not_inverted(intake,phrase):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 9443: '+phrase),)))
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+    assert not any(f['dimension']=='enabled_version' for f in result['facts'])
+
+
+def test_candidate_budget_exhaustion_is_explicit_and_never_a_complete_preview(intake):
+    source=upload(intake,'\n'.join('Listener '+str(i)+': TLS 1.2 is enabled.' for i in range(150)))
+    result=evaluation(build_assessment(intake,(source,)))
+    assert len(result['facts'])==128
+    assert any('incomplete:' in u for s in result['sources'] for u in s['uncertainties'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Met'
+
+
+def test_supported_versions_do_not_become_enabled_config_or_complete_scope(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443 supports TLS 1.0 and TLS 1.2.'),)))
+    assert all(f['dimension']=='reported_versions' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Evidence Missing'
+
+
+def test_tls_supported_clause_is_not_promoted_by_neighbor_enabled_clause(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443 supports TLS 1.0; TLS 1.2 is enabled.'),)))
+    assert not any(f['dimension']=='enabled_version' and f['value']==10 for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_dr_metric_scope_conflict_remains_unconfirmed_and_ineligible(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO 300 minutes and RPO 90 minutes for the test environment.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Achieved RTO 4 hours 30 minutes and RPO 1 hour 30 minutes.',
+    'Achieved RTO 4 hours and 30 minutes; achieved RPO 1 hour and 30 minutes.',
+    'Achieved RTO 4 hours, 30 minutes; actual RPO 1 hour, 30 minutes.',
+    'Achieved RTO 4 hours plus 30 minutes; actual RPO 1 hour plus 30 minutes.',
+    'Achieved RTO 4 hours (30 minutes extra); actual RPO 1 hour (30 minutes extra).',
+    'Achieved RTO 4 hours and a half; actual RPO 1 hour and a half.',
+])
+def test_compound_dr_durations_never_compare_only_the_first_component(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('body', [
+    'Listener 443: TLS 1.0 is supported; logging is enabled.',
+    'Listener 443: TLS 1.0 is supported. Logging is enabled.',
+    'Listener 443: TLS 1.0 is supported and logging is enabled.',
+    'Listener 443: TLS 1.0 is never enabled.',
+    "Listener 443: TLS 1.0 isn't enabled.",
+    'Listener 443: TLS 1.0 is no longer enabled.',
+])
+def test_tls_unrelated_states_and_unhandled_negations_stay_unresolved(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Achieved RTO 120 minutes; RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes and RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes. RPO 90 minutes was not measured.',
+    'Achieved RTO 120 minutes; RPO 90 minutes.',
+])
+def test_dr_achievement_cannot_cross_into_unmeasured_or_separate_metric(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert not any(f['dimension']=='achieved_rpo_minutes' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_protocol_conflicts_normalize_label_but_not_case_sensitive_identity(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled.\nlistener 443: TLS 1.0 is disabled.'),)))
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+    other=evaluation(build_assessment(intake,(upload(intake,'Endpoint HostA: TLS 1.0 is enabled.\nendpoint hosta: TLS 1.0 is disabled.'),)))
+    assert {f['subject'] for f in other['facts']}=={'endpoint HostA','endpoint hosta'}
+
+
+@pytest.mark.parametrize('modifier', ['or more', 'or less', 'minimum', '(rounded)'])
+def test_modified_dr_duration_is_not_assumed_to_be_an_exact_scalar(intake,modifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO 4 hours '+modifier+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('qualifier', ['in the test environment', 'in the staging environment', 'in the development environment', 'in the sandbox environment', 'on the test endpoint'])
+def test_tls_clause_local_nonproduction_qualifiers_block_production_preview(intake,qualifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+qualifier+'.'),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert any('outside the assessed environment' in u for f in result['facts'] for u in f['uncertainties'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('state', ['disabled','rejected','not enabled'])
+def test_bare_tls_disabled_lists_preserve_each_protocol_and_conflict(intake,state):
+    body='Listener 443: TLS 1.0 and TLS 1.1 are '+state+'.\nListener 443: TLS 1.0 is enabled.'
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert {f['value'] for f in result['facts'] if f['dimension']=='disabled_version'}=={10,11}
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise in the test environment.',
+    'Identity provider was excluded from the exercise in the staging environment.',
+    'Recovery exercise completed in the test environment.',
+    'Previously completed recovery exercise.',
+    'Historical identity provider was excluded from the exercise.',
+])
+def test_all_dr_fact_types_inherit_scope_and_temporal_qualification(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert all(f['uncertainties'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('qualification', ['Historical','Previously','Formerly'])
+def test_current_document_date_cannot_redate_historical_achieved_metrics(intake,qualification):
+    result=evaluation(build_assessment(intake,(upload(intake,qualification+' achieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('condition', ['if compatibility mode is selected', 'when compatibility mode is selected', 'unless compatibility mode is disabled'])
+def test_ordinary_tls_conditions_do_not_assert_current_activation(intake,condition):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+condition+'.'),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'No dependencies were excluded from the exercise.',
+    'Identity provider was never excluded from the exercise.',
+    'None of the dependencies were excluded from the exercise.',
+    'Identity provider was not excluded from the exercise.',
+])
+def test_negated_exclusions_never_become_exercise_deficiencies(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('separator', ['; ', '. ', ' but '])
+def test_negated_exclusion_does_not_suppress_separately_stated_exclusion(intake,separator):
+    body='Identity provider was not excluded from the exercise'+separator+'database was excluded from the exercise.'
+    source=upload(intake,body,'BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    exclusions=[f for f in result['facts'] if f['dimension']=='scope_complete']
+    assert len(exclusions)==1 and 'database was excluded' in exclusions[0]['quote']
+    assert exclusions[0]['eligible_for_preview'] and result['preview']['outcome_if_confirmed']=='Risk Identified'
+    assert all(f['quote'] in source.evidence.document.segments[int(f['source_id'].rsplit(':',1)[1])-1].text for f in result['facts'])
+
+
+@pytest.mark.parametrize('duration', ['4 hr. 30 minutes', '4 hrs. and 30 minutes', '240 min. plus 30 minutes', '240 mins. (30 minutes extra)'])
+def test_duration_abbreviation_punctuation_does_not_discard_compound_tail(intake,duration):
+    result=evaluation(build_assessment(intake,(upload(intake,'Achieved RTO '+duration+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('body', ['No TLS 1.0 is enabled on listener 443.', 'Neither TLS 1.0 nor TLS 1.1 is enabled on listener 443.'])
+def test_prefix_negation_also_blocks_current_tls_comparison(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('header', ['Not enabled protocols', 'Never enabled protocols', 'No enabled protocols'])
+def test_negated_enabled_protocol_headers_cannot_enable_a_version(intake,header):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: '+header+': TLS 1.0.'),)))
+    assert result['facts'] and not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise on 2024-01-01.',
+    'In 2024, achieved RTO 300 minutes.',
+    'In 2024, recovery exercise completed.',
+    'Achieved RTO 300 minutes on 2024-01-01.',
+])
+def test_clause_local_old_dates_cannot_inherit_current_document_date(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(not f['eligible_for_preview'] for f in result['facts'])
+    assert all(any('date' in u for u in f['uncertainties']) for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['Exercise results report excludes confidential contact details.', 'Report excludes the identity provider contact details.', 'The document excludes sensitive appendix material.', 'Contact details were excluded from the exercise report.', 'The appendix was excluded from the test results.'])
+def test_document_omissions_are_not_exercise_scope_deficiencies(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_matching_clause_date_keeps_an_explicit_exercise_scope_candidate(intake):
+    source=upload(intake,'Identity provider was excluded from the exercise on 2026-10-20.','BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    assert result['facts'][0]['eligible_for_preview']
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('qualification', ['or disabled', 'except in the production environment', 'only while compatibility mode is selected', 'under a compatibility condition'])
+def test_unrecognized_tls_state_suffix_never_becomes_unconditional_current_state(intake,qualification):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: TLS 1.0 is enabled '+qualification+'.'),)))
+    assert result['facts'] and not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('header', ['Non-enabled protocols', 'Currently enabled protocols'])
+def test_noncanonical_protocol_header_is_not_promoted_by_suffix_matching(intake,header):
+    result=evaluation(build_assessment(intake,(upload(intake,'Listener 443: '+header+': TLS 1.0.'),)))
+    assert not any(f['dimension']=='enabled_version' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('prefix', ['We could have achieved', 'We would have achieved', 'We hypothetically achieved', 'The planned exercise achieved'])
+def test_unknown_or_modal_achievement_prefix_is_not_an_actual_dr_result(intake,prefix):
+    result=evaluation(build_assessment(intake,(upload(intake,prefix+' RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_metric' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('prefix', ['Hypothetically, ', 'We could have configured ', 'Earlier, '])
+def test_unknown_tls_prefix_does_not_assert_current_activation(intake,prefix):
+    result=evaluation(build_assessment(intake,(upload(intake,prefix+'Listener 443: TLS 1.0 is enabled.'),)))
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('actor', ['We', 'The completed recovery exercise'])
+def test_known_affirmative_dr_actors_still_reach_typed_comparison(intake,actor):
+    result=evaluation(build_assessment(intake,(upload(intake,actor+' achieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert any(f['dimension']=='achieved_rto_minutes' and f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('modal', ['could have been','would have been','might have been','may have been','was possibly'])
+def test_exercise_scope_association_does_not_promote_modal_exclusions(intake,modal):
+    result=evaluation(build_assessment(intake,(upload(intake,'Identity provider '+modal+' excluded from the exercise.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert not any(f['dimension']=='scope_complete' for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded the identity provider.', 'Identity provider was excluded from the exercise.'])
+def test_direct_affirmative_exercise_exclusions_still_compare(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert any(f['dimension']=='scope_complete' and f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Identity provider was excluded from the exercise except in the production environment.',
+    'Identity provider was excluded from the exercise only while compatibility mode was selected.',
+    'The exercise excluded the identity provider except in the production environment.',
+    'Identity provider was excluded from the exercise; except in production.',
+    'Identity provider was excluded from the exercise but not in production.',
+])
+def test_exclusion_qualification_cannot_be_lost_at_the_predicate_or_clause_boundary(intake,body):
+    source=upload(intake,body,'BCP-01')
+    result=evaluation(build_assessment(intake,(source,)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+    assert all(f['quote'] in source.evidence.document.segments[int(f['source_id'].rsplit(':',1)[1])-1].text for f in result['facts'])
+
+
+@pytest.mark.parametrize('family,body', [
+    ('ENC-01','Listener 443: TLS 1.0 is enabled?'),
+    ('BCP-01','Achieved RTO 300 minutes?'),
+    ('BCP-01','Identity provider was excluded from the exercise?'),
+    ('BCP-01','Recovery exercise completed?'),
+])
+def test_questions_are_not_affirmative_source_observations(intake,family,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family),)),family)
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded not the identity provider from testing.', 'Identity provider was excluded from the exercise, not in production.'])
+def test_unsupported_negation_placement_is_not_an_affirmative_exclusion(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('family,body', [
+    ('ENC-01','Listener 443: TLS 1.0 is enabled; this applies only in the test environment.'),
+    ('BCP-01','Achieved RTO 300 minutes; this result was observed on 2024-01-01.'),
+    ('BCP-01','Identity provider was excluded from the exercise; this applied only in the test environment.'),
+])
+def test_consequential_enclosing_qualifications_reach_the_asserted_fact(intake,family,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family),)),family)
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', ['The exercise excluded the identity provider only hypothetically.', 'The exercise excluded the identity provider from its report.'])
+def test_active_exclusion_object_cannot_absorb_nonoperating_qualification(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('state', ['disabled','rejected'])
+def test_shared_protocol_state_subgroups_inside_mixed_lists_preserve_conflicts(intake,state):
+    body='Listener 443: TLS 1.0 and TLS 1.1 are '+state+', TLS 1.2 is enabled.\nListener 443: TLS 1.0 is enabled.'
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert {f['value'] for f in result['facts'] if f['dimension']=='disabled_version'}=={10,11}
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+
+
+@pytest.mark.parametrize('family,kind,body', [
+    ('ENC-01','This is not a configuration export.','Listener 443: TLS 1.0 is enabled.'),
+    ('ENC-01',"This isn't a configuration export.",'Listener 443: TLS 1.0 is enabled.'),
+    ('BCP-01','These are not exercise results.','Recovery exercise completed. Achieved RTO 300 minutes.'),
+    ('BCP-01',"These aren't exercise results.",'Recovery exercise completed. Achieved RTO 300 minutes.'),
+])
+def test_explicit_source_type_denials_cannot_become_operating_evidence(intake,family,kind,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,family,type=kind),)),family)
+    assert all(s['extracted']['kind'] is None for s in result['sources'])
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+def test_mentioning_configuration_is_not_an_affirmative_artifact_type(intake):
+    source=upload(intake,'We discuss configuration export concepts.\nListener 443: TLS 1.0 is enabled.',type='Vendor assertion')
+    result=evaluation(build_assessment(intake,(source,)))
+    assert result['sources'][0]['extracted']['kind'] is None
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+def test_policy_references_do_not_reclassify_an_actual_exercise_record(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'Customer policy requires RTO 240 minutes.\nAchieved RTO 300 minutes.','BCP-01'),)),'BCP-01')
+    assert result['sources'][0]['extracted']['kind']=='test'
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+def test_denial_of_another_genre_is_not_denial_of_configuration(intake):
+    result=evaluation(build_assessment(intake,(upload(intake,'These are not exercise results.\nListener 443: TLS 1.0 is enabled.'),)))
+    assert result['sources'][0]['extracted']['kind']=='configuration'
+    assert result['preview']['outcome_if_confirmed']=='Risk Identified'
+
+
+def test_case_equivalent_service_names_share_a_dr_conflict_key(intake):
+    first=upload(intake,'Achieved RTO 300 minutes.','BCP-01')
+    second=read_upload(intake,'second-result.txt',source_text(intake,'Achieved RTO 120 minutes.','BCP-01',service=intake.service.lower()).encode(),('BCP-01',),kind='test',observed_on=date(2026,10,20))
+    result=evaluation(build_assessment(intake,(first,second)),'BCP-01')
+    assert result['preview']['conflicts'] and result['preview']['outcome_if_confirmed']=='Needs Review'
+    assert len({f['subject'] for f in result['facts']})==1
+    assert {s['extracted']['service'] for s in result['sources']}=={intake.service,intake.service.lower()}
+
+
+@pytest.mark.parametrize('qualifier', ['in theory', 'in principle', 'under a hypothetical assumption'])
+def test_exclusion_objects_do_not_absorb_prepositional_occurrence_qualifications(intake,qualifier):
+    result=evaluation(build_assessment(intake,(upload(intake,'The exercise excluded the identity provider '+qualifier+'.','BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+
+
+@pytest.mark.parametrize('family,denial,body', [
+    ('BCP-01','These are not DR exercise results.','Achieved RTO 300 minutes.'),
+    ('BCP-01','These are not synthetic DR exercise results.','Achieved RTO 300 minutes.'),
+    ('ENC-01','This is not a TLS configuration export.','Listener 443: TLS 1.0 is enabled.'),
+])
+def test_declaration_and_denial_share_the_same_genre_modifier_grammar(intake,family,denial,body):
+    result=evaluation(build_assessment(intake,(upload(intake,denial+'\n'+body,family),)),family)
+    assert all(s['extracted']['kind'] is None for s in result['sources'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Listener 443: TLS 1.0 is enabled on the test endpoints.',
+    'Test primary listener 443: TLS 1.0 is enabled.',
+    'Test alternate endpoint 443: TLS 1.0 is enabled.',
+    'Primary test listener 443: TLS 1.0 is enabled.',
+    'Listener 443: TLS 1.0 is enabled; Environment: test.',
+])
+def test_scope_validation_covers_plural_and_modifier_grammar(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body),)))
+    assert result['facts'] and not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed']!='Risk Identified'
+
+
+@pytest.mark.parametrize('body', [
+    'Nothing was excluded from the exercise.',
+    'Nobody was excluded from the exercise.',
+    'Zero dependencies were excluded from the exercise.',
+    'The exercise excluded zero dependencies.',
+    'The exercise excluded 0 dependencies.',
+])
+def test_negative_or_zero_exclusion_quantities_are_not_deficiencies_or_coverage_proof(intake,body):
+    result=evaluation(build_assessment(intake,(upload(intake,body,'BCP-01'),)),'BCP-01')
+    assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
+    assert not any(f['eligible_for_preview'] for f in result['facts'])
+    assert result['preview']['outcome_if_confirmed'] not in ('Risk Identified','Met')

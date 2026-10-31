@@ -11,21 +11,20 @@ from zipfile import ZipFile, BadZipFile, ZIP_BZIP2
 from src.applicability import VendorRiskContext, evaluate_applicability
 from src.assessment_worklist import AssessmentScope, AssuranceLink, EvidenceNeed, RequirementMapping, build_assessment_worklist
 from src.assessment_worklist_pilot import WorklistScenario
-from src.control_assurance import ControlCase, CustomerThreshold, EvidenceExpectation, RequirementContext, Observation, bind_relevance
+from src.control_assurance import ControlCase, CustomerThreshold, EvidenceExpectation, RequirementContext, bind_relevance
 from src.evidence_intelligence_mvp import evaluate_pilot_requirements
-from src.evidence_source_validation import bind_evidence, segment_id, reuse_evidence_bindings
+from src.evidence_source_validation import bind_evidence, reuse_evidence_bindings
 from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole
 from src.scoring import InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
 from src.tiering import get_tier_profile
 from src.tls_assurance import TlsThreshold
 from src.dr_assurance import DrThreshold
+from src.upload_evaluation import evaluate_uploads, LIMITATION as EVALUATION_LIMITATION
 
 MAX_FILES = 10
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 10 * 1024 * 1024
-LIMITATION = ('Local synthetic/nonconfidential documents only. TLS uses existing deterministic text screening; '
-              'recovery and other controls retain source-cited manual review. No automatic technical assurance, '
-              'RTO/RPO extraction, compliance certification, AI calls, verified scope or vendor approval.')
+LIMITATION = 'Local synthetic/nonconfidential documents only. ' + EVALUATION_LIMITATION
 
 
 @dataclass(frozen=True)
@@ -143,14 +142,14 @@ def suggested_requirements(document, applicable):
     return tuple(r for r in candidates if r in applicable)
 
 
-def build_assessment(intake, uploads=()):
+def build_assessment(intake, uploads=(), *, tls_threshold=None, dr_threshold=None):
     # Relevance and worklist services rebind sources. Supply the already bounded
     # bindings for this build so neither path reparses untrusted original bytes.
     with reuse_evidence_bindings(u.evidence for u in uploads):
-        return _build_assessment(intake, uploads)
+        return _build_assessment(intake, uploads, tls_threshold or TlsThreshold(12), dr_threshold or DrThreshold(365, 240, 60))
 
 
-def _build_assessment(intake, uploads):
+def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     if len(uploads) > MAX_FILES or sum(len(u.evidence.source.content) for u in uploads) > MAX_TOTAL_BYTES:
         raise ValueError('Keep at most 10 files and 10 MB total in this local assessment.')
     if len({u.evidence.source.document_id for u in uploads}) != len(uploads):
@@ -163,32 +162,26 @@ def _build_assessment(intake, uploads):
         raise ValueError('Upload routing differs from current applicable requirements; review the file selections.')
     scope_label = f'{intake.service} / {intake.environment} (uploader-declared scope)'
     scope = AssessmentScope(intake.assessment_id, intake.service, intake.environment, intake.as_of)
-    mappings, links = [], []
+    mappings, links, evaluations = [], [], []
     for control in applicable.controls:
         criteria = {
-            'ENC-01': TlsThreshold(12).describe() + ' Encryption at rest and key management also require manual review.',
-            'BCP-01': DrThreshold(365, 240, 60).describe(),
+            'ENC-01': tls_threshold.describe() + ' Encryption at rest and key management also require manual review.',
+            'BCP-01': dr_threshold.describe(),
         }.get(control.control_id, control.requirement + ': provide current in-scope implementation and operating evidence for manual assessment.')
-        threshold = CustomerThreshold(criteria)
+        threshold = {'ENC-01': tls_threshold, 'BCP-01': dr_threshold}.get(control.control_id, CustomerThreshold(criteria))
         requirement = RequirementContext(control.control_id, 'synthetic-example-requirements', '2026.1',
             'Synthetic local example; not organizational approval', intake.as_of, intake.service, intake.environment,
-            scope_label, 90 if control.control_id == 'ENC-01' else 365,
+            scope_label, 90 if control.control_id == 'ENC-01' else dr_threshold.max_test_age_days if control.control_id == 'BCP-01' else 365,
             business_use_case=intake.use_case, required_evidence=(criteria,),
             evidence_expectation=EvidenceExpectation('2026.1', ('policy', 'assertion', 'configuration', 'test')))
         documents = tuple(u.evidence.source for u in uploads if control.control_id in u.requirements)
         proposals = []
-        if control.control_id == 'ENC-01':
+        if control.control_id in ('ENC-01', 'BCP-01'):
             bound_sources = tuple(u.evidence for u in uploads if control.control_id in u.requirements)
-            tls = evaluate_pilot_requirements(tuple(b.document for b in bound_sources), today=intake.as_of)[0]
-            if tls.outcome == 'Risk Identified':
-                for citation in tls.citations:
-                    for bound in bound_sources:
-                        for ordinal, segment in enumerate(bound.document.segments, 1):
-                            if bound.document.filename == citation.filename and segment.location == citation.location and citation.excerpt in segment.text:
-                                proposals.append(Observation('tls-screen-' + bound.source.document_id + '-' + str(ordinal),
-                                    'unverified_text_concern', None, segment_id(bound.source.document_id, ordinal),
-                                    bound.fingerprint, segment.location, citation.excerpt,
-                                    'Text screening only; service scope and technical meaning unverified', None, 'potential_exception'))
+            proposals, _, evaluation = evaluate_uploads(intake, bound_sources, control.control_id, threshold)
+            evaluations.append(evaluation)
+        # All interpretations remain unconfirmed. The existing fallback review stays
+        # the current session review; typed comparisons are a separate preview.
         case = ControlCase('local-' + control.control_id, control.requirement, control.domain, requirement, threshold,
             documents, tuple(proposals), intake.as_of, relevance=tuple(bind_relevance(requirement, threshold, d,
                 rationale='Uploader selected this requirement for this file. This is routing for manual review, not proof of relevance or effectiveness.') for d in documents))
@@ -210,7 +203,7 @@ def _build_assessment(intake, uploads):
         'environment': intake.environment, 'data': intake.data, 'access': intake.access, 'criticality': intake.criticality,
         'limitations': LIMITATION, 'uncollected_risk_inputs': 'Volume, regulation, fourth parties, geography and AI use are unassessed (zero illustrative points).',
         'criteria_basis': 'Predefined synthetic example requirements, not organization-approved customer policy. TLS and recovery threshold descriptions reuse the existing threshold services.',
-        'applicability_policy': applicable.policy_version,
+        'applicability_policy': applicable.policy_version, 'evaluations': evaluations,
         'screening': [dict(requirement_id=r.requirement_id, draft_text_signal=r.outcome, not_control_result=True, reason=r.reason, follow_up=r.follow_up,
                            citations=[dict(filename=c.filename, location=c.location, excerpt=c.excerpt) for c in r.citations]) for r in screening]}
     return UploadAssessment(intake.assessment_id, bool(uploads), f'{intake.data} / {intake.access} / {intake.criticality}',

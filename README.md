@@ -19,8 +19,9 @@ review exact source quotations and gaps, record draft findings, then finish and
 export the original uploaded bytes in a source-traceable ZIP.
 
 This local, memory-only first slice uses the existing applicability engine and
-source-bound manual review workflow. Deterministic TLS text screening is limited;
-recovery and other technical interpretations require human review. No arbitrary
+source-bound manual review workflow. TLS and DR now have limited source-cited candidate extraction and comparisons
+against example customer thresholds; all facts and meanings require human confirmation.
+Other technical interpretations remain manual. See [supported syntax and limits](docs/Upload_Threshold_Evaluation.md). No arbitrary
 standards assurance, real vendor custody, external AI calls or risk approvals are
 provided. See [scope, limits and walkthrough](docs/Upload_Assessment.md).
 
