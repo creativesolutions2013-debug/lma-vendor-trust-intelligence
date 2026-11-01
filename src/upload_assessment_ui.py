@@ -42,6 +42,39 @@ def _capture_metadata(widget_key):
     _invalidate_uploads()
 
 
+def _use_source_metadata(key, updates):
+    # A direct analyst action changes only the offered draft fields. Other pending
+    # routing/scope edits survive; no facts or evaluated snapshots are confirmed.
+    edits = dict(st.session_state.get(PREFIX + 'metadata_edits', {}))
+    for field, value in updates.items():
+        widget_key = key + ':' + field
+        edits[widget_key] = value
+        st.session_state[widget_key] = value
+    st.session_state[PREFIX + 'metadata_edits'] = edits
+    st.session_state[PREFIX + 'metadata_confirmation_pending'] = True
+    _invalidate_uploads()
+
+
+def _source_metadata(bound, intake, key, kind, observed):
+    from src.upload_evaluation import source_metadata_suggestion
+    extracted, updates, citations = source_metadata_suggestion(bound, intake)
+    st.text('Source says: ' + (extracted['kind'] or 'type missing/ambiguous') + ' / ' + (extracted['date'] or 'date missing/ambiguous'))
+    st.caption('Unverified source suggestions; applying metadata does not confirm technical facts or approve a control.')
+    declared_date = observed.isoformat() if observed else None
+    st.text('Your current declaration: ' + kind + ' / ' + (declared_date or 'date not supplied'))
+    if ((extracted['kind'] and extracted['kind'] != kind)
+            or (extracted['date'] and extracted['date'] != declared_date)):
+        st.warning('Source and declaration differ. Comparisons may be unavailable until metadata is corrected and evidence reevaluated.')
+    st.button('Use source-stated metadata for this file', key=key + ':suggest',
+              disabled=not updates, on_click=_use_source_metadata, args=(key, updates))
+    if len(updates) < 2:
+        st.caption('Some suggestions are unavailable: source type/date must be unambiguous, scope must match, and dates cannot be invalid or future. Check the source manually.')
+    st.caption('After applying suggestions, click Evaluate attached evidence. Freshness, exclusions and other uncertainties still require review.')
+    with st.expander('Source metadata citations: ' + bound.document.filename):
+        for citation in citations:
+            st.caption(citation['location']); st.code(citation['quote'], language=None)
+
+
 def _capture_files(widget_key):
     _invalidate_uploads()
     files = st.session_state.get(widget_key, [])
@@ -145,7 +178,8 @@ def _uploads(intake):
             try:
                 proposed.append(read_upload(intake, filename, content, tuple(targets), kind=kind, observed_on=observed, service=source_service, environment=source_environment))
             except ValueError as error: errors.append(str(error)); st.error(str(error))
-    st.session_state[PREFIX + 'uploads_dirty'] = bool(errors) or tuple(proposed) != tuple(retained)
+        _source_metadata(bound, intake, key, kind, observed)
+    st.session_state[PREFIX + 'uploads_dirty'] = bool(errors) or tuple(proposed) != tuple(retained) or st.session_state.get(PREFIX + 'metadata_confirmation_pending', False)
     if st.session_state[PREFIX + 'uploads_dirty']: st.session_state.pop(PREFIX + 'completion', None)
     if st.button('Evaluate attached evidence', type='primary', disabled=bool(errors)):
         try: model = build_assessment(intake, tuple(proposed))
@@ -157,6 +191,7 @@ def _uploads(intake):
             st.session_state[PREFIX + 'uploads'] = tuple(proposed)
             st.session_state.pop(PREFIX + 'pending_files', None)
             if changed: st.session_state.pop(PREFIX + 'completion', None)
+            st.session_state.pop(PREFIX + 'metadata_confirmation_pending', None)
             st.session_state[PREFIX + 'uploads_dirty'] = False
             st.session_state[PREFIX + 'pending_stage'] = 'Evaluate'
             st.rerun()

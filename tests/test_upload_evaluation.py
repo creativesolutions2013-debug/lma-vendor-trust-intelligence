@@ -566,3 +566,25 @@ def test_negative_or_zero_exclusion_quantities_are_not_deficiencies_or_coverage_
     assert result['facts'] and all(f['dimension']=='unresolved_exclusion' for f in result['facts'])
     assert not any(f['eligible_for_preview'] for f in result['facts'])
     assert result['preview']['outcome_if_confirmed'] not in ('Risk Identified','Met')
+
+
+@pytest.mark.parametrize('extra,changes,expected', [
+    ('', {}, {'kind','date'}),
+    ('', {'service':'Other service'}, set()),
+    ('', {'environment':'test'}, set()),
+    ('\nTest date: 2026-10-21', {}, {'kind'}),
+    ('\nDR exercise results', {}, {'date'}),
+    ('', {'date':'2099-10-20'}, {'kind'}),
+    ('', {'date':'2026-99-99'}, {'kind'}),
+    ('\n' + 'x'*2001, {}, set()),
+])
+def test_metadata_suggestions_reuse_bounded_context_without_changing_source(intake, extra, changes, expected):
+    from src.upload_evaluation import source_metadata_suggestion
+    bound = read_upload(intake, 'context.txt', (source_text(intake, 'Listener 9443: TLS 1.0 is enabled.', **changes)+extra).encode()).evidence
+    extracted, updates, citations = source_metadata_suggestion(bound, intake)
+    assert set(updates) == expected
+    assert bound.source.evidence_kind == 'assertion' and bound.source.observed_on is None
+    for citation in citations:
+        segment = bound.document.segments[int(citation['source_id'].rsplit(':',1)[1])-1]
+        assert citation['quote'] in segment.text and citation['location'] == segment.location
+        assert citation['source_fingerprint'] == bound.fingerprint

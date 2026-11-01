@@ -373,3 +373,23 @@ def _comparison(fact, threshold, direction):
         maximum = threshold.max_rto_minutes if metric == 'RTO' else threshold.max_rpo_minutes
         return f'Achieved {metric} {fact.value} minutes vs customer maximum {maximum} minutes — {suffix}'
     return f'{fact.subject}: {fact.dimension}={fact.value} — {suffix}'
+
+
+def source_metadata_suggestion(bound, intake):
+    """Reuse recognized source context, never infer or verify upload metadata.
+
+    Suggestions require explicit matching assessed scope and complete extraction.
+    Fields remain independent: an ambiguous date never prevents a clear type from
+    being offered, or becomes a date default. Stale dates remain stale on evaluation.
+    """
+    _, extracted, _, citations, issues, observed = _context(bound, intake, 'ENC-01', 90)
+    in_scope = (extracted['service'] and extracted['environment']
+        and extracted['service'].casefold() == intake.service.casefold()
+        and extracted['environment'].casefold() == intake.environment.casefold())
+    updates = {}
+    if in_scope and not any('incomplete:' in issue for issue in issues):
+        if extracted['kind'] in GENRES:
+            updates['kind'] = extracted['kind']
+        if observed is not None and observed <= intake.as_of:
+            updates['date'] = observed
+    return extracted, updates, citations

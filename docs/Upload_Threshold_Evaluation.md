@@ -149,3 +149,16 @@ Exclusion object labels cannot absorb prepositional occurrence qualifications.
 Scope validation follows the accepted singular/plural endpoint and modifier
 grammar. Negative pronouns and zero-quantity exclusion objects stay unresolved;
 absence-of-exclusion wording does not establish full tested coverage.
+
+
+Upload metadata suggestions reuse the same bounded source-context extraction.
+Each file prominently shows unverified source-stated type/date alongside current
+uploader declarations and mismatches, with exact quotes behind an expander.
+**Use source-stated metadata for this file** applies only unambiguous recognized
+fields when explicit source service/environment match the assessment. Missing,
+ambiguous, invalid/future or incomplete context remains a manual prompt. Partial
+suggestions do not overwrite ambiguous fields or other pending routing/scope edits.
+Nothing changes without the analyst click; applying suggestions invalidates completion
+and requires explicit **Evaluate attached evidence**, even if declarations already
+match. This acknowledges metadata only, never confirms technical facts, removes
+source uncertainty or authorizes control/vendor approval or risk reduction.
