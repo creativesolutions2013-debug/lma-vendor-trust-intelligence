@@ -6,18 +6,61 @@ gold text is read-only at scoring time; metrics never gate correctness unless
 source integrity or human-confirmation invariants are broken.
 """
 from datetime import date
+from io import BytesIO
 import json
 import os
 from pathlib import Path
+from xml.sax.saxutils import escape
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from src.upload_assessment import Intake, build_assessment, read_upload
-from test_upload_assessment import pdf_bytes, docx_bytes
+from src.evidence_source_validation import segment_id
+from test_upload_assessment import pdf_bytes
 
 CORPUS_PATH = Path(__file__).resolve().parents[1] / "benchmarks" / "m5c_holdout_v1.json"
 TYPED = {
     "enabled_version", "disabled_version", "achieved_rto_minutes",
     "achieved_rpo_minutes", "scope_complete", "completed",
 }
+
+
+def _valid_docx(lines):
+    """A minimally conforming WordprocessingML package, one paragraph per line."""
+    ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    paragraphs = "".join(
+        '<w:p><w:r><w:t xml:space="preserve">' + escape(line) +
+        '</w:t></w:r></w:p>' for line in lines
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{ns}"><w:body>{paragraphs}<w:sectPr/>'
+        '</w:body></w:document>'
+    )
+    types = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '</Types>'
+    )
+    relationships = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/>'
+        '</Relationships>'
+    )
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", types)
+        archive.writestr("_rels/.rels", relationships)
+        archive.writestr("word/document.xml", document)
+    with ZipFile(BytesIO(output.getvalue())) as archive:
+        assert {"[Content_Types].xml", "_rels/.rels", "word/document.xml"} <= set(archive.namelist())
+    return output.getvalue()
 
 
 def _case_bytes(case):
@@ -29,8 +72,7 @@ def _case_bytes(case):
         assert not any(char in text for char in "()\\")
         return pdf_bytes(text.rstrip("\n").replace("\n", ") Tj 0 -14 Td ("))
     if case["format"] == "docx":
-        assert not any(char in text for char in "<>&")
-        return docx_bytes(text)
+        return _valid_docx(text.rstrip("\n").splitlines())
     raise AssertionError("Unrecognized frozen format")
 
 
@@ -67,11 +109,22 @@ def _score(case, intake):
         assert fact["document_id"] == bound.evidence.source.document_id
         assert fact["source_fingerprint"] == bound.evidence.fingerprint
         matching = [
-            segment for segment in bound.evidence.document.segments
-            if segment.location == fact["location"]
+            segment for ordinal, segment in enumerate(bound.evidence.document.segments, 1)
+            if fact["source_id"] == segment_id(bound.evidence.source.document_id, ordinal)
+            and segment.location == fact["location"]
             and fact["quote"] in segment.text
         ]
-        assert matching, (case["id"], fact["location"], fact["quote"])
+        assert matching, (case["id"], fact["source_id"], fact["location"], fact["quote"])
+    for source in result["sources"]:
+        for citation in source["context_citations"]:
+            assert citation["document_id"] == bound.evidence.source.document_id
+            assert citation["source_fingerprint"] == bound.evidence.fingerprint
+            assert any(
+                citation["source_id"] == segment_id(bound.evidence.source.document_id, ordinal)
+                and citation["location"] == segment.location
+                and citation["quote"] in segment.text
+                for ordinal, segment in enumerate(bound.evidence.document.segments, 1)
+            ), (case["id"], citation)
     assert bound.evidence.source.content == original
 
     facts = [f for f in result["facts"] if f["dimension"] in TYPED]
@@ -116,7 +169,7 @@ def _rate(numerator, denominator):
 
 def benchmark():
     corpus = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
-    assert corpus["version"] == "M5C-holdout-1.0"
+    assert corpus["version"] == "M5C-holdout-1.1"
     cases = corpus["cases"]
     assert len(cases) >= 12 and len({case["id"] for case in cases}) == len(cases)
     assert {c["format"] for c in cases} == {"txt", "pdf", "docx"}
