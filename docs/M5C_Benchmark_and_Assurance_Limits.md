@@ -5,9 +5,9 @@ Product decision: **build the benchmark; defer new extractor rules** until we in
 
 ## Corpus and scoring
 
-The versioned `benchmarks/m5c_holdout_v1.json` contains **16 independently written synthetic cases** covering TLS and DR, across TXT, PDF and DOCX. Evidence and human gold annotations are frozen for scoring; rule authors must not edit cases to improve their own scores. This initial set was written with knowledge of existing platform behavior and does **not** qualify as an external blind, representative real-world study. A later external analyst-authored corpus is still necessary.
+The versioned `benchmarks/m5c_holdout_v1.json` contains **16 separately written synthetic cases** covering TLS and DR, across TXT, PDF and DOCX. **Version 1.0's first-run metrics are superseded by 1.1** after independent review identified a gold-label defect: an achieved 4-hour-30-minute RTO is a material exception to the 240-minute objective, regardless of parser support. The correction was made before accepting baseline findings. Gold annotations are now frozen at **M5C-holdout-1.1**; rule authors must not tune or rewrite these cases to improve scores. This initial set was written with knowledge of existing platform behavior and does **not** qualify as an external blind, representative real-world study. A later external analyst-authored corpus is still necessary.
 
-A frozen `as_of=2026-11-01` keeps freshness checks reproducible. Cases deliberately include healthy and weak listeners, weak secondary endpoints, disabled legacy versions, conditional/test-only/stale evidence, policy targets, recovery-objective overruns, incomplete dependency coverage, unsupported narrative synonyms, compound durations, historical exercises and out-of-scope services.
+A frozen `as_of=2026-11-01` keeps freshness checks reproducible. Synthetic DOCX examples are generated as complete minimal WordprocessingML packages with one paragraph per source line; PDF examples are readable simple text pages, not scans. Cases deliberately include healthy and weak listeners, weak secondary endpoints, disabled legacy versions, conditional/test-only/stale evidence, policy targets, recovery-objective overruns, incomplete dependency coverage, unsupported narrative synonyms, compound durations, historical exercises and out-of-scope services.
 
 Run:
 
