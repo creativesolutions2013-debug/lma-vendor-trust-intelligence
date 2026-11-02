@@ -1,6 +1,6 @@
 {
-  "version": "M5C-holdout-1.0",
-  "authoring_note": "Frozen separately from evaluator implementation; hand-authored synthetic examples and expected facts. Author had general knowledge of existing supported grammar; this is an independent held-out corpus, NOT an external blinded study or proof of real-world recall.",
+  "version": "M5C-holdout-1.1",
+  "authoring_note": "Frozen separately from evaluator implementation; hand-authored synthetic examples and expected facts. Author had general knowledge of existing supported grammar; this is an independent held-out corpus, NOT an external blinded study or proof of real-world recall. Version 1.1 corrects an independently reviewed objective breach label: an in-scope achieved RTO of four hours and thirty minutes exceeds 240 minutes even when grammar is unsupported; safe parser abstention is still a measurable material miss. Supersedes the invalid 1.0 baseline.",
   "assessment": {
     "vendor": "Orion Synthetic Services",
     "service": "Orion Ledger Gateway",
@@ -337,8 +337,8 @@
       "service": "Orion Ledger Gateway",
       "environment": "production",
       "observed_on": "2026-10-18",
-      "attention": "abstain",
-      "reason": "Compound duration is meaningful but unsupported; conservative abstention is acceptable while human reviews.",
+      "attention": "exception",
+      "reason": "Human-read achieved RTO 4 hours 30 minutes = 270 minutes exceeds the 240-minute threshold; supported/unsupported parser grammar must not change the gold label. Missing this material case is counted, while fact approval remains manual.",
       "source": "DR exercise report\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nMeasured RTO 4 hours 30 minutes.\n",
       "gold": [
         {
