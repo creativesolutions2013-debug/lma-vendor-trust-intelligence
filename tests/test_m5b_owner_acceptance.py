@@ -35,7 +35,18 @@ DR_SOURCE = (
 ).encode("utf-8")
 
 
-def test_cedarline_real_upload_one_click_metadata_threshold_and_export(no_live_effects, packages):
+def test_cedarline_real_upload_one_click_metadata_threshold_and_export(no_live_effects, packages, monkeypatch):
+    # The acceptance documents are fixed at 2026-10-26 / 2026-09-20.
+    # Freeze only the intake/UI assessment clock: preserve real source dates,
+    # and avoid a false stale-evidence failure as wall time advances.
+    import src.upload_assessment_ui as upload_ui
+
+    class AcceptanceDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 11, 1)
+
+    monkeypatch.setattr(upload_ui, "date", AcceptanceDate)
     at = start()
     widget(at.sidebar.button, "Clear this assessment").click()
     run(at)
@@ -91,12 +102,25 @@ def test_cedarline_real_upload_one_click_metadata_threshold_and_export(no_live_e
     assert all(e["preview"]["outcome_if_confirmed"] == "Risk Identified" for e in evaluations.values())
     assert all(f["eligible_for_preview"] and not f["confirmed"]
                for e in evaluations.values() for f in e["facts"])
-    assert any("TLS 1.0" in f["quote"] and "9443" in f["quote"]
-               for f in evaluations["ENC-01"]["facts"])
-    assert any("RTO 300" in f["quote"] and "RPO 90" in f["quote"]
-               for f in evaluations["BCP-01"]["facts"])
+    # Compare the *parsed technical observations* rather than only line text:
+    # a dropped RTO fact or a swapped RTO/RPO value must fail this test.
+    tls_facts = evaluations["ENC-01"]["facts"]
+    dr_facts = evaluations["BCP-01"]["facts"]
+    assert {(f["dimension"], f["value"], f["subject"]) for f in tls_facts} == {
+        ("enabled_version", 12, "listener 443"),
+        ("enabled_version", 10, "listener 9443"),
+    }
+    assert {(f["dimension"], f["value"], f["subject"]) for f in dr_facts} == {
+        ("completed", True, "exercise for cedarline data platform"),
+        ("achieved_rto_minutes", 300, "exercise for cedarline data platform"),
+        ("achieved_rpo_minutes", 90, "exercise for cedarline data platform"),
+        ("scope_complete", False, "exercise for cedarline data platform"),
+    }
+    assert next(f for f in tls_facts if f["value"] == 10)["direction"] == "adverse"
+    assert all(f["direction"] == "adverse" for f in dr_facts if f["dimension"] in (
+        "achieved_rto_minutes", "achieved_rpo_minutes", "scope_complete"))
     assert any("Identity provider was excluded" in f["quote"]
-               for f in evaluations["BCP-01"]["facts"])
+               for f in dr_facts if f["dimension"] == "scope_complete")
     assert all(row.outcome != "Met" for row in model.worklist.rows)
     assert all(not fact.confirmed for row in model.worklist.rows
                if row.review for fact in row.review.facts)
