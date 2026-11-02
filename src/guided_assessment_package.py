@@ -95,13 +95,15 @@ def summary_html(report):
     parts.append('<h2>Simulated annotation history (no confirmations or approvals)</h2>')
     for action in report['analyst_actions']:
         parts.append(f'<p>{e(action["requirement_id"])} · {e(action["action"])} · {e(action["status"])} · {e(action["recorded_at"])}: {e(action["rationale"])}</p>')
-    if context:
-        parts.append('<h2>Unverified deterministic text screening (not control assurance)</h2>')
-        for screening in context['screening']:
-            if screening['citations']:
-                parts.append(f'<p>{e(screening["reason"])}</p>')
-                for citation in screening['citations']:
-                    parts.append(f'<p>{e(citation["filename"])} · {e(citation["location"])}</p><blockquote>{e(citation["excerpt"])}</blockquote>')
+    if context and context.get('evaluations') is not None:
+        parts.append('<h2>Unconfirmed source-cited threshold comparisons</h2>')
+        for evaluation in context['evaluations']:
+            parts.append(f'<h3>{e(evaluation["requirement_id"])} · {e(evaluation["status"])}</h3><p>{e(evaluation["threshold"])}</p>')
+            for fact in evaluation['facts']:
+                parts.append(f'<p>{e(fact["comparison"])} · {e(fact["filename"])} · {e(fact["location"])}</p><blockquote>{e(fact["quote"])}</blockquote><p>{e("; ".join(fact["uncertainties"]))}</p>')
+            for source in evaluation['sources']:
+                parts.append(f'<p>{e(source["filename"])}: {e("; ".join(source["uncertainties"]))}</p>')
+            parts.append(f'<p>Next action: {e(evaluation["next_action"])}</p><p>{e(evaluation["limitations"])}</p>')
     parts.append('<h2>Attached evidence/artifacts</h2><ul>')
     for artifact in report['evidence_manifest']['artifacts']:
         parts.append(f'<li><a href="{e(artifact["archive_path"])}">{e(artifact["filename"])}</a> · {e(artifact["document_id"])} · {e(artifact["source_role"])} · SHA-256 {e(artifact["sha256"])} · {e(artifact["use"])}</li>')

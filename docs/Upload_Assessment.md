@@ -1,5 +1,8 @@
 # Local upload-to-assessment slice (Issue #24)
 
+M5B extends this workflow with [unconfirmed TLS/DR threshold candidates](Upload_Threshold_Evaluation.md).
+The limits below describe the original M5A slice; the linked document specifies current evaluation coverage.
+
 Install the repository requirements (Streamlit 1.66+), then run
 `AUTH_MODE=development streamlit run app.py`. The primary customer entry is
 **New Assessment** with no scenario selector and no preloaded vendor documents.

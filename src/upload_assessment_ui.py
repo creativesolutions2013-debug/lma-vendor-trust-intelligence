@@ -42,6 +42,39 @@ def _capture_metadata(widget_key):
     _invalidate_uploads()
 
 
+def _use_source_metadata(key, updates):
+    # A direct analyst action changes only the offered draft fields. Other pending
+    # routing/scope edits survive; no facts or evaluated snapshots are confirmed.
+    edits = dict(st.session_state.get(PREFIX + 'metadata_edits', {}))
+    for field, value in updates.items():
+        widget_key = key + ':' + field
+        edits[widget_key] = value
+        st.session_state[widget_key] = value
+    st.session_state[PREFIX + 'metadata_edits'] = edits
+    st.session_state[PREFIX + 'metadata_confirmation_pending'] = True
+    _invalidate_uploads()
+
+
+def _source_metadata(bound, intake, key, kind, observed):
+    from src.upload_evaluation import source_metadata_suggestion
+    extracted, updates, citations = source_metadata_suggestion(bound, intake)
+    st.text('Source says: ' + (extracted['kind'] or 'type missing/ambiguous') + ' / ' + (extracted['date'] or 'date missing/ambiguous'))
+    st.caption('Unverified source suggestions; applying metadata does not confirm technical facts or approve a control.')
+    declared_date = observed.isoformat() if observed else None
+    st.text('Your current declaration: ' + kind + ' / ' + (declared_date or 'date not supplied'))
+    if ((extracted['kind'] and extracted['kind'] != kind)
+            or (extracted['date'] and extracted['date'] != declared_date)):
+        st.warning('Source and declaration differ. Comparisons may be unavailable until metadata is corrected and evidence reevaluated.')
+    st.button('Use source-stated metadata for this file', key=key + ':suggest',
+              disabled=not updates, on_click=_use_source_metadata, args=(key, updates))
+    if len(updates) < 2:
+        st.caption('Some suggestions are unavailable: source type/date must be unambiguous, scope must match, and dates cannot be invalid or future. Check the source manually.')
+    st.caption('After applying suggestions, click Evaluate attached evidence. Freshness, exclusions and other uncertainties still require review.')
+    with st.expander('Source metadata citations: ' + bound.document.filename):
+        for citation in citations:
+            st.caption(citation['location']); st.code(citation['quote'], language=None)
+
+
 def _capture_files(widget_key):
     _invalidate_uploads()
     files = st.session_state.get(widget_key, [])
@@ -145,7 +178,8 @@ def _uploads(intake):
             try:
                 proposed.append(read_upload(intake, filename, content, tuple(targets), kind=kind, observed_on=observed, service=source_service, environment=source_environment))
             except ValueError as error: errors.append(str(error)); st.error(str(error))
-    st.session_state[PREFIX + 'uploads_dirty'] = bool(errors) or tuple(proposed) != tuple(retained)
+        _source_metadata(bound, intake, key, kind, observed)
+    st.session_state[PREFIX + 'uploads_dirty'] = bool(errors) or tuple(proposed) != tuple(retained) or st.session_state.get(PREFIX + 'metadata_confirmation_pending', False)
     if st.session_state[PREFIX + 'uploads_dirty']: st.session_state.pop(PREFIX + 'completion', None)
     if st.button('Evaluate attached evidence', type='primary', disabled=bool(errors)):
         try: model = build_assessment(intake, tuple(proposed))
@@ -157,6 +191,7 @@ def _uploads(intake):
             st.session_state[PREFIX + 'uploads'] = tuple(proposed)
             st.session_state.pop(PREFIX + 'pending_files', None)
             if changed: st.session_state.pop(PREFIX + 'completion', None)
+            st.session_state.pop(PREFIX + 'metadata_confirmation_pending', None)
             st.session_state[PREFIX + 'uploads_dirty'] = False
             st.session_state[PREFIX + 'pending_stage'] = 'Evaluate'
             st.rerun()
@@ -169,11 +204,15 @@ def _details(row):
     st.info(row.outcome)
     st.text('Next action: ' + row.next_action)
     if row.review:
+        displayed = set()
         for fact in row.review.facts:
-            if fact.direction == 'adverse':
+            if fact.direction == 'adverse' and (fact.proposal.source_id, fact.proposal.quote) not in displayed:
                 st.warning('Unverified text concern'); st.code(fact.proposal.quote, language=None)
+                displayed.add((fact.proposal.source_id, fact.proposal.quote))
         for signal in row.review.signals:
-            st.warning('Unverified exception text'); st.code(signal.quote, language=None)
+            if (signal.source_id, signal.quote) not in displayed:
+                st.warning('Unverified exception text'); st.code(signal.quote, language=None)
+                displayed.add((signal.source_id, signal.quote))
     with st.expander('Sources and limitations'):
         if row.review:
             for bound in row.review.evidence:
@@ -184,22 +223,46 @@ def _details(row):
         st.caption('No specialist technical interpretation is supplied for arbitrary uploaded documents. Quotation matches and uploader routing do not establish meaning, operating effectiveness or compliance.')
 
 
+def _evaluation(evaluation):
+    st.markdown('**' + evaluation['requirement_id'] + ' · ' + evaluation['status'] + '**')
+    st.text('Customer example threshold: ' + evaluation['threshold'])
+    facts = evaluation['facts']
+    if facts:
+        st.dataframe([{'Proposed comparison (unconfirmed)': f['comparison'], 'Source': f['filename'] + ' · ' + f['location'],
+                       'Uncertainty': '; '.join(f['uncertainties']) or 'Meaning, scope and source authenticity require confirmation'} for f in facts], hide_index=True)
+    else:
+        st.info('No supported technical fact phrase extracted; this is an evidence gap, not a failed control.')
+    for source in evaluation['sources']:
+        for uncertainty in source['uncertainties']: st.caption(source['filename'] + ': ' + uncertainty)
+    if evaluation['preview']['conflicts']:
+        st.warning('Conflicting candidate observations; reconcile the retained sources.')
+    st.text('Next action: ' + evaluation['next_action'])
+    with st.expander('Source quotes and candidate details: ' + evaluation['requirement_id']):
+        seen = set()
+        for fact in facts:
+            key = (fact['source_id'], fact['quote'])
+            if key not in seen:
+                st.caption(fact['filename'] + ' · ' + fact['location']); st.code(fact['quote'], language=None)
+                seen.add(key)
+        for source in evaluation['sources']:
+            st.text('Source-stated vs uploader-declared metadata: ' + source['filename'])
+            st.json({'source_stated': source['extracted'], 'uploader_declared': source['declared']})
+            for citation in source['context_citations']:
+                st.caption(citation['location']); st.code(citation['quote'], language=None)
+        st.caption(evaluation['limitations'])
+
+
 def _evaluate(model):
     st.subheader('What LMA evaluated')
     st.write('The existing applicability engine selected the requirements below. Your source text is parsed and routed to source-bound manual reviews. No uploaded control is automatically satisfied. Example criteria are supplied for synthetic testing, not your organization’s approved policies.')
     st.dataframe([{'Requirement': r.requirement_id, 'Title': r.title, 'Status': r.outcome,
                    'Next action': r.next_action} for r in model.worklist.rows], hide_index=True)
-    st.markdown('**Limited deterministic text screening**')
-    for result in model.customer_context['screening']:
-        if result['citations']:
-            st.write(result['requirement_id'] + ' · Unverified text screening: ' + result['draft_text_signal'])
-            st.write(result['reason'])
-            for citation in result['citations']:
-                st.caption(citation['filename'] + ' · ' + citation['location'])
-                st.code(citation['excerpt'], language=None)
-    st.caption('TLS screening compares statements to TLS 1.2; it does not verify enabled configuration or reject historical/out-of-scope text automatically. Recovery RTO/RPO and other technical/control thresholds require human interpretation. AI is off; no external calls are enabled.')
+    for evaluation in model.customer_context['evaluations']:
+        _evaluation(evaluation)
+    st.caption('Candidate meanings require analyst confirmation. Draft review annotations do not confirm facts. TLS cipher suites, encryption at rest and other control families remain manual; AI and external calls are off.')
     selected = st.selectbox('Requirement details', [r.requirement_id for r in model.worklist.rows], key=PREFIX + 'detail')
-    _details(next(r for r in model.worklist.rows if r.requirement_id == selected))
+    with st.expander('Full requirement and source review'):
+        _details(next(r for r in model.worklist.rows if r.requirement_id == selected))
 
 
 def _review(model):

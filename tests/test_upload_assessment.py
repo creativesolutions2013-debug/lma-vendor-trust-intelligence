@@ -56,7 +56,7 @@ def test_actual_originals_are_parsed_screened_bound_and_exported(intake, filenam
     assert tls.review.facts[0].proposal.quote in uploaded.evidence.document.segments[0].text
     assert dr.review.evidence[0].source.content == dr_content
     assert not dr.review.specialist_available
-    assert 'RTO/RPO extraction' in model.customer_context['limitations']
+    assert 'Every fact and comparison is unconfirmed' in model.customer_context['limitations']
     assert suggested_requirements(uploaded.evidence.document, {'ENC-01','BCP-01'}) == ('ENC-01',)
     history = record_action(model, (), 'ENC-01', 'Create Finding', '<script>Unverified alternate listener</script>')
     completion = complete_review(model, history)

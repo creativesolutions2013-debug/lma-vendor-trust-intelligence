@@ -27,6 +27,10 @@ def tls_direction(threshold, fact, source):
         return "unknown"
     if source.evidence_kind not in {"configuration", "test", "assertion", "policy"}:
         return "unknown"
+    # An explicitly enabled version below policy is adverse; a healthy version
+    # alone cannot establish the endpoint minimum or full configuration coverage.
+    if fact.dimension == "enabled_version" and type(fact.value) is int and fact.value in {10, 11, 12, 13}:
+        return "adverse" if fact.value < threshold.minimum_version else "unknown"
     if fact.dimension == "minimum_version" and type(fact.value) is int and fact.value in {10, 11, 12, 13}:
         return "support" if fact.value >= threshold.minimum_version else "adverse"
     if fact.dimension in {"legacy_rejected", "scope_complete"} and type(fact.value) is bool:
@@ -48,7 +52,17 @@ def evaluate_tls(threshold, observations, as_of):
     for f, s in current:
         if tls_direction(threshold, f, s) != "unknown":
             groups.setdefault((f.dimension, f.subject), []).append((f, s))
+    for fact, _ in current:
+        if fact.dimension != "enabled_version":
+            continue
+        opposed = [f for f, _ in current if f.dimension == "disabled_version"
+                   and f.subject == fact.subject and f.value == fact.value]
+        if opposed:
+            checks.append(Check("protocol_state", "conflict", f"Enabled and disabled statements conflict for {fact.subject}; reconcile sources.",
+                                (fact.fact_id, *(f.fact_id for f in opposed))))
     for (dimension, subject), rows in groups.items():
+        if dimension == "enabled_version":
+            continue  # Different enabled protocols can coexist on one listener.
         if len({f.value for f, _ in rows}) > 1:
             checks.append(Check(dimension, "conflict", f"Conflicting TLS statements for {subject}; retain both sources.",
                                 tuple(f.fact_id for f, _ in rows)))
