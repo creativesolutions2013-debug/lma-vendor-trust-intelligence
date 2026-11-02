@@ -262,6 +262,12 @@
           "value": 90,
           "subject": "exercise for orion ledger gateway",
           "phrase": "ninety minutes"
+        },
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "completed"
         }
       ]
     },
@@ -314,6 +320,12 @@
           "value": false,
           "subject": "exercise for orion ledger gateway",
           "phrase": "not tested"
+        },
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "completed"
         }
       ]
     },
@@ -334,6 +346,12 @@
           "value": 270,
           "subject": "exercise for orion ledger gateway",
           "phrase": "4 hours 30 minutes"
+        },
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "completed"
         }
       ]
     },
@@ -354,6 +372,18 @@
           "value": 300,
           "subject": "exercise for orion data warehouse",
           "phrase": "RTO 300"
+        },
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion data warehouse",
+          "phrase": "completed"
+        },
+        {
+          "dimension": "achieved_rpo_minutes",
+          "value": 90,
+          "subject": "exercise for orion data warehouse",
+          "phrase": "RPO 90"
         }
       ]
     },
@@ -374,6 +404,12 @@
           "value": 300,
           "subject": "exercise for orion ledger gateway",
           "phrase": "RTO 300"
+        },
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "completed"
         }
       ]
     }
