@@ -1,0 +1,381 @@
+{
+  "version": "M5C-holdout-1.0",
+  "authoring_note": "Frozen separately from evaluator implementation; hand-authored synthetic examples and expected facts. Author had general knowledge of existing supported grammar; this is an independent held-out corpus, NOT an external blinded study or proof of real-world recall.",
+  "assessment": {
+    "vendor": "Orion Synthetic Services",
+    "service": "Orion Ledger Gateway",
+    "environment": "production",
+    "as_of": "2026-11-01",
+    "tls_minimum": "1.2",
+    "dr_max_rto_minutes": 240,
+    "dr_max_rpo_minutes": 60,
+    "dr_max_test_age_days": 365
+  },
+  "classification": {
+    "exception": "A material current in-scope statement warrants a provisional adverse concern; absent eligible concern counts as a benchmark miss, not proof of control pass.",
+    "no_exception": "No adverse statement in the supplied excerpt; no inference of full control Met.",
+    "abstain": "Evidence is stale, out of scope, hypothetical, a plan, or grammatically ambiguous; an eligible adverse comparison would be an overclaim. Unsupported facts may still be annotated by a human."
+  },
+  "cases": [
+    {
+      "id": "tls-alt-backdoor",
+      "family": "ENC-01",
+      "format": "txt",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Weak alternate TLS listener despite strong primary.",
+      "source": "TLS configuration report\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nPrimary endpoint 443: TLS 1.3 is enabled.\nAlternate production endpoint 9443: TLS 1.1 is enabled.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 13,
+          "subject": "endpoint 443",
+          "phrase": "TLS 1.3"
+        },
+        {
+          "dimension": "enabled_version",
+          "value": 11,
+          "subject": "endpoint 9443",
+          "phrase": "TLS 1.1"
+        }
+      ]
+    },
+    {
+      "id": "tls-rejected-legacy",
+      "family": "ENC-01",
+      "format": "pdf",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "no_exception",
+      "reason": "Disabled legacy does not establish failure or full coverage.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nListener edge443: TLS 1.0 is disabled.\nListener edge443: TLS 1.2 is enabled.\n",
+      "gold": [
+        {
+          "dimension": "disabled_version",
+          "value": 10,
+          "subject": "listener edge443",
+          "phrase": "TLS 1.0"
+        },
+        {
+          "dimension": "enabled_version",
+          "value": 12,
+          "subject": "listener edge443",
+          "phrase": "TLS 1.2"
+        }
+      ]
+    },
+    {
+      "id": "tls-port-prose",
+      "family": "ENC-01",
+      "format": "docx",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Clear human-read protocol exception in unfamiliar port phrasing; count as missed if no eligible comparison.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nTraffic on port 8443 still accepts TLS 1.0 connections.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 10,
+          "subject": "port 8443",
+          "phrase": "TLS 1.0"
+        }
+      ]
+    },
+    {
+      "id": "tls-conditional",
+      "family": "ENC-01",
+      "format": "txt",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Conditional fallback statement is not current operating proof.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nListener 443: TLS 1.0 may be enabled during fallback.\n",
+      "gold": []
+    },
+    {
+      "id": "tls-old-record",
+      "family": "ENC-01",
+      "format": "txt",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2025-01-10",
+      "attention": "abstain",
+      "reason": "Stale configuration cannot prove current production failure.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2025-01-10\nListener 443: TLS 1.0 is enabled.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 10,
+          "subject": "listener 443",
+          "phrase": "TLS 1.0"
+        }
+      ]
+    },
+    {
+      "id": "tls-test-only",
+      "family": "ENC-01",
+      "format": "pdf",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Test-only listener should not be compared as production.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nTest endpoint 7001: TLS 1.0 is enabled.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 10,
+          "subject": "endpoint 7001",
+          "phrase": "TLS 1.0"
+        }
+      ]
+    },
+    {
+      "id": "tls-gateway-caption",
+      "family": "ENC-01",
+      "format": "txt",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Alternate material endpoint written as network narrative.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nClient sessions on legacy gateway port 9443 accept TLS 1.0.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 10,
+          "subject": "gateway port 9443",
+          "phrase": "TLS 1.0"
+        }
+      ]
+    },
+    {
+      "id": "tls-mixed-enabled",
+      "family": "ENC-01",
+      "format": "docx",
+      "kind": "configuration",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Healthy and weak protocols coexist on same listener.",
+      "source": "Configuration export\nService: Orion Ledger Gateway\nEnvironment: production\nObservation date: 2026-10-18\nListener 443: TLS 1.0 and TLS 1.3 are enabled.\n",
+      "gold": [
+        {
+          "dimension": "enabled_version",
+          "value": 10,
+          "subject": "listener 443",
+          "phrase": "TLS 1.0"
+        },
+        {
+          "dimension": "enabled_version",
+          "value": 13,
+          "subject": "listener 443",
+          "phrase": "TLS 1.3"
+        }
+      ]
+    },
+    {
+      "id": "dr-breached-objectives",
+      "family": "BCP-01",
+      "format": "txt",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Measured overrun and incomplete service scope.",
+      "source": "Disaster recovery test report\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nObserved RTO 6 hours and RPO 2 hours.\nThe exercise excluded message broker failover.\n",
+      "gold": [
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "Recovery exercise completed"
+        },
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 360,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "RTO 6 hours"
+        },
+        {
+          "dimension": "achieved_rpo_minutes",
+          "value": 120,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "RPO 2 hours"
+        },
+        {
+          "dimension": "scope_complete",
+          "value": false,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "excluded message broker"
+        }
+      ]
+    },
+    {
+      "id": "dr-plan-only",
+      "family": "BCP-01",
+      "format": "docx",
+      "kind": "policy",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Policy intent is not achieved recovery evidence.",
+      "source": "Recovery plan objectives\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nTarget RTO 60 minutes. Target RPO 15 minutes.\nExercises are scheduled for next quarter.\n",
+      "gold": []
+    },
+    {
+      "id": "dr-failover-narrative",
+      "family": "BCP-01",
+      "format": "txt",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Human-readable RTO/RPO equivalents without formal acronyms; likely outside supported grammar.",
+      "source": "Disaster recovery exercise results\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nSwitching the service took five hours, with up to ninety minutes of data loss.\n",
+      "gold": [
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 300,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "five hours"
+        },
+        {
+          "dimension": "achieved_rpo_minutes",
+          "value": 90,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "ninety minutes"
+        }
+      ]
+    },
+    {
+      "id": "dr-compliant-sample",
+      "family": "BCP-01",
+      "format": "pdf",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "no_exception",
+      "reason": "Within example objectives but coverage remains unproven.",
+      "source": "DR exercise results\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nAchieved RTO 90 minutes and RPO 15 minutes.\n",
+      "gold": [
+        {
+          "dimension": "completed",
+          "value": true,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "completed"
+        },
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 90,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "RTO 90"
+        },
+        {
+          "dimension": "achieved_rpo_minutes",
+          "value": 15,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "RPO 15"
+        }
+      ]
+    },
+    {
+      "id": "dr-uncovered-idp",
+      "family": "BCP-01",
+      "format": "txt",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "exception",
+      "reason": "Identity dependency untested; material scope limitation.",
+      "source": "DR test results\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nIdentity federation was not tested in this exercise.\n",
+      "gold": [
+        {
+          "dimension": "scope_complete",
+          "value": false,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "not tested"
+        }
+      ]
+    },
+    {
+      "id": "dr-compound-duration",
+      "family": "BCP-01",
+      "format": "docx",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Compound duration is meaningful but unsupported; conservative abstention is acceptable while human reviews.",
+      "source": "DR exercise report\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nMeasured RTO 4 hours 30 minutes.\n",
+      "gold": [
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 270,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "4 hours 30 minutes"
+        }
+      ]
+    },
+    {
+      "id": "dr-unrelated-service",
+      "family": "BCP-01",
+      "format": "txt",
+      "kind": "test",
+      "service": "Orion Data Warehouse",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Evidence belongs to different assessed service.",
+      "source": "DR exercise results\nService: Orion Data Warehouse\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nAchieved RTO 300 minutes and RPO 90 minutes.\n",
+      "gold": [
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 300,
+          "subject": "exercise for orion data warehouse",
+          "phrase": "RTO 300"
+        }
+      ]
+    },
+    {
+      "id": "dr-year-qualified",
+      "family": "BCP-01",
+      "format": "txt",
+      "kind": "test",
+      "service": "Orion Ledger Gateway",
+      "environment": "production",
+      "observed_on": "2026-10-18",
+      "attention": "abstain",
+      "reason": "Historical result cannot be relabeled with a current report date.",
+      "source": "DR exercise results\nService: Orion Ledger Gateway\nEnvironment: production\nTest date: 2026-10-18\nRecovery exercise completed.\nAchieved RTO 300 minutes in 2024.\n",
+      "gold": [
+        {
+          "dimension": "achieved_rto_minutes",
+          "value": 300,
+          "subject": "exercise for orion ledger gateway",
+          "phrase": "RTO 300"
+        }
+      ]
+    }
+  ]
+}
