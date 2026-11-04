@@ -24,7 +24,7 @@ def test_explicit_port_acceptance_is_only_an_unconfirmed_candidate(intake, state
     fact = facts[0]
     assert fact["subject"] == subject
     assert fact["eligible_for_preview"]
-    assert fact["direction"] == ("adverse" if version < 12 else "support")
+    assert fact["direction"] == ("adverse" if version < 12 else "unknown")
     assert fact["confirmed"] is False
     assert fact["quote"] == statement
     assert fact["document_id"] == bound.evidence.source.document_id
