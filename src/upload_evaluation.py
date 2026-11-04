@@ -306,7 +306,7 @@ def _affirmative_exclusion(clause):
         r'(?:claims|reports)\b', object_text, re.I)
     if reporting_predicate:
         return False
-    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|states|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):
