@@ -152,6 +152,16 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             if re.search(r'\b(?:except|or|while|until|alternatively|otherwise|instead|rather)\b|\bbut\s+not\b|;\s*not\b|\?', source_line, re.I):
                 line_uncertainty += ('Enclosing source line contains an exception, alternative, qualification or question; verify the complete context before a current comparison.',)
             line_uncertainty += _enclosing_qualifications(source_line, line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
+            if requirement_id == 'BCP-01' and re.search(
+                r'\b(?:additional|extra|another|plus)\s+(?:\d+(?:\.\d+)?\s*)'
+                r'(?:minutes?|mins?|hours?|hrs?)\b|'
+                r'\b(?:but|plus)\b[^;.!?]*\b\d+(?:\.\d+)?\s*'
+                r'(?:minutes?|mins?|hours?|hrs?)\b',
+                source_line, re.I,
+            ):
+                line_uncertainty += (
+                    'Enclosing recovery statement adds duration beyond the metric; review the whole result.',
+                )
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
