@@ -327,17 +327,21 @@ def _affirmative_exclusion(clause):
         # Title-cased product names and a bounded noun-compound tail are
         # entity labels, not speaker verbs (The Reports API, The Claims
         # processing service, Insurance claims processing service).
+        prefix = [w.casefold() for w in words[:pos]]
         suffix = [w.casefold() for w in words[pos + 1:]]
+        # Explicit speaker roles take precedence over product-like nouns:
+        # "The recovery team reports API..." is attribution, not an API name.
+        if set(prefix) & role_nouns:
+            return False
+        # Bounded dependency names may legitimately include verb-shaped nouns.
         if verb in {'claims', 'reports'} and (
-            word[0].isupper() or
             suffix in (['api'], ['processing', 'service'], ['processing', 'platform'])
+            or (word[0].isupper() and not suffix)
         ):
             continue
-        # A named service may contain a verb-shaped noun: Customer Claims API,
-        # Insurance claims processing service. Do not strip that evidence.
-        prefix = [w.casefold() for w in words[:pos]]
-        attributed = prefix[0] in {'the', 'our', 'a', 'an'} or bool(set(prefix) & role_nouns)
-        if attributed:
+        # Other attributed propositions (e.g. "The security group reports...")
+        # must remain uncertain, never become an observed scope exception.
+        if prefix[0] in {'the', 'our', 'a', 'an'}:
             return False
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
