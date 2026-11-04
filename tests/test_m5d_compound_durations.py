@@ -57,3 +57,17 @@ def test_compound_duration_with_stale_date_cannot_be_current_exception(intake):
     assert any(f["dimension"] == "achieved_rto_minutes" and f["value"] == 270
                for f in result["facts"])
     assert not any(f["eligible_for_preview"] for f in result["facts"])
+
+
+@pytest.mark.parametrize("statement", [
+    "Measured RTO 4 hours 30 minutes but with an additional 45 minutes for restoration.",
+    "Observed RPO 1 hour 10 minutes but another 20 minutes for replay.",
+    "Measured RTO 3 hours 30 minutes; plus 40 minutes for dependent services.",
+])
+def test_split_duration_addendum_never_becomes_eligible_comparison(intake, statement):
+    result = evaluation(build_assessment(intake, (
+        upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01"),
+    )), "BCP-01")
+    assert not any(f["direction"] == "adverse" and f["eligible_for_preview"]
+                   for f in result["facts"])
+    assert result["preview"]["outcome_if_confirmed"] != "Risk Identified"
