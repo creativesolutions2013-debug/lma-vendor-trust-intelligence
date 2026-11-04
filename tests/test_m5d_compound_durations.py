@@ -1,0 +1,59 @@
+"""M5D strict achieved compound-duration evidence; no partial-hours approvals."""
+import pytest
+
+from test_upload_evaluation import intake, upload, evaluation
+from src.upload_assessment import build_assessment
+
+
+@pytest.mark.parametrize("statement,values", [
+    ("Measured RTO 3 hours 25 minutes.", {"achieved_rto_minutes": 205}),
+    ("Observed RPO 1 hour and 15 minutes.", {"achieved_rpo_minutes": 75}),
+    ("Achieved RTO 4 hours and 30 minutes; actual RPO 1 hour and 30 minutes.",
+     {"achieved_rto_minutes": 270, "achieved_rpo_minutes": 90}),
+])
+def test_strict_compound_durations_are_complete_unconfirmed_metrics(intake, statement, values):
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    facts = {fact["dimension"]: fact for fact in result["facts"]
+             if fact["dimension"].startswith("achieved_")}
+    assert {key: fact["value"] for key, fact in facts.items()} == values
+    for fact in facts.values():
+        assert fact["eligible_for_preview"]
+        assert fact["confirmed"] is False
+        assert fact["document_id"] == bound.evidence.source.document_id
+        assert fact["source_fingerprint"] == bound.evidence.fingerprint
+        assert any(fact["source_id"].endswith(":" + str(i)) and
+                   fact["location"] == segment.location and fact["quote"] in segment.text
+                   for i, segment in enumerate(bound.evidence.document.segments, 1))
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("statement", [
+    "Target RTO 4 hours 30 minutes.",
+    "Planned RTO 4 hours 30 minutes.",
+    "Measured RTO approximately 4 hours 30 minutes.",
+    "Measured RTO 4 hours and 70 minutes.",
+    "Measured RTO 4 hours 30 minutes, unless failover is slow.",
+    "Measured RTO 4 hours 30 minutes and RPO 1 hour 20 minutes.",
+    "RTO 4 hours 30 minutes was not measured.",
+    "Observed RTO 4 hours plus 30 minutes.",
+    "Measured RTO 4 hours (30 minutes extra).",
+])
+def test_ambiguous_compound_durations_never_partially_compare(intake, statement):
+    result = evaluation(build_assessment(intake, (
+        upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01"),
+    )), "BCP-01")
+    assert not any(f["dimension"].startswith("achieved_") for f in result["facts"])
+    assert not any(f["eligible_for_preview"] and f["direction"] == "adverse"
+                   for f in result["facts"])
+
+
+def test_compound_duration_with_stale_date_cannot_be_current_exception(intake):
+    result = evaluation(build_assessment(intake, (
+        upload(intake, "Recovery exercise completed.\nMeasured RTO 4 hours 30 minutes.",
+               "BCP-01", date="2024-01-01"),
+    )), "BCP-01")
+    assert any(f["dimension"] == "achieved_rto_minutes" and f["value"] == 270
+               for f in result["facts"])
+    assert not any(f["eligible_for_preview"] for f in result["facts"])
