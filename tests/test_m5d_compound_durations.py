@@ -205,3 +205,25 @@ def test_shared_preposition_additive_time_qualifies_both_metrics(intake, labels)
         assert fact["quote"] == statement
     assert result["preview"]["outcome_if_confirmed"] != "Met"
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("labels", ["RTO and RPO", "RPO and RTO"])
+def test_coordinated_metric_subject_addendum_qualifies_both(intake, labels):
+    statement = (
+        "Measured RTO 3 hours 30 minutes; observed RPO 0 hours 30 minutes; "
+        f"{labels} took an additional 60 minutes."
+    )
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    facts = {fact["dimension"]: fact for fact in result["facts"]
+             if fact["dimension"] in ("achieved_rto_minutes", "achieved_rpo_minutes")}
+    assert facts["achieved_rto_minutes"]["value"] == 210
+    assert facts["achieved_rpo_minutes"]["value"] == 30
+    for fact in facts.values():
+        assert fact["eligible_for_preview"] is False
+        assert fact["confirmed"] is False
+        assert fact["document_id"] == bound.evidence.source.document_id
+        assert fact["quote"] == statement
+    assert result["preview"]["outcome_if_confirmed"] != "Met"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
