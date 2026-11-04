@@ -261,6 +261,8 @@ def _enclosing_qualifications(parent, assertion, environment, observed, as_of, m
         if not fragment or fragment == assertion:
             continue
         independent = re.search(r'\bTLS\s*v?\s*1\.[0-3]\s+(?:(?:is|are|was|were)\s+)?(?:not\s+)?(?:enabled|disabled|allowed|accepted|rejected|blocked)\b|\b(?:RTO|RPO)\s*(?::|=|was|of)?\s*\d|\b(?:was|were|is|are)\s+(?:not\s+)?excluded\b|\b(?:exercise|test)\s+(?:was\s+)?completed\b', fragment, re.I)
+        if not independent and _explicit_tls_port_observation(fragment) is not None:
+            independent = True
         if not independent:
             issues.extend(_line_uncertainties(fragment, environment, observed, as_of, max_age))
     return tuple(dict.fromkeys(issues))
