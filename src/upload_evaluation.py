@@ -321,6 +321,19 @@ def _affirmative_exclusion(clause):
         r'(?:claims|reports|states)\b', object_text, re.I)
     if reporting_predicate:
         return False
+    # Treat an attributed proposition as unresolved regardless of speaker title.
+    # Do not mistake an entity named "Reports API", "Claims processing",
+    # or the geographic label "United States" for a reporting predicate.
+    words = object_text.split()
+    for pos, word in enumerate(words):
+        verb = word.casefold()
+        if verb not in {'reports', 'claims', 'states', 'confirms', 'says', 'notes', 'indicates', 'asserts'}:
+            continue
+        if pos == 0 or pos == len(words) - 1:
+            continue
+        if verb == 'states' and words[pos - 1].casefold() == 'united':
+            continue
+        return False
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
