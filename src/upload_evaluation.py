@@ -207,7 +207,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if re.search(r'\b(?:exercise|test) (?:was )?completed|\bcompleted (?:recovery |DR )?(?:exercise|test)', line, re.I):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
-                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind']):
+                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind'], source_line):
                     add(dimension, value, ordinal, location, line, subject, uncertainty)
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
@@ -329,13 +329,116 @@ def _tls_state(tail, head=''):
     return None
 
 
-def _dr_metrics(line, kind):
+def _strict_compound_dr_metric(clause, kind):
+    """Only a complete, affirmative achieved duration in technical test evidence.
+
+    Never take the first hour value from an unfinished, qualified, or mixed
+    statement. Other narrative durations remain for explicit analyst review.
+    """
+    if kind != 'test':
+        return None
+    match = re.fullmatch(
+        r'\s*(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+        r'(\d{1,4})\s+(?:hours?|hrs?)\s+(?:and\s+)?'
+        r'(\d{1,2})\s+(?:minutes?|mins?)\s*[.!]?\s*',
+        clause, re.I,
+    )
+    if not match:
+        return None
+    hours, minutes = int(match.group(2)), int(match.group(3))
+    if not 0 <= hours <= 720 or not 0 <= minutes < 60:
+        return None
+    return 'achieved_' + match.group(1).lower() + '_minutes', hours * 60 + minutes
+
+
+def _compound_duration_addendum(source_line, clause):
+    """Attach additive-duration uncertainty to the referenced achieved metric.
+
+    Only complete achieved assertions transfer ownership; an explicit RTO/RPO
+    label on an additive continuation overrides the previous metric. Unknown
+    ownership conservatively retains uncertainty rather than a passing preview.
+    """
+    if not source_line or source_line.strip() == clause.strip():
+        return ()
+    own_match = re.search(r'\b(RTO|RPO)\b', clause, re.I)
+    if not own_match:
+        return ('Recovery metric identity is unclear; verify the entire exercise.',)
+    target = own_match.group(1).casefold()
+    owner = None
+    for fragment in re.split(CLAUSE_BREAKS, source_line, flags=re.I):
+        fragment = fragment.strip()
+        if not fragment:
+            continue
+        assertion = re.match(
+            r'\s*(?:(?:we|the exercise|the recovery test|the completed DR exercise|the completed recovery exercise)\s+)?'
+            r'(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+            r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b',
+            fragment, re.I,
+        )
+        postfix = re.match(
+            r'\s*(RTO|RPO)\s+\d+(?:\.\d+)?\s*'
+            r'(?:minutes?|mins?|hours?|hrs?)\s+'
+            r'(?:was|is)\s+(?:achieved|measured|observed)\b',
+            fragment, re.I,
+        )
+        if assertion or postfix:
+            owner = (assertion or postfix).group(1).casefold()
+        if fragment == clause.strip():
+            continue
+        duration = r'\d+(?:\.\d+)?\s*(?:(?:more|additional|extra|further)\s+)?(?:minutes?|mins?|hours?|hrs?)\b'
+        additive = (
+            re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
+            or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further|more)\b', fragment, re.I)
+            or re.search(r'\b\d+(?:\.\d+)?\s+more\s+(?:minutes?|mins?|hours?|hrs?)\b', fragment, re.I)
+            or re.search(duration + r'\s+in\s+addition\b', fragment, re.I)
+        )
+        if not additive:
+            continue
+        # "for RTO restoration" is stronger than preceding RPO ownership.
+        labelled = re.findall(
+            r'\b(?:for|of)\s+(RTO|RPO)\b|\b(RTO|RPO)\s+(?:replay|restoration|recovery|required|needed)\b',
+            fragment, re.I,
+        )
+        explicitly_named = {g.casefold() for match in labelled for g in match if g}
+        coordinated = re.findall(
+            r'\b(?:for|of)\s+(RTO|RPO)\s+and\s+(RTO|RPO)\b',
+            fragment, re.I,
+        )
+        explicitly_named.update(g.casefold() for pair in coordinated for g in pair)
+        # Metric subjects at the start of an additive continuation own that
+        # duration regardless of the following verb (took, required, needed).
+        # Do not infer ownership from incidental "after observed RPO" mentions.
+        subject = re.match(r'\s*(?:the\s+)?(RTO|RPO)\b', fragment, re.I)
+        if subject:
+            explicitly_named.add(subject.group(1).casefold())
+        # A coordinated metric subject qualifies both measurements, not
+        # just the first one: "RTO and RPO took an additional 60 minutes".
+        paired_subject = re.match(
+            r'\s*(?:the\s+)?(RTO|RPO)\s+and\s+(RTO|RPO)\b',
+            fragment, re.I,
+        )
+        if paired_subject:
+            explicitly_named.update(
+                (paired_subject.group(1).casefold(), paired_subject.group(2).casefold())
+            )
+        # A single continuation may add different durations to both RTO and
+        # RPO. Do not let the first match suppress uncertainty on the other.
+        if target in explicitly_named or (not explicitly_named and (owner is None or owner == target)):
+            return ('Additive recovery duration requires confirmation of the complete achieved metric.',)
+    return ()
+
+
+def _dr_metrics(line, kind, source_line=None):
     """Qualify each metric locally; simple coordinated achieved pairs may inherit.
 
     Compound/range durations and unsupported negation are unresolved, never a
     partially parsed favourable duration. Quote remains the complete original line.
     """
     for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
+        compound = _strict_compound_dr_metric(clause, kind)
+        if compound is not None:
+            yield compound[0], compound[1], _compound_duration_addendum(source_line, clause)
+            continue
         matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
         inherited = False
         for i, metric in enumerate(matches):

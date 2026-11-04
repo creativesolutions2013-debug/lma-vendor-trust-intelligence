@@ -198,7 +198,6 @@ def test_dr_metric_scope_conflict_remains_unconfirmed_and_ineligible(intake):
 
 @pytest.mark.parametrize('body', [
     'Achieved RTO 4 hours 30 minutes and RPO 1 hour 30 minutes.',
-    'Achieved RTO 4 hours and 30 minutes; achieved RPO 1 hour and 30 minutes.',
     'Achieved RTO 4 hours, 30 minutes; actual RPO 1 hour, 30 minutes.',
     'Achieved RTO 4 hours plus 30 minutes; actual RPO 1 hour plus 30 minutes.',
     'Achieved RTO 4 hours (30 minutes extra); actual RPO 1 hour (30 minutes extra).',
