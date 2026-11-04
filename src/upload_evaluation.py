@@ -434,32 +434,38 @@ def _strict_compound_dr_metric(clause, kind):
 
 
 def _compound_duration_addendum(source_line, clause):
-    """A split trailing duration may qualify a measurement, not add another one.
+    """Attach additive-duration uncertainty to the referenced achieved metric.
 
-    Other independently asserted achieved metrics keep their own comparison.
+    Only complete achieved assertions transfer ownership; an explicit RTO/RPO
+    label on an additive continuation overrides the previous metric. Unknown
+    ownership conservatively retains uncertainty rather than a passing preview.
     """
     if not source_line or source_line.strip() == clause.strip():
         return ()
     own_match = re.search(r'\b(RTO|RPO)\b', clause, re.I)
+    if not own_match:
+        return ('Recovery metric identity is unclear; verify the entire exercise.',)
+    target = own_match.group(1).casefold()
     owner = None
     for fragment in re.split(CLAUSE_BREAKS, source_line, flags=re.I):
         fragment = fragment.strip()
         if not fragment:
             continue
-        # A separately asserted *other* metric owns its continuation. Do not
-        # suppress RTO because an explicitly achieved RPO has extra replay time.
-        other_metric = re.match(
-            r'\s*(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+        assertion = re.match(
+            r'\s*(?:(?:we|the exercise|the recovery test)\s+)?'
+            r'(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
             r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b',
             fragment, re.I,
         )
-        if other_metric:
-            owner = other_metric.group(1).casefold()
+        postfix = re.match(
+            r'\s*(RTO|RPO)\s+\d+(?:\.\d+)?\s*'
+            r'(?:minutes?|mins?|hours?|hrs?)\s+'
+            r'(?:was|is)\s+(?:achieved|measured|observed)\b',
+            fragment, re.I,
+        )
+        if assertion or postfix:
+            owner = (assertion or postfix).group(1).casefold()
         if fragment == clause.strip():
-            continue
-        # Continuations inherit their nearest independently asserted metric.
-        # An additive RPO replay tail cannot disqualify an earlier RTO result.
-        if own_match and owner and owner != own_match.group(1).casefold():
             continue
         duration = r'\d+(?:\.\d+)?\s*(?:(?:more|additional|extra|further)\s+)?(?:minutes?|mins?|hours?|hrs?)\b'
         additive = (
@@ -467,17 +473,17 @@ def _compound_duration_addendum(source_line, clause):
             or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further|more)\b', fragment, re.I)
             or re.search(r'\b\d+(?:\.\d+)?\s+more\s+(?:minutes?|mins?|hours?|hrs?)\b', fragment, re.I)
         )
-        if additive:
-            return ('Enclosing statement adds duration; confirm the entire achieved recovery time.',)
-        # Only a self-contained measured result is independent. Merely mentioning
-        # "observed RPO" within an additive tail does not establish a second result.
-        independent = re.fullmatch(
-            r'\s*(?:achieved|measured|observed|actual)\s+(?:RTO|RPO)\s+'
-            r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\s*[.!]?\s*',
+        if not additive:
+            continue
+        # "for RTO restoration" is stronger than preceding RPO ownership.
+        labelled = re.search(
+            r'\b(?:for|of)\s+(RTO|RPO)\b|\b(RTO|RPO)\s+(?:replay|restoration|recovery)\b',
             fragment, re.I,
         )
-        if independent:
-            continue
+        explicit_owner = next((g.casefold() for g in labelled.groups() if g), None) if labelled else None
+        assigned = explicit_owner or owner
+        if assigned is None or assigned == target:
+            return ('Additive recovery duration requires confirmation of the complete achieved metric.',)
     return ()
 
 
