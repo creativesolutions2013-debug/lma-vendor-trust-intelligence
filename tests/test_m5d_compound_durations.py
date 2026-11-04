@@ -134,3 +134,21 @@ def test_explicit_and_inherited_metric_ownership(intake, statement, eligible):
     assert rto[0]["document_id"] == bound.evidence.source.document_id
     assert (result["preview"]["outcome_if_confirmed"] == "Risk Identified") is eligible
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("statement", [
+    "Measured RTO 3 hours 30 minutes; achieved RPO 30 minutes; RTO required an additional 60 minutes for restoration.",
+    "Measured RTO 3 hours 30 minutes; restoration required 60 minutes in addition.",
+])
+def test_explicit_rto_and_in_addition_continuations_block_truncated_comparison(intake, statement):
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    rto = [f for f in result["facts"] if f["dimension"] == "achieved_rto_minutes"]
+    assert len(rto) == 1
+    assert rto[0]["value"] == 210
+    assert not rto[0]["eligible_for_preview"]
+    assert not rto[0]["confirmed"]
+    assert rto[0]["document_id"] == bound.evidence.source.document_id
+    assert result["preview"]["outcome_if_confirmed"] != "Met"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
