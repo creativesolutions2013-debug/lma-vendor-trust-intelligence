@@ -362,15 +362,23 @@ def _compound_duration_addendum(source_line, clause):
         fragment = fragment.strip()
         if not fragment or fragment == clause.strip():
             continue
-        if re.search(r'\b(?:achieved|measured|observed|actual)\s+(?:RTO|RPO)\b', fragment, re.I):
-            continue
-        duration = r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b'
+        duration = r'\d+(?:\.\d+)?\s*(?:(?:more|additional|extra|further)\s+)?(?:minutes?|mins?|hours?|hrs?)\b'
         additive = (
             re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
-            or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further)\b', fragment, re.I)
+            or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further|more)\b', fragment, re.I)
+            or re.search(r'\b\d+(?:\.\d+)?\s+more\s+(?:minutes?|mins?|hours?|hrs?)\b', fragment, re.I)
         )
         if additive:
             return ('Enclosing statement adds duration; confirm the entire achieved recovery time.',)
+        # Only a self-contained measured result is independent. Merely mentioning
+        # "observed RPO" within an additive tail does not establish a second result.
+        independent = re.fullmatch(
+            r'\s*(?:achieved|measured|observed|actual)\s+(?:RTO|RPO)\s+'
+            r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\s*[.!]?\s*',
+            fragment, re.I,
+        )
+        if independent:
+            continue
     return ()
 
 
