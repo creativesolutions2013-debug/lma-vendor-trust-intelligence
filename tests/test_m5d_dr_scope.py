@@ -9,6 +9,8 @@ from src.upload_assessment import build_assessment
     "Identity federation was not tested in this exercise.",
     "Message queue was not tested in the recovery exercise.",
     "Identity service was excluded from this DR test.",
+    "Claims processing service was excluded from the exercise.",
+    "Reports API was excluded from the exercise.",
 ])
 def test_explicit_uncovered_dependency_is_source_cited_and_unconfirmed(intake, line):
     bound = upload(intake, "Recovery exercise completed.\n" + line, "BCP-01")
@@ -35,6 +37,8 @@ def test_explicit_uncovered_dependency_is_source_cited_and_unconfirmed(intake, l
     "Identity federation was not tested in this exercise?",
     "The report says identity federation was not tested in this exercise.",
     "Management says identity federation was not tested in this exercise.",
+    "Management claims identity federation was not tested in this exercise.",
+    "Vendor reports identity federation was not tested in this exercise.",
     "It is false that identity federation was not tested in this exercise.",
     "It was reported that identity federation was not tested in this exercise.",
     "Identity federation will not be tested in this exercise.",
