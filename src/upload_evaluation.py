@@ -324,6 +324,15 @@ def _affirmative_exclusion(clause):
             continue
         if verb == 'states' and words[pos - 1].casefold() == 'united':
             continue
+        # Title-cased product names and a bounded noun-compound tail are
+        # entity labels, not speaker verbs (The Reports API, The Claims
+        # processing service, Insurance claims processing service).
+        suffix = [w.casefold() for w in words[pos + 1:]]
+        if verb in {'claims', 'reports'} and (
+            word[0].isupper() or
+            suffix in (['api'], ['processing', 'service'], ['processing', 'platform'])
+        ):
+            continue
         # A named service may contain a verb-shaped noun: Customer Claims API,
         # Insurance claims processing service. Do not strip that evidence.
         prefix = [w.casefold() for w in words[:pos]]
