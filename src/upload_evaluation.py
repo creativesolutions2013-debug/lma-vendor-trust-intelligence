@@ -472,12 +472,13 @@ def _compound_duration_addendum(source_line, clause):
             re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
             or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further|more)\b', fragment, re.I)
             or re.search(r'\b\d+(?:\.\d+)?\s+more\s+(?:minutes?|mins?|hours?|hrs?)\b', fragment, re.I)
+            or re.search(duration + r'\s+in\s+addition\b', fragment, re.I)
         )
         if not additive:
             continue
         # "for RTO restoration" is stronger than preceding RPO ownership.
         labelled = re.search(
-            r'\b(?:for|of)\s+(RTO|RPO)\b|\b(RTO|RPO)\s+(?:replay|restoration|recovery)\b',
+            r'\b(?:for|of)\s+(RTO|RPO)\b|\b(RTO|RPO)\s+(?:replay|restoration|recovery|required|needed)\b',
             fragment, re.I,
         )
         explicit_owner = next((g.casefold() for g in labelled.groups() if g), None) if labelled else None
