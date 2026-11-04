@@ -287,11 +287,11 @@ def _affirmative_exclusion(clause):
     other scope mentions remain source-cited unresolved observations.
     """
     entity = r'(?P<object>[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}?)'
-    exercise = r'(?:the\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
+    exercise = r'(?:(?:the|this)\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
     suffix = (r'(?:\s+on\s+\d{4}-\d{2}-\d{2})?'
               r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment)?'
               r'\s*[.,!]?\s*')
-    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+from\s+' + exercise + suffix, clause, re.I)
+    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+(?:from|in)\s+' + exercise + suffix, clause, re.I)
     active = re.fullmatch(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\s+' + entity + suffix, clause, re.I)
 
     match = passive or active
