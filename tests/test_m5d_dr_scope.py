@@ -39,6 +39,8 @@ def test_explicit_uncovered_dependency_is_source_cited_and_unconfirmed(intake, l
     "Management says identity federation was not tested in this exercise.",
     "Management claims identity federation was not tested in this exercise.",
     "Vendor reports identity federation was not tested in this exercise.",
+    "The vendor reports identity federation was not tested in this exercise.",
+    "Our supplier claims identity federation was not tested in this exercise.",
     "It is false that identity federation was not tested in this exercise.",
     "It was reported that identity federation was not tested in this exercise.",
     "Identity federation will not be tested in this exercise.",
