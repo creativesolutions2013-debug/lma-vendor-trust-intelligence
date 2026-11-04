@@ -86,3 +86,17 @@ def test_independently_measured_rpo_after_but_does_not_suppress_adverse_rto(inta
                and f["direction"] == "adverse" and f["eligible_for_preview"]
                for f in result["facts"])
     assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
+
+
+def test_other_metric_addendum_must_not_hide_independent_rto_breach(intake):
+    line = ("Recovery exercise completed.\nMeasured RTO 4 hours 30 minutes; "
+            "achieved RPO 30 minutes plus an additional 5 minutes.")
+    bound = upload(intake, line, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    rto = [f for f in result["facts"] if f["dimension"] == "achieved_rto_minutes"
+           and f["value"] == 270]
+    assert len(rto) == 1 and rto[0]["eligible_for_preview"]
+    assert rto[0]["direction"] == "adverse" and not rto[0]["confirmed"]
+    assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
