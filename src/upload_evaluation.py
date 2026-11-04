@@ -370,7 +370,7 @@ def _compound_duration_addendum(source_line, clause):
         if not fragment:
             continue
         assertion = re.match(
-            r'\s*(?:(?:we|the exercise|the recovery test)\s+)?'
+            r'\s*(?:(?:we|the exercise|the recovery test|the completed DR exercise|the completed recovery exercise)\s+)?'
             r'(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
             r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b',
             fragment, re.I,
@@ -395,13 +395,14 @@ def _compound_duration_addendum(source_line, clause):
         if not additive:
             continue
         # "for RTO restoration" is stronger than preceding RPO ownership.
-        labelled = re.search(
+        labelled = re.findall(
             r'\b(?:for|of)\s+(RTO|RPO)\b|\b(RTO|RPO)\s+(?:replay|restoration|recovery|required|needed)\b',
             fragment, re.I,
         )
-        explicit_owner = next((g.casefold() for g in labelled.groups() if g), None) if labelled else None
-        assigned = explicit_owner or owner
-        if assigned is None or assigned == target:
+        explicitly_named = {g.casefold() for match in labelled for g in match if g}
+        # A single continuation may add different durations to both RTO and
+        # RPO. Do not let the first match suppress uncertainty on the other.
+        if target in explicitly_named or (not explicitly_named and (owner is None or owner == target)):
             return ('Additive recovery duration requires confirmation of the complete achieved metric.',)
     return ()
 
