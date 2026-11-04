@@ -199,7 +199,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             else:
                 subject = 'exercise for ' + (extracted['service'].casefold() if extracted['service'] else 'unspecified service')
                 if excluded:
-                    exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
+                    exercise_scope = bool(re.search(r'\bfrom (?:(?:the|this) )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
                     if extracted['kind'] == 'test' and exercise_scope and _affirmative_exclusion(line):
                         add('scope_complete', False, ordinal, location, line, subject)
                     else:
