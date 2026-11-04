@@ -411,6 +411,16 @@ def _compound_duration_addendum(source_line, clause):
         subject = re.match(r'\s*(?:the\s+)?(RTO|RPO)\b', fragment, re.I)
         if subject:
             explicitly_named.add(subject.group(1).casefold())
+        # A coordinated metric subject qualifies both measurements, not
+        # just the first one: "RTO and RPO took an additional 60 minutes".
+        paired_subject = re.match(
+            r'\s*(?:the\s+)?(RTO|RPO)\s+and\s+(RTO|RPO)\b',
+            fragment, re.I,
+        )
+        if paired_subject:
+            explicitly_named.update(
+                (paired_subject.group(1).casefold(), paired_subject.group(2).casefold())
+            )
         # A single continuation may add different durations to both RTO and
         # RPO. Do not let the first match suppress uncertainty on the other.
         if target in explicitly_named or (not explicitly_named and (owner is None or owner == target)):
