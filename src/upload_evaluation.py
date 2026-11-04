@@ -160,6 +160,11 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 add('unresolved_exclusion', line, ordinal, location, line, 'unresolved scope statement',
                     ('Negated or ambiguous exclusion clause; it cannot establish an exercise deficiency or full coverage.',))
             if requirement_id == 'ENC-01':
+                port_observation = _explicit_tls_port_observation(line)
+                if port_observation is not None:
+                    subject, version = port_observation
+                    add('enabled_version', version, ordinal, location, line, subject)
+                    continue
                 versions = list(re.finditer(r'\bTLS\s*v?\s*1\.([0-3])\b', line, re.I))
                 if not versions: continue
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
@@ -300,6 +305,30 @@ def _affirmative_exclusion(clause):
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+
+
+
+def _explicit_tls_port_observation(clause):
+    """Strict active-state port grammar; no status inferred from support or intent.
+
+    The caller keeps the original source line, exact segment and local qualifiers.
+    Never borrow a verb, port identity, or date from a neighbouring clause.
+    """
+    match = re.fullmatch(
+        r'(?:(?:traffic|client sessions|connections)\s+(?:on|through)\s+)'
+        r'(?P<subject>(?:(?:production|alternate|primary|legacy)\s+)*'
+        r'(?:(?:gateway|admin|service)\s+)?port\s+(?P<port>\d{1,5}))\s+'
+        r'(?:(?:currently|still)\s+)?(?:accept|accepts|allow|allows)\s+'
+        r'TLS\s*v?\s*1\.(?P<minor>[0-3])(?:\s+connections)?[.!]?\s*',
+        clause, re.I,
+    )
+    if match is None:
+        return None
+    port = int(match.group('port'))
+    if not 1 <= port <= 65535:
+        return None
+    subject = re.sub(r'\s+', ' ', match.group('subject').strip()).casefold()
+    return subject, 10 + int(match.group('minor'))
 
 
 def _tls_state(tail, head=''):
