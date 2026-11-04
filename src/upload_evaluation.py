@@ -299,7 +299,14 @@ def _affirmative_exclusion(clause):
     # Entity slots are identifiers/noun labels, not a place for omitted predicates,
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
-    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|states|stated|reports|reported|claims|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    # A dependency called "Reports API" or "Claims processing service" is
+    # not a reported proposition. Reject reporting verbs in speaker context.
+    reporting_predicate = re.match(
+        r'^(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
+        r'(?:claims|reports)\b', object_text, re.I)
+    if reporting_predicate:
+        return False
+    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|states|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):
