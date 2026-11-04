@@ -181,3 +181,25 @@ def test_completed_exercise_rpo_assertion_owns_following_addendum(intake):
                and not f["confirmed"] for f in result["facts"])
     assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("labels", ["RTO and RPO", "RPO and RTO"])
+def test_shared_preposition_additive_time_qualifies_both_metrics(intake, labels):
+    statement = (
+        "Measured RTO 3 hours 30 minutes; observed RPO 0 hours 30 minutes; "
+        f"an additional 60 minutes for {labels}."
+    )
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    values = {fact["dimension"]: fact for fact in result["facts"]
+              if fact["dimension"] in ("achieved_rto_minutes", "achieved_rpo_minutes")}
+    assert values["achieved_rto_minutes"]["value"] == 210
+    assert values["achieved_rpo_minutes"]["value"] == 30
+    for fact in values.values():
+        assert not fact["eligible_for_preview"]
+        assert not fact["confirmed"]
+        assert fact["document_id"] == bound.evidence.source.document_id
+        assert fact["quote"] == statement
+    assert result["preview"]["outcome_if_confirmed"] != "Met"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
