@@ -152,16 +152,6 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             if re.search(r'\b(?:except|or|while|until|alternatively|otherwise|instead|rather)\b|\bbut\s+not\b|;\s*not\b|\?', source_line, re.I):
                 line_uncertainty += ('Enclosing source line contains an exception, alternative, qualification or question; verify the complete context before a current comparison.',)
             line_uncertainty += _enclosing_qualifications(source_line, line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
-            if requirement_id == 'BCP-01' and re.search(
-                r'\b(?:additional|extra|another|plus)\s+(?:\d+(?:\.\d+)?\s*)'
-                r'(?:minutes?|mins?|hours?|hrs?)\b|'
-                r'\b(?:but|plus)\b[^;.!?]*\b\d+(?:\.\d+)?\s*'
-                r'(?:minutes?|mins?|hours?|hrs?)\b',
-                source_line, re.I,
-            ):
-                line_uncertainty += (
-                    'Enclosing recovery statement adds duration beyond the metric; review the whole result.',
-                )
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))
@@ -217,7 +207,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if re.search(r'\b(?:exercise|test) (?:was )?completed|\bcompleted (?:recovery |DR )?(?:exercise|test)', line, re.I):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
-                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind']):
+                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind'], source_line):
                     add(dimension, value, ordinal, location, line, subject, uncertainty)
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
@@ -361,7 +351,30 @@ def _strict_compound_dr_metric(clause, kind):
     return 'achieved_' + match.group(1).lower() + '_minutes', hours * 60 + minutes
 
 
-def _dr_metrics(line, kind):
+def _compound_duration_addendum(source_line, clause):
+    """A split trailing duration may qualify a measurement, not add another one.
+
+    Other independently asserted achieved metrics keep their own comparison.
+    """
+    if not source_line or source_line.strip() == clause.strip():
+        return ()
+    for fragment in re.split(CLAUSE_BREAKS, source_line, flags=re.I):
+        fragment = fragment.strip()
+        if not fragment or fragment == clause.strip():
+            continue
+        if re.search(r'\b(?:achieved|measured|observed|actual)\s+(?:RTO|RPO)\b', fragment, re.I):
+            continue
+        duration = r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b'
+        additive = (
+            re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
+            or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further)\b', fragment, re.I)
+        )
+        if additive:
+            return ('Enclosing statement adds duration; confirm the entire achieved recovery time.',)
+    return ()
+
+
+def _dr_metrics(line, kind, source_line=None):
     """Qualify each metric locally; simple coordinated achieved pairs may inherit.
 
     Compound/range durations and unsupported negation are unresolved, never a
@@ -370,7 +383,7 @@ def _dr_metrics(line, kind):
     for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
         compound = _strict_compound_dr_metric(clause, kind)
         if compound is not None:
-            yield compound[0], compound[1], ()
+            yield compound[0], compound[1], _compound_duration_addendum(source_line, clause)
             continue
         matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
         inherited = False
