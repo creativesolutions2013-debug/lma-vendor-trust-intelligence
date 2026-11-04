@@ -329,6 +329,28 @@ def _tls_state(tail, head=''):
     return None
 
 
+def _strict_compound_dr_metric(clause, kind):
+    """Only a complete, affirmative achieved duration in technical test evidence.
+
+    Never take the first hour value from an unfinished, qualified, or mixed
+    statement. Other narrative durations remain for explicit analyst review.
+    """
+    if kind != 'test':
+        return None
+    match = re.fullmatch(
+        r'\s*(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+        r'(\d{1,4})\s+(?:hours?|hrs?)\s+(?:and\s+)?'
+        r'(\d{1,2})\s+(?:minutes?|mins?)\s*[.!]?\s*',
+        clause, re.I,
+    )
+    if not match:
+        return None
+    hours, minutes = int(match.group(2)), int(match.group(3))
+    if not 0 <= hours <= 720 or not 0 <= minutes < 60:
+        return None
+    return 'achieved_' + match.group(1).lower() + '_minutes', hours * 60 + minutes
+
+
 def _dr_metrics(line, kind):
     """Qualify each metric locally; simple coordinated achieved pairs may inherit.
 
@@ -336,6 +358,10 @@ def _dr_metrics(line, kind):
     partially parsed favourable duration. Quote remains the complete original line.
     """
     for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
+        compound = _strict_compound_dr_metric(clause, kind)
+        if compound is not None:
+            yield compound[0], compound[1], ()
+            continue
         matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
         inherited = False
         for i, metric in enumerate(matches):
