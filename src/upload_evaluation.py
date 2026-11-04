@@ -327,6 +327,11 @@ def _affirmative_exclusion(clause):
     # Do not mistake an entity named "Reports API", "Claims processing",
     # or the geographic label "United States" for a reporting predicate.
     words = object_text.split()
+    role_nouns = {
+        'vendor', 'supplier', 'management', 'auditor', 'operator', 'reviewer',
+        'team', 'department', 'committee', 'board', 'officer', 'staff',
+        'assessor', 'representative', 'company', 'organization',
+    }
     for pos, word in enumerate(words):
         verb = word.casefold()
         if verb not in {'reports', 'claims', 'states', 'confirms', 'says', 'notes', 'indicates', 'asserts'}:
@@ -335,7 +340,12 @@ def _affirmative_exclusion(clause):
             continue
         if verb == 'states' and words[pos - 1].casefold() == 'united':
             continue
-        return False
+        # A named service may contain a verb-shaped noun: Customer Claims API,
+        # Insurance claims processing service. Do not strip that evidence.
+        prefix = [w.casefold() for w in words[:pos]]
+        attributed = prefix[0] in {'the', 'our', 'a', 'an'} or bool(set(prefix) & role_nouns)
+        if attributed:
+            return False
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
