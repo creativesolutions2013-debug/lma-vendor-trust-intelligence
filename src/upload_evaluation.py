@@ -351,8 +351,8 @@ def _affirmative_exclusion(clause):
         # Limited, explicit noun-phrase grammar; versions and service qualifiers
         # remain labels, while "Acme confirms ..." is always attribution.
         noun_tail = (
-            re.fullmatch(r'(?:api|apis)(?:\\s+(?:service|platform|v\\d+))?', ' '.join(suffix), re.I)
-            or re.fullmatch(r'processing\\s+(?:service|platform)(?:\\s+v\\d+)?', ' '.join(suffix), re.I)
+            re.fullmatch(r'(?:api|apis)(?:\s+(?:service|platform|v\d+))?', ' '.join(suffix), re.I)
+            or re.fullmatch(r'processing\s+(?:service|platform)(?:\s+v\d+)?', ' '.join(suffix), re.I)
         )
         if verb in {'claims', 'reports'} and noun_tail:
             continue
