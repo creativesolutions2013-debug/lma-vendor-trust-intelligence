@@ -63,6 +63,8 @@ def test_compound_duration_with_stale_date_cannot_be_current_exception(intake):
     "Measured RTO 4 hours 30 minutes but with an additional 45 minutes for restoration.",
     "Observed RPO 1 hour 10 minutes but another 20 minutes for replay.",
     "Measured RTO 3 hours 30 minutes; plus 40 minutes for dependent services.",
+    "Measured RTO 4 hours 30 minutes; restoration required a further 45 minutes.",
+    "Observed RPO 1 hour 10 minutes; 20 minutes extra for replay.",
 ])
 def test_split_duration_addendum_never_becomes_eligible_comparison(intake, statement):
     result = evaluation(build_assessment(intake, (
@@ -71,3 +73,14 @@ def test_split_duration_addendum_never_becomes_eligible_comparison(intake, state
     assert not any(f["direction"] == "adverse" and f["eligible_for_preview"]
                    for f in result["facts"])
     assert result["preview"]["outcome_if_confirmed"] != "Risk Identified"
+
+
+def test_independently_measured_rpo_after_but_does_not_suppress_adverse_rto(intake):
+    result = evaluation(build_assessment(intake, (
+        upload(intake, "Recovery exercise completed.\n"
+               "Achieved RTO 300 minutes but achieved RPO 30 minutes.", "BCP-01"),
+    )), "BCP-01")
+    assert any(f["dimension"] == "achieved_rto_minutes" and f["value"] == 300
+               and f["direction"] == "adverse" and f["eligible_for_preview"]
+               for f in result["facts"])
+    assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
