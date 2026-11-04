@@ -487,6 +487,12 @@ def _compound_duration_addendum(source_line, clause):
             fragment, re.I,
         )
         explicitly_named.update(g.casefold() for pair in coordinated for g in pair)
+        # Metric subjects at the start of an additive continuation own that
+        # duration regardless of the following verb (took, required, needed).
+        # Do not infer ownership from incidental "after observed RPO" mentions.
+        subject = re.match(r'\s*(?:the\s+)?(RTO|RPO)\b', fragment, re.I)
+        if subject:
+            explicitly_named.add(subject.group(1).casefold())
         # A single continuation may add different durations to both RTO and
         # RPO. Do not let the first match suppress uncertainty on the other.
         if target in explicitly_named or (not explicitly_named and (owner is None or owner == target)):
