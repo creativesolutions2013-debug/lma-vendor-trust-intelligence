@@ -271,7 +271,7 @@ def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_
             issues.append('Clause-local date differs from the source observation date or is stale/future; do not re-date this fact from the document header.')
     if re.search(r'\b(?:in|during|from|year)\s+(?:19|20)\d{2}\b(?!-\d)|\b(?:19|20)\d{2}\s+(?:exercise|test|results)\b', line, re.I):
         issues.append('Clause-local year does not establish its own complete current observation date; verify the exercise/date binding.')
-    modifier_groups = re.findall(r'\b((?:(?:production|test|staging|development|sandbox|primary|alternate)\s+){1,2})(?:environments?|listeners?|endpoints?)\b', line, re.I)
+    modifier_groups = re.findall(r'\b((?:(?:production|test|staging|development|sandbox|primary|alternate)\s+){1,2})(?:environments?|listeners?|endpoints?|ports?)\b', line, re.I)
     environments = [value for group in modifier_groups for value in re.findall(r'\b(production|test|staging|development|sandbox)\b', group, re.I)]
     environments += re.findall(r'\benvironment\s*:\s*(production|test|staging|development|sandbox)\b', line, re.I)
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
@@ -316,7 +316,7 @@ def _explicit_tls_port_observation(clause):
     """
     match = re.fullmatch(
         r'(?:(?:traffic|client sessions|connections)\s+(?:on|through)\s+)'
-        r'(?P<subject>(?:(?:production|alternate|primary|legacy)\s+)*'
+        r'(?P<subject>(?:(?:production|test|staging|development|sandbox|alternate|primary|legacy)\s+)*'
         r'(?:(?:gateway|admin|service)\s+)?port\s+(?P<port>\d{1,5}))\s+'
         r'(?:(?:currently|still)\s+)?(?:accept|accepts|allow|allows)\s+'
         r'TLS\s*v?\s*1\.(?P<minor>[0-3])(?:\s+connections)?[.!]?\s*',
