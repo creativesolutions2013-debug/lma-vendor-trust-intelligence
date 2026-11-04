@@ -358,11 +358,11 @@ def _compound_duration_addendum(source_line, clause):
     """
     if not source_line or source_line.strip() == clause.strip():
         return ()
-    own_match = re.search(r'\\b(RTO|RPO)\\b', clause, re.I)
+    own_match = re.search(r'\b(RTO|RPO)\b', clause, re.I)
     owner = None
     for fragment in re.split(CLAUSE_BREAKS, source_line, flags=re.I):
         fragment = fragment.strip()
-        if not fragment or fragment == clause.strip():
+        if not fragment:
             continue
         # A separately asserted *other* metric owns its continuation. Do not
         # suppress RTO because an explicitly achieved RPO has extra replay time.
@@ -373,6 +373,8 @@ def _compound_duration_addendum(source_line, clause):
         )
         if other_metric:
             owner = other_metric.group(1).casefold()
+        if fragment == clause.strip():
+            continue
         # Continuations inherit their nearest independently asserted metric.
         # An additive RPO replay tail cannot disqualify an earlier RTO result.
         if own_match and owner and owner != own_match.group(1).casefold():
