@@ -115,3 +115,22 @@ def test_detached_other_metric_addendum_does_not_hide_rto_breach(intake, stateme
                and not f["confirmed"] for f in result["facts"])
     assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("statement,eligible", [
+    ("Measured RTO 3 hours 30 minutes; achieved RPO 30 minutes; an additional 60 minutes for RTO restoration.", False),
+    ("Measured RTO 4 hours 30 minutes; we achieved RPO 30 minutes; an additional 5 minutes for RPO replay.", True),
+    ("Measured RTO 4 hours 30 minutes; RPO 30 minutes was achieved; an additional 5 minutes for RPO replay.", True),
+])
+def test_explicit_and_inherited_metric_ownership(intake, statement, eligible):
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    rto = [f for f in result["facts"] if f["dimension"] == "achieved_rto_minutes"]
+    assert len(rto) == 1
+    assert rto[0]["eligible_for_preview"] is eligible
+    assert rto[0]["confirmed"] is False
+    assert rto[0]["quote"] == statement
+    assert rto[0]["document_id"] == bound.evidence.source.document_id
+    assert result["preview"]["outcome_if_confirmed"] == ("Risk Identified" if eligible else "Evidence Missing")
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
