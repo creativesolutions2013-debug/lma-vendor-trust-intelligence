@@ -100,3 +100,18 @@ def test_other_metric_addendum_must_not_hide_independent_rto_breach(intake):
     assert rto[0]["direction"] == "adverse" and not rto[0]["confirmed"]
     assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+@pytest.mark.parametrize("statement", [
+    "Measured RTO 4 hours 30 minutes; achieved RPO 30 minutes; an additional 5 minutes for RPO replay.",
+    "Measured RTO 4 hours 30 minutes; achieved RPO 30 minutes but an additional 5 minutes for replay.",
+])
+def test_detached_other_metric_addendum_does_not_hide_rto_breach(intake, statement):
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    assert any(f["dimension"] == "achieved_rto_minutes" and f["value"] == 270
+               and f["direction"] == "adverse" and f["eligible_for_preview"]
+               and not f["confirmed"] for f in result["facts"])
+    assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
