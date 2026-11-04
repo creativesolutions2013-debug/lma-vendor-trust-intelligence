@@ -199,7 +199,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             else:
                 subject = 'exercise for ' + (extracted['service'].casefold() if extracted['service'] else 'unspecified service')
                 if excluded:
-                    exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
+                    exercise_scope = bool(re.search(r'\bfrom (?:(?:the|this) )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
                     if extracted['kind'] == 'test' and exercise_scope and _affirmative_exclusion(line):
                         add('scope_complete', False, ordinal, location, line, subject)
                     else:
@@ -287,11 +287,11 @@ def _affirmative_exclusion(clause):
     other scope mentions remain source-cited unresolved observations.
     """
     entity = r'(?P<object>[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}?)'
-    exercise = r'(?:the\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
+    exercise = r'(?:(?:the|this)\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
     suffix = (r'(?:\s+on\s+\d{4}-\d{2}-\d{2})?'
               r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment)?'
               r'\s*[.,!]?\s*')
-    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+from\s+' + exercise + suffix, clause, re.I)
+    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+(?:from|in)\s+' + exercise + suffix, clause, re.I)
     active = re.fullmatch(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\s+' + entity + suffix, clause, re.I)
 
     match = passive or active
@@ -299,7 +299,50 @@ def _affirmative_exclusion(clause):
     # Entity slots are identifiers/noun labels, not a place for omitted predicates,
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
-    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    # A dependency called "Reports API" or "Claims processing service" is
+    # not a reported proposition. Reject reporting verbs in speaker context.
+    reporting_predicate = re.match(
+        r'^(?:(?:the|a|our)\s+)?(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
+        r'(?:(?:(?:also|explicitly|publicly|repeatedly|further|now)\s+){0,2})'
+        r'(?:claims|reports|states)\b', object_text, re.I)
+    if reporting_predicate:
+        return False
+    # Reject attribution based on the verb's syntactic tail, not an arbitrary
+    # speaker whitelist. Product labels such as "The Reports API service"
+    # must not be rejected simply because they contain "Reports".
+    words = object_text.split()
+    role_nouns = {
+        'vendor', 'supplier', 'management', 'auditor', 'operator', 'reviewer',
+        'team', 'department', 'committee', 'board', 'officer', 'staff',
+        'assessor', 'representative', 'company', 'organization',
+        'leadership', 'group',
+    }
+    reporting_verbs = {
+        'reports', 'reported', 'claims', 'claimed', 'states', 'stated',
+        'confirms', 'confirmed', 'says', 'said', 'notes', 'noted',
+        'indicates', 'indicated', 'asserts', 'asserted',
+    }
+    for pos, word in enumerate(words):
+        verb = word.casefold()
+        if verb not in reporting_verbs or pos == 0 or pos == len(words) - 1:
+            continue
+        prefix = [w.casefold() for w in words[:pos]]
+        suffix = [w.casefold() for w in words[pos + 1:]]
+        if verb == 'states' and prefix[-1] == 'united':
+            continue
+        # Recognized speaker roles always outrank apparent API-name tails.
+        if set(prefix) & role_nouns:
+            return False
+        # Limited, explicit noun-phrase grammar; versions and service qualifiers
+        # remain labels, while "Acme confirms ..." is always attribution.
+        noun_tail = (
+            re.fullmatch(r'(?:api|apis)(?:\s+(?:service|platform|v\d+))?', ' '.join(suffix), re.I)
+            or re.fullmatch(r'processing\s+(?:service|platform)(?:\s+v\d+)?', ' '.join(suffix), re.I)
+        )
+        if verb in {'claims', 'reports'} and noun_tail:
+            continue
+        return False
+    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
 def _tls_state(tail, head=''):
