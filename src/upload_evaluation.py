@@ -302,7 +302,7 @@ def _affirmative_exclusion(clause):
     # A dependency called "Reports API" or "Claims processing service" is
     # not a reported proposition. Reject reporting verbs in speaker context.
     reporting_predicate = re.match(
-        r'^(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
+        r'^(?:(?:the|a|our)\s+)?(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
         r'(?:claims|reports)\b', object_text, re.I)
     if reporting_predicate:
         return False
