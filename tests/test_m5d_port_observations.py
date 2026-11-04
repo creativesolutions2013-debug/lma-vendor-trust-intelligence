@@ -91,3 +91,16 @@ def test_intervening_port_descriptor_does_not_bypass_environment_scope(intake, a
     assert any(f["dimension"] == "enabled_version" for f in result["facts"])
     assert not any(f["direction"] == "adverse" and f["eligible_for_preview"]
                    for f in result["facts"])
+
+def test_independent_production_and_test_ports_keep_own_scope(intake):
+    statement = ("Traffic on production port 8444 accepts TLS 1.0 connections; "
+                 "traffic on test port 9444 accepts TLS 1.2 connections.")
+    bound = upload(intake, statement)
+    result = evaluation(build_assessment(intake, (bound,)))
+    production = [f for f in result["facts"] if f["subject"] == "production port 8444"]
+    test_port = [f for f in result["facts"] if f["subject"] == "test port 9444"]
+    assert len(production) == 1 and production[0]["direction"] == "adverse"
+    assert production[0]["eligible_for_preview"]
+    assert len(test_port) == 1 and not test_port[0]["eligible_for_preview"]
+    assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
+    assert not production[0]["confirmed"]
