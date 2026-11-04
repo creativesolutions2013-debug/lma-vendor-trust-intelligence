@@ -400,6 +400,11 @@ def _compound_duration_addendum(source_line, clause):
             fragment, re.I,
         )
         explicitly_named = {g.casefold() for match in labelled for g in match if g}
+        coordinated = re.findall(
+            r'\b(?:for|of)\s+(RTO|RPO)\s+and\s+(RTO|RPO)\b',
+            fragment, re.I,
+        )
+        explicitly_named.update(g.casefold() for pair in coordinated for g in pair)
         # A single continuation may add different durations to both RTO and
         # RPO. Do not let the first match suppress uncertainty on the other.
         if target in explicitly_named or (not explicitly_named and (owner is None or owner == target)):
