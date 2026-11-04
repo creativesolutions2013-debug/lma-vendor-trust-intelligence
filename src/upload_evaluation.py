@@ -160,6 +160,20 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 add('unresolved_exclusion', line, ordinal, location, line, 'unresolved scope statement',
                     ('Negated or ambiguous exclusion clause; it cannot establish an exercise deficiency or full coverage.',))
             if requirement_id == 'ENC-01':
+                port_observation = _explicit_tls_port_observation(line)
+                if port_observation is not None:
+                    subject, version = port_observation
+                    # A port may carry an environment modifier before gateway/admin.
+                    # Verify the entire recognized subject, not only adjacent words.
+                    port_environments = re.findall(
+                        r'\b(production|test|staging|development|sandbox)\b', subject, re.I)
+                    port_uncertainty = (
+                        ('Port subject names an environment outside assessed scope.',)
+                        if any(env.casefold() != intake.environment.casefold() for env in port_environments)
+                        else ()
+                    )
+                    add('enabled_version', version, ordinal, location, line, subject, port_uncertainty)
+                    continue
                 versions = list(re.finditer(r'\bTLS\s*v?\s*1\.([0-3])\b', line, re.I))
                 if not versions: continue
                 listener = re.search(r'\b(listener|endpoint)\s+([a-z0-9][a-z0-9_.:/-]*)', line, re.I)
@@ -199,7 +213,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             else:
                 subject = 'exercise for ' + (extracted['service'].casefold() if extracted['service'] else 'unspecified service')
                 if excluded:
-                    exercise_scope = bool(re.search(r'\bfrom (?:the )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
+                    exercise_scope = bool(re.search(r'\bfrom (?:(?:the|this) )?(?:(?:recovery|DR|completed) )?(?:exercise|test|testing)\b(?!\s+(?:results?|reports?|documents?))|\b(?:exercise|test|testing) (?:scope )?exclud|\b(?:exercise|test) (?:scope|exclusions?)\s*:|\b(?:not tested|untested)\b', line, re.I))
                     if extracted['kind'] == 'test' and exercise_scope and _affirmative_exclusion(line):
                         add('scope_complete', False, ordinal, location, line, subject)
                     else:
@@ -207,7 +221,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if re.search(r'\b(?:exercise|test) (?:was )?completed|\bcompleted (?:recovery |DR )?(?:exercise|test)', line, re.I):
                     add('completed', not bool(re.search(r'\b(?:not|never)\s+completed\b', line, re.I)), ordinal, location, line, subject)
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
-                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind']):
+                for dimension, value, uncertainty in _dr_metrics(line, extracted['kind'], source_line):
                     add(dimension, value, ordinal, location, line, subject, uncertainty)
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
@@ -266,7 +280,7 @@ def _line_uncertainties(line, assessed_environment, source_date, as_of, max_age_
             issues.append('Clause-local date differs from the source observation date or is stale/future; do not re-date this fact from the document header.')
     if re.search(r'\b(?:in|during|from|year)\s+(?:19|20)\d{2}\b(?!-\d)|\b(?:19|20)\d{2}\s+(?:exercise|test|results)\b', line, re.I):
         issues.append('Clause-local year does not establish its own complete current observation date; verify the exercise/date binding.')
-    modifier_groups = re.findall(r'\b((?:(?:production|test|staging|development|sandbox|primary|alternate)\s+){1,2})(?:environments?|listeners?|endpoints?)\b', line, re.I)
+    modifier_groups = re.findall(r'\b((?:(?:production|test|staging|development|sandbox|primary|alternate)\s+){1,2})(?:environments?|listeners?|endpoints?|ports?)\b', line, re.I)
     environments = [value for group in modifier_groups for value in re.findall(r'\b(production|test|staging|development|sandbox)\b', group, re.I)]
     environments += re.findall(r'\benvironment\s*:\s*(production|test|staging|development|sandbox)\b', line, re.I)
     if (any(value.casefold() != assessed_environment.casefold() for value in environments)
@@ -287,11 +301,11 @@ def _affirmative_exclusion(clause):
     other scope mentions remain source-cited unresolved observations.
     """
     entity = r'(?P<object>[A-Za-z0-9][A-Za-z0-9 _./()\-]{0,200}?)'
-    exercise = r'(?:the\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
+    exercise = r'(?:(?:the|this)\s+)?(?:(?:recovery|DR|completed)\s+)?(?:exercise|test|testing)'
     suffix = (r'(?:\s+on\s+\d{4}-\d{2}-\d{2})?'
               r'(?:\s+in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment)?'
               r'\s*[.,!]?\s*')
-    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+from\s+' + exercise + suffix, clause, re.I)
+    passive = re.fullmatch(entity + r'\s+(?:was|were|is|are)\s+(?:excluded|not tested|untested)\s+(?:from|in)\s+' + exercise + suffix, clause, re.I)
     active = re.fullmatch(r'(?:(?:the|completed|recovery|DR|production)\s+){0,3}(?:exercise|test|testing)\s+(?:scope\s+)?exclud(?:ed|es)\s+' + entity + suffix, clause, re.I)
 
     match = passive or active
@@ -299,7 +313,37 @@ def _affirmative_exclusion(clause):
     # Entity slots are identifiers/noun labels, not a place for omitted predicates,
     # report associations or adverbial occurrence qualifications.
     object_text = match.group('object')
-    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+    # A dependency called "Reports API" or "Claims processing service" is
+    # not a reported proposition. Reject reporting verbs in speaker context.
+    reporting_predicate = re.match(
+        r'^(?:(?:the|a|our)\s+)?(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
+        r'(?:(?:(?:also|explicitly|publicly|repeatedly|further|now)\s+){0,2})'\n        r'(?:claims|reports|states)\b', object_text, re.I)
+    if reporting_predicate:
+        return False
+    return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
+
+
+def _explicit_tls_port_observation(clause):
+    """Strict active-state port grammar; no status inferred from support or intent.
+
+    The caller keeps the original source line, exact segment and local qualifiers.
+    Never borrow a verb, port identity, or date from a neighbouring clause.
+    """
+    match = re.fullmatch(
+        r'(?:(?:traffic|client sessions|connections)\s+(?:on|through)\s+)'
+        r'(?P<subject>(?:(?:production|test|staging|development|sandbox|alternate|primary|legacy)\s+)*'
+        r'(?:(?:gateway|admin|service)\s+)?port\s+(?P<port>\d{1,5}))\s+'
+        r'(?:(?:currently|still)\s+)?(?:accept|accepts|allow|allows)\s+'
+        r'TLS\s*v?\s*1\.(?P<minor>[0-3])(?:\s+connections)?[.!]?\s*',
+        clause, re.I,
+    )
+    if match is None:
+        return None
+    port = int(match.group('port'))
+    if not 1 <= port <= 65535:
+        return None
+    subject = re.sub(r'\s+', ' ', match.group('subject').strip()).casefold()
+    return subject, 10 + int(match.group('minor'))
 
 
 def _tls_state(tail, head=''):
@@ -329,13 +373,70 @@ def _tls_state(tail, head=''):
     return None
 
 
-def _dr_metrics(line, kind):
+def _strict_compound_dr_metric(clause, kind):
+    """Only a complete, affirmative achieved duration in technical test evidence.
+
+    Never take the first hour value from an unfinished, qualified, or mixed
+    statement. Other narrative durations remain for explicit analyst review.
+    """
+    if kind != 'test':
+        return None
+    match = re.fullmatch(
+        r'\s*(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+        r'(\d{1,4})\s+(?:hours?|hrs?)\s+(?:and\s+)?'
+        r'(\d{1,2})\s+(?:minutes?|mins?)\s*[.!]?\s*',
+        clause, re.I,
+    )
+    if not match:
+        return None
+    hours, minutes = int(match.group(2)), int(match.group(3))
+    if not 0 <= hours <= 720 or not 0 <= minutes < 60:
+        return None
+    return 'achieved_' + match.group(1).lower() + '_minutes', hours * 60 + minutes
+
+
+def _compound_duration_addendum(source_line, clause):
+    """A split trailing duration may qualify a measurement, not add another one.
+
+    Other independently asserted achieved metrics keep their own comparison.
+    """
+    if not source_line or source_line.strip() == clause.strip():
+        return ()
+    for fragment in re.split(CLAUSE_BREAKS, source_line, flags=re.I):
+        fragment = fragment.strip()
+        if not fragment or fragment == clause.strip():
+            continue
+        duration = r'\d+(?:\.\d+)?\s*(?:(?:more|additional|extra|further)\s+)?(?:minutes?|mins?|hours?|hrs?)\b'
+        additive = (
+            re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
+            or re.search(duration + r'[^;.!?]*\b(?:additional|extra|another|further|more)\b', fragment, re.I)
+            or re.search(r'\b\d+(?:\.\d+)?\s+more\s+(?:minutes?|mins?|hours?|hrs?)\b', fragment, re.I)
+        )
+        if additive:
+            return ('Enclosing statement adds duration; confirm the entire achieved recovery time.',)
+        # Only a self-contained measured result is independent. Merely mentioning
+        # "observed RPO" within an additive tail does not establish a second result.
+        independent = re.fullmatch(
+            r'\s*(?:achieved|measured|observed|actual)\s+(?:RTO|RPO)\s+'
+            r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\s*[.!]?\s*',
+            fragment, re.I,
+        )
+        if independent:
+            continue
+    return ()
+
+
+def _dr_metrics(line, kind, source_line=None):
     """Qualify each metric locally; simple coordinated achieved pairs may inherit.
 
     Compound/range durations and unsupported negation are unresolved, never a
     partially parsed favourable duration. Quote remains the complete original line.
     """
     for clause in re.split(CLAUSE_BREAKS, line, flags=re.I):
+        compound = _strict_compound_dr_metric(clause, kind)
+        if compound is not None:
+            yield compound[0], compound[1], _compound_duration_addendum(source_line, clause)
+            continue
         matches = list(re.finditer(r'\b(RTO|RPO)\s*(?:was|of|:|=)?\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)?\b', clause, re.I))
         inherited = False
         for i, metric in enumerate(matches):
