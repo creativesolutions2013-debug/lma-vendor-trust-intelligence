@@ -138,6 +138,8 @@ def test_explicit_and_inherited_metric_ownership(intake, statement, eligible):
 
 @pytest.mark.parametrize("statement", [
     "Measured RTO 3 hours 30 minutes; achieved RPO 30 minutes; RTO required an additional 60 minutes for restoration.",
+    "Measured RTO 3 hours 30 minutes; observed RPO 0 hours 30 minutes; RTO took an additional 60 minutes for restoration.",
+    "Measured RTO 3 hours 30 minutes; observed RPO 0 hours 30 minutes; the RTO took an additional 60 minutes for restoration.",
     "Measured RTO 3 hours 30 minutes; restoration required 60 minutes in addition.",
 ])
 def test_explicit_rto_and_in_addition_continuations_block_truncated_comparison(intake, statement):
