@@ -307,42 +307,40 @@ def _affirmative_exclusion(clause):
         r'(?:claims|reports|states)\b', object_text, re.I)
     if reporting_predicate:
         return False
-    # Treat an attributed proposition as unresolved regardless of speaker title.
-    # Do not mistake an entity named "Reports API", "Claims processing",
-    # or the geographic label "United States" for a reporting predicate.
+    # Reject attribution based on the verb's syntactic tail, not an arbitrary
+    # speaker whitelist. Product labels such as "The Reports API service"
+    # must not be rejected simply because they contain "Reports".
     words = object_text.split()
     role_nouns = {
         'vendor', 'supplier', 'management', 'auditor', 'operator', 'reviewer',
         'team', 'department', 'committee', 'board', 'officer', 'staff',
         'assessor', 'representative', 'company', 'organization',
+        'leadership', 'group',
+    }
+    reporting_verbs = {
+        'reports', 'claims', 'states', 'confirms', 'says', 'notes',
+        'indicates', 'asserts',
     }
     for pos, word in enumerate(words):
         verb = word.casefold()
-        if verb not in {'reports', 'claims', 'states', 'confirms', 'says', 'notes', 'indicates', 'asserts'}:
+        if verb not in reporting_verbs or pos == 0 or pos == len(words) - 1:
             continue
-        if pos == 0 or pos == len(words) - 1:
-            continue
-        if verb == 'states' and words[pos - 1].casefold() == 'united':
-            continue
-        # Title-cased product names and a bounded noun-compound tail are
-        # entity labels, not speaker verbs (The Reports API, The Claims
-        # processing service, Insurance claims processing service).
         prefix = [w.casefold() for w in words[:pos]]
         suffix = [w.casefold() for w in words[pos + 1:]]
-        # Explicit speaker roles take precedence over product-like nouns:
-        # "The recovery team reports API..." is attribution, not an API name.
+        if verb == 'states' and prefix[-1] == 'united':
+            continue
+        # Recognized speaker roles always outrank apparent API-name tails.
         if set(prefix) & role_nouns:
             return False
-        # Bounded dependency names may legitimately include verb-shaped nouns.
-        if verb in {'claims', 'reports'} and (
-            suffix in (['api'], ['processing', 'service'], ['processing', 'platform'])
-            or (word[0].isupper() and not suffix)
-        ):
+        # Limited, explicit noun-phrase grammar; versions and service qualifiers
+        # remain labels, while "Acme confirms ..." is always attribution.
+        noun_tail = (
+            re.fullmatch(r'(?:api|apis)(?:\\s+(?:service|platform|v\\d+))?', ' '.join(suffix), re.I)
+            or re.fullmatch(r'processing\\s+(?:service|platform)(?:\\s+v\\d+)?', ' '.join(suffix), re.I)
+        )
+        if verb in {'claims', 'reports'} and noun_tail:
             continue
-        # Other attributed propositions (e.g. "The security group reports...")
-        # must remain uncertain, never become an observed scope exception.
-        if prefix[0] in {'the', 'our', 'a', 'an'}:
-            return False
+        return False
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
 
 
