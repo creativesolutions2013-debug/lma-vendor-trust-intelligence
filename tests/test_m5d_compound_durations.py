@@ -152,3 +152,32 @@ def test_explicit_rto_and_in_addition_continuations_block_truncated_comparison(i
     assert rto[0]["document_id"] == bound.evidence.source.document_id
     assert result["preview"]["outcome_if_confirmed"] != "Met"
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
+
+
+def test_additive_fragment_explicitly_names_both_recovery_metrics(intake):
+    statement = ("Measured RTO 3 hours 30 minutes; observed RPO 0 hours 30 minutes; "
+                 "an additional 60 minutes for RTO restoration and 45 minutes for RPO replay.")
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    facts = {f["dimension"]: f for f in result["facts"] if f["dimension"].startswith("achieved_")}
+    assert facts["achieved_rto_minutes"]["value"] == 210
+    assert facts["achieved_rpo_minutes"]["value"] == 30
+    assert not facts["achieved_rto_minutes"]["eligible_for_preview"]
+    assert not facts["achieved_rpo_minutes"]["eligible_for_preview"]
+    assert all(not f["confirmed"] for f in facts.values())
+    assert result["preview"]["outcome_if_confirmed"] != "Met"
+
+
+def test_completed_exercise_rpo_assertion_owns_following_addendum(intake):
+    statement = ("Measured RTO 4 hours 30 minutes; "
+                 "the completed DR exercise achieved RPO 30 minutes; "
+                 "an additional 5 minutes for replay.")
+    bound = upload(intake, "Recovery exercise completed.\n" + statement, "BCP-01")
+    model = build_assessment(intake, (bound,))
+    result = evaluation(model, "BCP-01")
+    assert any(f["dimension"] == "achieved_rto_minutes" and f["value"] == 270
+               and f["eligible_for_preview"] and f["direction"] == "adverse"
+               and not f["confirmed"] for f in result["facts"])
+    assert result["preview"]["outcome_if_confirmed"] == "Risk Identified"
+    assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
