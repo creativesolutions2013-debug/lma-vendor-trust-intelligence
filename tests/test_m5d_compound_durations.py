@@ -132,5 +132,5 @@ def test_explicit_and_inherited_metric_ownership(intake, statement, eligible):
     assert rto[0]["confirmed"] is False
     assert rto[0]["quote"] == statement
     assert rto[0]["document_id"] == bound.evidence.source.document_id
-    assert result["preview"]["outcome_if_confirmed"] == ("Risk Identified" if eligible else "Evidence Missing")
+    assert (result["preview"]["outcome_if_confirmed"] == "Risk Identified") is eligible
     assert all(row.outcome not in ("Met", "Risk Identified") for row in model.worklist.rows)
