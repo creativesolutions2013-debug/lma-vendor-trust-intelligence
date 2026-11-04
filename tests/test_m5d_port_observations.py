@@ -76,3 +76,18 @@ def test_port_scope_modifier_must_match_assessed_environment(intake, assessed, s
     assert not any(f["eligible_for_preview"] and f["direction"] == "adverse"
                    for f in result["facts"])
     assert result["preview"]["outcome_if_confirmed"] != "Risk Identified"
+
+
+@pytest.mark.parametrize("assessed,modifier", [
+    ("production", "test gateway"),
+    ("test", "production admin"),
+    ("production", "staging legacy gateway"),
+    ("test", "production service"),
+])
+def test_intervening_port_descriptor_does_not_bypass_environment_scope(intake, assessed, modifier):
+    assessment = replace(intake, environment=assessed)
+    statement = f"Traffic on {modifier} port 8444 accepts TLS 1.0 connections."
+    result = evaluation(build_assessment(assessment, (upload(assessment, statement),)))
+    assert any(f["dimension"] == "enabled_version" for f in result["facts"])
+    assert not any(f["direction"] == "adverse" and f["eligible_for_preview"]
+                   for f in result["facts"])
