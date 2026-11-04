@@ -334,8 +334,9 @@ def _affirmative_exclusion(clause):
         'leadership', 'group',
     }
     reporting_verbs = {
-        'reports', 'claims', 'states', 'confirms', 'says', 'notes',
-        'indicates', 'asserts',
+        'reports', 'reported', 'claims', 'claimed', 'states', 'stated',
+        'confirms', 'confirmed', 'says', 'said', 'notes', 'noted',
+        'indicates', 'indicated', 'asserts', 'asserted',
     }
     for pos, word in enumerate(words):
         verb = word.casefold()
