@@ -11,6 +11,8 @@ from src.upload_assessment import build_assessment
     "Identity service was excluded from this DR test.",
     "Claims processing service was excluded from the exercise.",
     "Reports API was excluded from the exercise.",
+    "United States payment gateway was excluded from the exercise.",
+    "The exercise excluded United States payment gateway.",
 ])
 def test_explicit_uncovered_dependency_is_source_cited_and_unconfirmed(intake, line):
     bound = upload(intake, "Recovery exercise completed.\n" + line, "BCP-01")
