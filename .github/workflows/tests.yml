@@ -30,6 +30,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
+      - name: Compile application and M5D evaluator before tests
+        run: python -m py_compile app.py src/upload_evaluation.py
+
       - name: Run tests
         run: pytest -q
 
@@ -82,6 +85,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
+
+      - name: Compile application and M5D evaluator before PostgreSQL tests
+        run: python -m py_compile app.py src/upload_evaluation.py
 
       - name: Apply Alembic migrations to PostgreSQL
         run: alembic upgrade head
