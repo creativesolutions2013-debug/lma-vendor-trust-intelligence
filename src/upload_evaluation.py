@@ -163,7 +163,16 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 port_observation = _explicit_tls_port_observation(line)
                 if port_observation is not None:
                     subject, version = port_observation
-                    add('enabled_version', version, ordinal, location, line, subject)
+                    # A port may carry an environment modifier before gateway/admin.
+                    # Verify the entire recognized subject, not only adjacent words.
+                    port_environments = re.findall(
+                        r'\b(production|test|staging|development|sandbox)\b', subject, re.I)
+                    port_uncertainty = (
+                        ('Port subject names an environment outside assessed scope.',)
+                        if any(env.casefold() != intake.environment.casefold() for env in port_environments)
+                        else ()
+                    )
+                    add('enabled_version', version, ordinal, location, line, subject, port_uncertainty)
                     continue
                 versions = list(re.finditer(r'\bTLS\s*v?\s*1\.([0-3])\b', line, re.I))
                 if not versions: continue
