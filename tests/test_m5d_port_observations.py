@@ -4,6 +4,7 @@ Test nearby unsafe constructions to prevent a false positive from a word match.
 These cases are deliberately different from the frozen M5C benchmark.
 """
 import pytest
+from dataclasses import replace
 
 from test_upload_evaluation import intake, upload, evaluation
 from src.upload_assessment import build_assessment
@@ -60,3 +61,18 @@ def test_explicit_port_statement_in_stale_source_is_not_current_evidence(intake)
     )))
     assert any(f["dimension"] == "enabled_version" for f in result["facts"])
     assert not any(f["eligible_for_preview"] for f in result["facts"])
+
+
+@pytest.mark.parametrize("assessed,source_port", [
+    ("test", "production"),
+    ("production", "test"),
+    ("production", "staging"),
+])
+def test_port_scope_modifier_must_match_assessed_environment(intake, assessed, source_port):
+    assessment = replace(intake, environment=assessed)
+    statement = f"Traffic on {source_port} port 8444 accepts TLS 1.0 connections."
+    result = evaluation(build_assessment(assessment, (upload(assessment, statement),)))
+    assert any(f["dimension"] == "enabled_version" for f in result["facts"])
+    assert not any(f["eligible_for_preview"] and f["direction"] == "adverse"
+                   for f in result["facts"])
+    assert result["preview"]["outcome_if_confirmed"] != "Risk Identified"
