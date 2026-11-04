@@ -65,6 +65,8 @@ def test_compound_duration_with_stale_date_cannot_be_current_exception(intake):
     "Measured RTO 3 hours 30 minutes; plus 40 minutes for dependent services.",
     "Measured RTO 4 hours 30 minutes; restoration required a further 45 minutes.",
     "Observed RPO 1 hour 10 minutes; 20 minutes extra for replay.",
+    "Measured RTO 4 hours 30 minutes; an additional 45 minutes for restoration was required after the observed RPO.",
+    "Measured RTO 4 hours 30 minutes; restoration required 45 more minutes.",
 ])
 def test_split_duration_addendum_never_becomes_eligible_comparison(intake, statement):
     result = evaluation(build_assessment(intake, (
