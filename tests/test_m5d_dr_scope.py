@@ -11,6 +11,8 @@ from src.upload_assessment import build_assessment
     "Identity service was excluded from this DR test.",
     "Claims processing service was excluded from the exercise.",
     "Reports API was excluded from the exercise.",
+    "The Reports API was excluded from the exercise.",
+    "The Claims processing service was excluded from the exercise.",
     "Customer Claims API was excluded from the exercise.",
     "Insurance claims processing service was excluded from the exercise.",
     "United States payment gateway was excluded from the exercise.",
