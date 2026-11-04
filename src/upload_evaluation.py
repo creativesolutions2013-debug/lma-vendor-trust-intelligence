@@ -445,6 +445,17 @@ def _compound_duration_addendum(source_line, clause):
         fragment = fragment.strip()
         if not fragment or fragment == clause.strip():
             continue
+        # A separately asserted *other* metric owns its continuation. Do not
+        # suppress RTO because an explicitly achieved RPO has extra replay time.
+        own_metric = re.search(r'\b(RTO|RPO)\b', clause, re.I)
+        other_metric = re.match(
+            r'\s*(?:achieved|measured|observed|actual)\s+(RTO|RPO)\s+'
+            r'\d+(?:\.\d+)?\s*(?:minutes?|mins?|hours?|hrs?)\b',
+            fragment, re.I,
+        )
+        if (own_metric and other_metric
+                and own_metric.group(1).casefold() != other_metric.group(1).casefold()):
+            continue
         duration = r'\d+(?:\.\d+)?\s*(?:(?:more|additional|extra|further)\s+)?(?:minutes?|mins?|hours?|hrs?)\b'
         additive = (
             re.search(r'\b(?:additional|extra|another|further|plus)\b[^;.!?]*' + duration, fragment, re.I)
