@@ -303,7 +303,8 @@ def _affirmative_exclusion(clause):
     # not a reported proposition. Reject reporting verbs in speaker context.
     reporting_predicate = re.match(
         r'^(?:(?:the|a|our)\s+)?(?:management|vendor|supplier|auditor|reviewer|operator|it)\s+'
-        r'(?:(?:(?:also|explicitly|publicly|repeatedly|further|now)\s+){0,2})'\n        r'(?:claims|reports|states)\b', object_text, re.I)
+        r'(?:(?:(?:also|explicitly|publicly|repeatedly|further|now)\s+){0,2})'
+        r'(?:claims|reports|states)\b', object_text, re.I)
     if reporting_predicate:
         return False
     return not re.search(r'\b(?:nothing|nobody|noone|none|zero|0|only|from|in|on|at|for|by|of|under|over|about|with|without|to|as|per|between|during|after|before|until|except|unless|while|if|when|report|document|appendix|details|that|false|says|said|stated|reported|claimed|denies|denied|alleges|alleged|asserts|asserted|according|suggests|suggested|mentions|mentioned|or|hypothetic\w*|possib\w*|potential\w*)\b|\b\w+ly\b', object_text, re.I)
