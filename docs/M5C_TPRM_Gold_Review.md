@@ -614,3 +614,11 @@ Proposed typed gold (not confirmed vendor facts):
 ```
 
 Reviewer response: **pending**. Record verdict, exact decisive quote/location, any fact correction, scope/date/type uncertainty and smallest follow-up.
+
+## AI-assisted review supplement
+
+An [AI-assisted source review](M5C_AI_Assisted_Gold_Review.md) now records
+15 agreements and one proposed gold-fact qualification, with exact citations.
+It is not independent human TPRM validation, does not change this frozen corpus
+and does not authorize parser changes. The upper-bound versus exact RPO issue
+requires human confirmation before any gold revision or rescoring.
