@@ -85,7 +85,7 @@ def _gold_match(gold, fact):
     )
 
 
-def _score(case, intake):
+def _score(case, intake, *, include_evaluation=False):
     original = _case_bytes(case)
     bound = read_upload(
         intake, case["id"] + "." + case["format"], original, (case["family"],),
@@ -145,7 +145,7 @@ def _score(case, intake):
     eligible_adverse = any(f["direction"] == "adverse" and f["eligible_for_preview"]
                            for f in result["facts"])
     expected_attention = case["attention"]
-    return {
+    scored = {
         "id": case["id"], "family": case["family"], "format": case["format"],
         "expected_attention": expected_attention, "eligible_adverse": eligible_adverse,
         "status": result["status"],
@@ -161,6 +161,10 @@ def _score(case, intake):
         "needs_human_interpretation": expected_attention == "abstain",
         "annotation": case["reason"],
     }
+
+    if include_evaluation:
+        scored["evaluation"] = result
+    return scored
 
 
 def _rate(numerator, denominator):

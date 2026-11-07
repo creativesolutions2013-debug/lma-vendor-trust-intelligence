@@ -63,3 +63,12 @@ separate development corpus remain prerequisites for extractor work under Issue 
 **Smallest source follow-up:** request failover start/restoration acceptance times
 and actual recovery-point timestamps, then clarify the ninety-minute wording.
 No vendor/control/risk approval, parser change or merge follows from this decision.
+
+## Subsequent candidate execution
+
+The [separate 1.2 candidate rubric](M5C_Candidate_Rubric.md) now makes this
+qualification executable in diagnostic tests using an in-memory copy. It splits
+technical exception triage from the narrative's manual-interpretation expectation.
+This does not activate the proposal in the legacy harness, rewrite v1.1 or adopt
+new gold. Candidate metrics are separately labelled annotation diagnostics, not
+improved application accuracy or completed human validation.
