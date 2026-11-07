@@ -445,6 +445,6 @@
   "automatic_approvals": false,
   "evidence_bundle": {
     "filename": "metadata-race-evidence.zip",
-    "sha256": "4bb8f032c49dd36c899d63231c3e4e6d77e9419ea9124d3e3b637e3f293bb021"
+    "sha256": "a277d4efbc5e70546172edba96ace88211fa3e85f3e6e37dc0e484c621ff24c9"
   }
 }
