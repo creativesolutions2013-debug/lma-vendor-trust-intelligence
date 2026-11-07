@@ -614,4 +614,3 @@ Proposed typed gold (not confirmed vendor facts):
 ```
 
 Reviewer response: **pending**. Record verdict, exact decisive quote/location, any fact correction, scope/date/type uncertainty and smallest follow-up.
-
