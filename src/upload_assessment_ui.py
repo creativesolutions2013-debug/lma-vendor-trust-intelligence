@@ -33,11 +33,13 @@ def _invalidate_uploads():
     st.session_state.pop(PREFIX + 'completion', None)
 
 
-def _capture_metadata(widget_key):
-    # Durable draft state is deliberately separate from Streamlit-owned widget keys,
-    # which are removed when Upload evidence is not rendered.
+def _capture_metadata(key, field, revision):
+    # Old browser snapshots can arrive after a source action. They are not
+    # fresh manual edits to the newly mounted metadata controls.
+    if revision != st.session_state.get(PREFIX + 'metadata_revisions', {}).get(key, 0):
+        return
     edits = dict(st.session_state.get(PREFIX + 'metadata_edits', {}))
-    edits[widget_key] = st.session_state[widget_key]
+    edits[key + ':' + field] = st.session_state[key + ':v' + str(revision) + ':' + field]
     st.session_state[PREFIX + 'metadata_edits'] = edits
     _invalidate_uploads()
 
@@ -47,10 +49,11 @@ def _use_source_metadata(key, updates):
     # routing/scope edits survive; no facts or evaluated snapshots are confirmed.
     edits = dict(st.session_state.get(PREFIX + 'metadata_edits', {}))
     for field, value in updates.items():
-        widget_key = key + ':' + field
-        edits[widget_key] = value
-        st.session_state[widget_key] = value
+        edits[key + ':' + field] = value
     st.session_state[PREFIX + 'metadata_edits'] = edits
+    revisions = dict(st.session_state.get(PREFIX + 'metadata_revisions', {}))
+    revisions[key] = revisions.get(key, 0) + 1
+    st.session_state[PREFIX + 'metadata_revisions'] = revisions
     st.session_state[PREFIX + 'metadata_confirmation_pending'] = True
     _invalidate_uploads()
 
@@ -162,17 +165,19 @@ def _uploads(intake):
         bound = parsed.evidence
         key = PREFIX + 'file:' + bound.source.document_id
         edits = st.session_state.get(PREFIX + 'metadata_edits', {})
+        revision = st.session_state.get(PREFIX + 'metadata_revisions', {}).get(key, 0)
+        widget_key = key + ':v' + str(revision)
         st.text(bound.document.filename + f' — readable text extracted ({len(bound.document.segments)} sections)')
         with st.expander('File details and routing: ' + bound.document.filename, expanded=False):
             st.text(f'{len(bound.document.segments)} readable sections · SHA-256 {bound.content_sha256}')
             targets = st.multiselect('Related requirements (routing only)', list(titles),
                 default=edits.get(key + ':targets', previous.requirements if previous else suggested_requirements(bound.document, titles)),
-                format_func=lambda value: value + ' · ' + titles[value], key=key + ':targets', on_change=_capture_metadata, args=(key + ':targets',))
+                format_func=lambda value: value + ' · ' + titles[value], key=widget_key + ':targets', on_change=_capture_metadata, args=(key, 'targets', revision))
             st.caption('Suggested routing is a text hint, not control proof. Correct the choices before evaluation. No selection keeps the file as context only.')
-            kind = st.selectbox('Document kind (your declaration)', ('assertion', 'policy', 'configuration', 'test'), index=('assertion', 'policy', 'configuration', 'test').index(edits.get(key + ':kind', previous.evidence.source.evidence_kind if previous else 'assertion')), key=key + ':kind', on_change=_capture_metadata, args=(key + ':kind',))
-            observed = st.date_input('Document observation/test date (if known)', value=edits.get(key + ':date', previous.evidence.source.observed_on if previous else None), max_value=date.today(), key=key + ':date', on_change=_capture_metadata, args=(key + ':date',))
-            source_service = st.text_input('Service stated by this document', value=edits.get(key + ':scope', previous.evidence.source.service if previous else intake.service), key=key + ':scope', max_chars=200, on_change=_capture_metadata, args=(key + ':scope',))
-            source_environment = st.text_input('Environment stated by this document', value=edits.get(key + ':environment', previous.evidence.source.environment if previous else intake.environment), key=key + ':environment', max_chars=100, on_change=_capture_metadata, args=(key + ':environment',))
+            kind = st.selectbox('Document kind (your declaration)', ('assertion', 'policy', 'configuration', 'test'), index=('assertion', 'policy', 'configuration', 'test').index(edits.get(key + ':kind', previous.evidence.source.evidence_kind if previous else 'assertion')), key=widget_key + ':kind', on_change=_capture_metadata, args=(key, 'kind', revision))
+            observed = st.date_input('Document observation/test date (if known)', value=edits.get(key + ':date', previous.evidence.source.observed_on if previous else None), max_value=date.today(), key=widget_key + ':date', on_change=_capture_metadata, args=(key, 'date', revision))
+            source_service = st.text_input('Service stated by this document', value=edits.get(key + ':scope', previous.evidence.source.service if previous else intake.service), key=widget_key + ':scope', max_chars=200, on_change=_capture_metadata, args=(key, 'scope', revision))
+            source_environment = st.text_input('Environment stated by this document', value=edits.get(key + ':environment', previous.evidence.source.environment if previous else intake.environment), key=widget_key + ':environment', max_chars=100, on_change=_capture_metadata, args=(key, 'environment', revision))
             st.text('Role: ' + ('uploaded synthetic vendor evidence' if targets else 'uploaded context only') + ' · Declared scope: ' + source_service + ' / ' + source_environment)
             st.caption('Scope is uploader-declared, not verified from the document. Missing/stale dates and different scope remain explicit evidence limitations.')
             try:

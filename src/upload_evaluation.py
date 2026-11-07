@@ -219,7 +219,9 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
     missing = [c for c in result.checks if c.status == 'missing']
     next_action = (('Validate the cited noncompliant listener and obtain its dated configuration/protocol-rejection scan.' if requirement_id == 'ENC-01' else
                    'Validate the achieved objectives and exclusions; request a corrective exercise covering excluded dependencies.') if adverse else
-                  'Resolve source date/type/scope discrepancies and confirm candidate meanings; obtain missing technical coverage or operating proof.')
+                  (('Review the listed source uncertainties and confirm candidate meanings; '
+                    if any(source['uncertainties'] for source in sources) else 'Confirm candidate meanings; ')
+                   + 'obtain missing technical coverage or operating proof.'))
     return tuple(observations), evaluator, {
         'requirement_id': requirement_id, 'extractor_version': VERSION, 'threshold': threshold.describe(),
         'status': 'Unverified threshold concern' if adverse else 'Unverified evidence review',
