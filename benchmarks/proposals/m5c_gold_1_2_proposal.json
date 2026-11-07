@@ -1,0 +1,85 @@
+{
+  "version": "M5C-gold-correction-1.2-proposal",
+  "status": "proposed_not_active",
+  "parent": {
+    "path": "benchmarks/m5c_holdout_v1.json",
+    "version": "M5C-holdout-1.1",
+    "sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9"
+  },
+  "owner_decision": {
+    "source": "User message in this task after the AI-assisted review",
+    "exact_statement": "I accept those qualifications",
+    "accepted_interpretations": [
+      "Up to ninety minutes is an upper bound, not exact achieved RPO=90 and not conclusive proof of exceeding 60 minutes.",
+      "The five-hour service switch warrants investigation, but mapping its duration to formal achieved RTO requires measurement-boundary clarification."
+    ],
+    "scope": "Acceptance of these two qualifications only; not approval of all gold labels, activation of a new baseline, parser changes or merge.",
+    "independent_human_tprm_validation_complete": false
+  },
+  "case_id": "dr-failover-narrative",
+  "source_text_sha256": "3e64c44425e64177b01650dbd22e48637590abe158fbcc14cb1c02e6dd93c185",
+  "source_unchanged": true,
+  "annotation_replacement_if_adopted": {
+    "attention": "exception",
+    "attention_basis": "Retain targeted provisional review of the five-hour switch and uncertain data-loss bound; this is not proof of a confirmed numerical RTO/RPO breach.",
+    "gold": [
+      {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      }
+    ],
+    "qualified_source_assertions": [
+      {
+        "meaning": "reported service-switch duration",
+        "operator": "=",
+        "value": 300,
+        "unit": "minutes",
+        "phrase": "five hours",
+        "source_location": "Line 6",
+        "quote": "Switching the service took five hours, with up to ninety minutes of data loss.",
+        "formal_rto_mapping": "unresolved",
+        "eligible_as_exact_achieved_rto": false
+      },
+      {
+        "meaning": "reported data-loss upper bound",
+        "operator": "<=",
+        "value": 90,
+        "unit": "minutes",
+        "phrase": "up to ninety minutes",
+        "source_location": "Line 6",
+        "quote": "Switching the service took five hours, with up to ninety minutes of data loss.",
+        "formal_rpo_mapping": "unresolved",
+        "eligible_as_exact_achieved_rpo": false,
+        "proves_rpo_exceeds_60": false,
+        "proves_rpo_at_most_60": false
+      }
+    ],
+    "smallest_follow_up": "Obtain failover start/service-restoration acceptance timestamps and actual recovered data-point timestamps; clarify whether ninety minutes is an observed maximum or a hypothetical bound.",
+    "eligible_comparison_expectation": "Unresolved: targeted manual-review attention is not equivalent to eligible exact-metric adverse comparison; resolve the triage rubric before activation."
+  },
+  "removed_unqualified_gold": [
+    {
+      "dimension": "achieved_rto_minutes",
+      "value": 300,
+      "subject": "exercise for orion ledger gateway",
+      "phrase": "five hours"
+    },
+    {
+      "dimension": "achieved_rpo_minutes",
+      "value": 90,
+      "subject": "exercise for orion ledger gateway",
+      "phrase": "ninety minutes"
+    }
+  ],
+  "implementation_boundary": {
+    "active_corpus_changed": false,
+    "benchmark_harness_changed": false,
+    "extractor_changed": false,
+    "new_metrics_published": false,
+    "qualified_assertions_are_existing_typed_facts": false,
+    "note": "This overlay is review material only. The current harness still reads frozen v1.1 and does not consume proposals. Adoption needs a separately versioned corpus and explicit treatment of qualified/unsupported assertions before rescoring. Never count a literal bound or unverified mapping as an exact achieved metric.",
+    "ready_for_current_harness": false
+  }
+}

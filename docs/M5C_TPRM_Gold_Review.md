@@ -620,5 +620,7 @@ Reviewer response: **pending**. Record verdict, exact decisive quote/location, a
 An [AI-assisted source review](M5C_AI_Assisted_Gold_Review.md) now records
 15 agreements and one proposed gold-fact qualification, with exact citations.
 It is not independent human TPRM validation, does not change this frozen corpus
-and does not authorize parser changes. The upper-bound versus exact RPO issue
-requires human confirmation before any gold revision or rescoring.
+and does not authorize parser changes. The owner has since accepted the two qualifications for the narrative case;
+see the [scoped decision and versioned proposal](M5C_Gold_Qualification_Decision.md).
+Broader human TPRM validation remains pending. No active gold revision or rescoring
+has occurred.
