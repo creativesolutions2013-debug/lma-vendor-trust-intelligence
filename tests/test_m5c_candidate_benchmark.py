@@ -82,6 +82,7 @@ def candidate_benchmark():
         row = _score(case, intake, include_evaluation=True)
         evaluation = row.pop('evaluation')
         if case['attention'] == 'manual_interpretation':
+            row['needs_human_interpretation'] = True
             row['qualified_metric_review'] = qualified_metric_review(evaluation)
             row['qualified_source_assertions'] = case['qualified_source_assertions']
         details.append(row)
@@ -106,7 +107,7 @@ def candidate_benchmark():
                         'extra_count': predicted-matched,
                         'recall_against_candidate_annotations': _rate(matched, gold),
                         'precision_against_candidate_annotations': _rate(matched, predicted)},
-        'definite_exception_triage': {
+        'technical_exception_triage': {
             'cases': len(technical), 'surfaced': sum(r['eligible_adverse'] for r in technical),
             'missed_ids': [r['id'] for r in technical if not r['eligible_adverse']],
             'case_recall_against_candidate_labels': _rate(sum(r['eligible_adverse'] for r in technical), len(technical)),
@@ -134,6 +135,9 @@ def test_candidate_runs_separately_without_mutating_frozen_source():
     assert report['summary']['manual_interpretation']['targeted_signal_surfaced_count'] is None
     # The correction changes what is exact, not whether the extractor improved.
     assert report['summary']['typed_facts']['gold_count'] == 27
+    narrative = next(r for r in report['cases'] if r['id'] == NARRATIVE)
+    assert narrative['needs_human_interpretation'] is True
+    assert narrative['adverse_case_missed'] is False
     output = json.dumps(report, indent=2, sort_keys=True)
     if os.environ.get('M5C_CANDIDATE_REPORT_PATH'):
         Path(os.environ['M5C_CANDIDATE_REPORT_PATH']).write_text(output+'\n')
