@@ -78,3 +78,11 @@ Machine-readable observations and evidence-bundle SHA-256:
 [`m5c_browser_rehearsal_1.json`](../benchmarks/observations/m5c_browser_rehearsal_1.json).
 The local evidence bundle is a handoff artifact; binary screenshots, traces and
 assessment ZIPs are not committed to the repository.
+
+## Rapid-click follow-up
+
+The previously unresolved metadata observation was later reproduced with real
+PDF uploads and exported assessment data. A [per-file metadata-control revision
+fix](M5C_Metadata_Race_Fix.md) now rejects obsolete callbacks. The original
+rehearsal records above remain unchanged as historical evidence; the follow-up
+provides separate before/after trials and the narrow scope of the correction.
