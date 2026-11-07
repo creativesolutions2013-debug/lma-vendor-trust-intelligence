@@ -79,3 +79,12 @@ risk safeguards intact.
 End with one justified recommendation: build, simplify, defer or reject, listing
 remaining assurance and measurement limitations. Owner review is required before
 broader product claims; PR #29 is still draft and merge authorization is separate.
+
+## Preparatory automated diagnostic
+
+A [browser rehearsal](M5C_Browser_Rehearsal.md) has now exercised two known sources
+and led to a small correction of inaccurate metadata advice. This was not an
+execution of the formal human protocol: gold validation remains incomplete,
+source quotes were known, and the live assessment date differed from the frozen
+benchmark. Human measures and ROI remain null. The rehearsal must not be cited
+as evidence for default-action changes or broad parser improvements.

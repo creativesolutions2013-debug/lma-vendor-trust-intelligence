@@ -1,0 +1,140 @@
+{
+  "version": "M5C-browser-diagnostic-1",
+  "status": "diagnostic_only_not_formal_analyst_study",
+  "method": "Automated Playwright/Chromium, one scripted path on two known synthetic sources; source meanings/quotes were known beforehand.",
+  "base_commit": "7b68bffb4ff1b15c67775cbcea9a8902d70c286b",
+  "after_tested_module": "src/upload_evaluation.py",
+  "after_tested_module_sha256": "6af7f1c331150b78aeb3359e55f931f7fe88452e066ceb2bef29e63efcc8af1f",
+  "browser": "Chromium 154.0.8037.57 built on Debian GNU/Linux 13 (trixie)",
+  "corpus_sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9",
+  "human_tprm_validation_complete": false,
+  "human_minutes": null,
+  "human_clicks": null,
+  "human_quote_discovery_seconds": null,
+  "unnecessary_vendor_questions": null,
+  "real_user_gap_only_finding_rate": null,
+  "counting_rule": "Completed replay only: explicit locator.click calls, programmatic fill calls (each followed by Tab), and one native file-list injection batch. Excludes implicit focus, auto-scroll, waits and file-picker UI; these are not physical human steps or minimum-click estimates.",
+  "before": {
+    "scope_as_of": "2026-11-07",
+    "fixed_benchmark_as_of": "2026-11-01",
+    "same_date_as_fixed_benchmark": false,
+    "counts": {
+      "clicks": 14,
+      "field_fills": 4,
+      "file_attachment_batches": 1
+    },
+    "file_hashes": {
+      "tls-port-prose.docx": "4a4c067399ff9e65f641ba904a48fff7872f64fb0e41e1d2b92cbb8d5058b491",
+      "dr-uncovered-idp.txt": "d9d15d6e72884979103a480fb6c2f4fbb232286e8cc480af92098329fccdc7fc"
+    },
+    "artifacts_verified": 2,
+    "verified_citations": 11,
+    "valid_html_links": 15,
+    "assessment_zip_sha256": "b35a3f9cfbdcb371268acfd994672f926f9330fe011f7696a8b570d457bcaffa",
+    "request_evidence_actions": 1,
+    "findings": 0,
+    "vendor_approved": false,
+    "technical_facts_confirmed": false,
+    "residual_score": null,
+    "evaluation_next_actions": {
+      "ENC-01": "Resolve source date/type/scope discrepancies and confirm candidate meanings; obtain missing technical coverage or operating proof.",
+      "BCP-01": "Resolve source date/type/scope discrepancies and confirm candidate meanings; obtain missing technical coverage or operating proof."
+    },
+    "page_errors": []
+  },
+  "after": {
+    "scope_as_of": "2026-11-07",
+    "fixed_benchmark_as_of": "2026-11-01",
+    "same_date_as_fixed_benchmark": false,
+    "counts": {
+      "clicks": 14,
+      "field_fills": 4,
+      "file_attachment_batches": 1
+    },
+    "file_hashes": {
+      "tls-port-prose.docx": "4a4c067399ff9e65f641ba904a48fff7872f64fb0e41e1d2b92cbb8d5058b491",
+      "dr-uncovered-idp.txt": "d9d15d6e72884979103a480fb6c2f4fbb232286e8cc480af92098329fccdc7fc"
+    },
+    "artifacts_verified": 2,
+    "verified_citations": 11,
+    "valid_html_links": 15,
+    "assessment_zip_sha256": "de36c576ee6200517aba58c2b5df1da9cc55e339aff2874027f802eebf1b643c",
+    "request_evidence_actions": 1,
+    "findings": 0,
+    "vendor_approved": false,
+    "technical_facts_confirmed": false,
+    "residual_score": null,
+    "evaluation_next_actions": {
+      "ENC-01": "Confirm candidate meanings; obtain missing technical coverage or operating proof.",
+      "BCP-01": "Confirm candidate meanings; obtain missing technical coverage or operating proof."
+    },
+    "page_errors": []
+  },
+  "comparison": {
+    "facts_scopes_dates_citations_eligibility_status_preview_identical": true,
+    "changed_evaluation_field": "next_action only",
+    "human_effort_measured": false,
+    "human_tprm_validation_complete": false,
+    "action_count_reduction_claimed": false,
+    "before_and_after_counts_identical": true
+  },
+  "quote_visibility": {
+    "before": [
+      {
+        "case_id": "tls-port-prose",
+        "quote": "Traffic on port 8443 still accepts TLS 1.0 connections.",
+        "after_action": 9,
+        "automation_elapsed_seconds": 7.531
+      },
+      {
+        "case_id": "dr-uncovered-idp",
+        "quote": "Identity federation was not tested in this exercise.",
+        "after_action": 10,
+        "automation_elapsed_seconds": 7.877
+      }
+    ],
+    "after": [
+      {
+        "case_id": "tls-port-prose",
+        "quote": "Traffic on port 8443 still accepts TLS 1.0 connections.",
+        "after_action": 9,
+        "automation_elapsed_seconds": 9.732
+      },
+      {
+        "case_id": "dr-uncovered-idp",
+        "quote": "Identity federation was not tested in this exercise.",
+        "after_action": 10,
+        "automation_elapsed_seconds": 10.388
+      }
+    ],
+    "interpretation": "Visibility of preselected text, not a blind search or human reasoning time."
+  },
+  "preparatory_failures": [
+    {
+      "kind": "video_setup",
+      "stage": "before UI interaction",
+      "result": "FFmpeg recording dependency absent; screenshots/traces used instead."
+    },
+    {
+      "kind": "navigation_locator",
+      "result": "Native radio input was intercepted by layout/header; visible label click succeeded. Automation issue, not established human UI failure."
+    },
+    {
+      "kind": "unsynchronized_metadata_replay",
+      "result": "One replay evaluated first file with assertion/no date after rapid button sequence; source uncertainty correctly remained. Waiting for each visible declaration update passed. Product-versus-driver cause not established; raw failure retained, not claimed fixed."
+    }
+  ],
+  "recommendation": "SIMPLIFY only the inaccurate generic source-metadata prompt when source uncertainties are empty; do not change parser, fact eligibility or default review actions on this diagnostic alone.",
+  "limitations": [
+    "Not a blinded, independent or representative human study.",
+    "Application captured as_of differs from the fixed corpus as_of; do not pool this diagnostic with benchmark rates.",
+    "No action-count reduction: both successful scripts used the same explicit calls.",
+    "No formal protocol completion, human effort/ROI or targeted-signal recall claim.",
+    "Rapid-click metadata behavior remains a diagnostic follow-up, not an established resolved product defect."
+  ],
+  "evidence_bundle": {
+    "filename": "m5c-browser-rehearsal-evidence.zip",
+    "sha256": "d7ac562a34f2e29fb309f6cf683143214f767b7dc4f00a49ed053885f71d4b1f",
+    "artifact_count": 30
+  }
+}
