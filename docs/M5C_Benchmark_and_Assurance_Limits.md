@@ -21,7 +21,7 @@ The standard GitHub Actions Unit job also runs the holdout separately and upload
 **Two separate measurement layers:**
 
 - **Typed fact extraction:** human-annotated dimension/value/service subject/quote phrase versus all proposed typed facts; report matched facts, unmatched gold, extra typed facts, precision against annotations and recall. This measures *text candidate coverage*, not truth of real vendor statements.
-- **Provisional material-exception triage:** case-level current eligible adverse candidates versus seven human-labelled material concerns; report missed cases. Two non-exception cases and seven intentional-abstain cases are scored for unsafe eligible adverse overclaims. A safe abstention is not an automatic control failure, and a text-only extracted warning with bad scope/date does not qualify as a current exception.
+- **Provisional material-exception triage:** case-level current eligible adverse candidates versus eight human-labelled material concerns; report missed cases. Two non-exception cases and six intentional-abstain cases are scored for unsafe eligible adverse overclaims. A safe abstention is not an automatic control failure, and a text-only extracted warning with bad scope/date does not qualify as a current exception.
 
 **Safety gate (always hard-fail):** facts must carry exact original document identity, source fingerprint, in-document location and verifiable quote; no automatic `Met`/authoritative `Risk Identified` in the control worklist; no confirmed technical facts. The accuracy score intentionally does **not** fail CI; otherwise developers could tune the rules to this small set rather than confronting defects. Negative findings are visible in the downloadable JSON.
 
@@ -40,3 +40,12 @@ After the first CI artifact, review:
 4. **Analyst effort**: adjust defaults/labels only if observed behavior warrants it.
 
 Approve a **small quality correction**, not a new control family or generic regex expansion, after independently reviewing the measured baseline. Keep PR #21 and production auth/evidence custody out of scope.
+
+
+## Next review and measurement work
+
+The [TPRM gold-review packet](M5C_TPRM_Gold_Review.md) preserves all 16 frozen
+source cases and existing annotations, with reviewer status explicitly pending.
+The [analyst-effort protocol](M5C_Analyst_Effort_Protocol.md) defines observations
+for the same documents; no time, click or savings results have been collected.
+Extractor changes remain gated on independent human TPRM validation in Issue #28.
