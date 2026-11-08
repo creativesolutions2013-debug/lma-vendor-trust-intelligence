@@ -11,7 +11,7 @@ from src.guided_assessment_demo import (
     record_action, report_payload, source_role,
 )
 from src.upload_assessment import (
-    DATA_TYPES, SYSTEM_ACCESS_POINTS, NETWORK_ACCESS_POINTS, CRITICALITY_POINTS,
+    DATA_TYPES, SYSTEM_ACCESS_POINTS, SYSTEM_DATA_CRITICALITY, NETWORK_ACCESS_POINTS, CRITICALITY_POINTS,
     SERVICE_DEPENDENCY_POINTS, MAX_VOLUME_RECORDS, Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
     build_assessment, read_upload, risk_and_applicability, suggested_requirements,
 )
@@ -120,6 +120,11 @@ def _about():
     data = cols[0].selectbox('Data sensitivity', ('Public', 'Confidential', 'Restricted'), index=1, key=PREFIX + 'data')
     access = cols[1].selectbox('System access', tuple(SYSTEM_ACCESS_POINTS), index=1, key=PREFIX + 'access')
     criticality = cols[2].selectbox('Business criticality', tuple(CRITICALITY_POINTS), index=1, key=PREFIX + 'criticality')
+    system_data_criticality = 'Unknown'
+    if access != 'None':
+        system_data_criticality = st.selectbox('Does the accessed system host or process critical data?', SYSTEM_DATA_CRITICALITY,
+            key=PREFIX + 'system_data_criticality', help='Select Hosts or processes critical data if any system this vendor can access hosts/processes critical data under your organization’s classification. This is separate from business dependency and is not inferred from data type alone.')
+        st.caption('System-access points apply only to systems hosting or processing critical data. Noncritical-system access contributes zero. Unknown critical-data scope remains unassessed; network access is evaluated separately.')
     network = st.selectbox('Network access', tuple(NETWORK_ACCESS_POINTS), index=2, key=PREFIX + 'network_access',
                            help='Does this service have connectivity into your network? Connectivity does not establish public internet exposure.')
     volume = st.number_input('Estimated records in scope', min_value=0, max_value=MAX_VOLUME_RECORDS, value=None, step=1,
@@ -127,14 +132,15 @@ def _about():
     dependency = st.selectbox('Dependency on this service', tuple(SERVICE_DEPENDENCY_POINTS), index=4,
                               key=PREFIX + 'service_dependency', help='What happens if this service is unavailable? Consider operational disruption and whether a viable workaround exists; this is not fourth-party dependency.')
     st.caption('Pilot scoring: access uses the higher system/network contribution; business exposure uses the higher criticality/dependency contribution. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10 points. These example bands need customer policy validation.')
-    if access == 'Unknown' or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown':
+    if (access == 'Unknown' or (access != 'None' and system_data_criticality == 'Unknown')
+            or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown'):
         st.warning('Complete or clarify unknown exposure inputs. The score is only a known-input subtotal and the tier remains provisional.')
     st.caption('Inherent risk uses the existing engine. Regulation, fourth parties, geography and AI remain unassessed; their zero illustrative contributions are not proof of low exposure.')
     if st.button('Create assessment', type='primary', disabled=not data_types or not all(s.strip() for s in (vendor, service, purpose))):
         try:
             intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment,
                             as_of=date.today(), data_types=tuple(data_types), network_access=network,
-                            data_volume_records=volume, service_dependency=dependency)
+                            data_volume_records=volume, service_dependency=dependency, system_data_criticality=system_data_criticality)
             model = build_assessment(intake)
         except ValueError as error: st.error(str(error))
         else:

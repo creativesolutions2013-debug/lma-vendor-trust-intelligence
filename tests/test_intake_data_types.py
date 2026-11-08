@@ -11,6 +11,7 @@ from src.guided_assessment_demo import complete_review, package_bytes, record_ac
 
 
 def intake(**values):
+    values.setdefault('system_data_criticality', 'Hosts or processes critical data')
     return Intake('scope-test', 'Synthetic Vendor', 'Synthetic Portal', 'Synthetic processing', **values)
 
 

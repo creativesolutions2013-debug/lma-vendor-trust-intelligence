@@ -16,6 +16,7 @@ def test_customer_exposure_fields_persist_export_and_reset(no_live_effects, pack
     widget(at.text_area, 'Business use case').set_value('Synthetic dependency and volume test')
     widget(at.multiselect, 'Data types in scope').set_value(['Health data (PHI)'])
     widget(at.selectbox, 'System access').set_value('Privileged')
+    widget(at.selectbox, 'Does the accessed system host or process critical data?').set_value('Hosts or processes critical data')
     widget(at.selectbox, 'Network access').set_value('Network connectivity')
     widget(at.selectbox, 'Business criticality').set_value('Important')
     widget(at.number_input, 'Estimated records in scope').set_value(100_001)

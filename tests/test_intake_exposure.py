@@ -12,7 +12,8 @@ from src.guided_assessment_demo import complete_review, completion_is_current, p
 def base(**changes):
     context = Intake('exposure-test', 'Synthetic Vendor', 'Synthetic Portal', 'Synthetic processing',
         data_types=('Confidential business data',), access='None', criticality='Limited',
-        network_access='None', data_volume_records=0, service_dependency='No operational dependency')
+        network_access='None', data_volume_records=0, service_dependency='No operational dependency',
+        system_data_criticality='Hosts or processes critical data')
     return replace(context, **changes)
 
 

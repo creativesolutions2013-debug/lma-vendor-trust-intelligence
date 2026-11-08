@@ -37,6 +37,7 @@ DATA_TYPE_CLASSIFICATIONS = {
 }
 DATA_TYPES = tuple(DATA_TYPE_CLASSIFICATIONS)
 SYSTEM_ACCESS_POINTS = {'None': 0, 'Production': 16, 'Privileged': 25, 'Unknown': None}
+SYSTEM_DATA_CRITICALITY = ('Unknown', 'Hosts or processes critical data', 'Does not host or process critical data')
 NETWORK_ACCESS_POINTS = {'None': 0, 'Network connectivity': 12, 'Unknown': None}
 CRITICALITY_POINTS = {'Limited': 5, 'Important': 15, 'Critical': 20, 'Unknown': None}
 # Pilot dependency descriptions reuse the existing criticality contribution.
@@ -63,6 +64,7 @@ class Intake:
     network_access: str = 'Unknown'
     data_volume_records: int | None = None
     service_dependency: str = 'Unknown'
+    system_data_criticality: str = 'Unknown'
 
     def __post_init__(self):
         for value in (self.assessment_id, self.vendor, self.service, self.use_case, self.environment):
@@ -71,7 +73,8 @@ class Intake:
         if (self.data not in ('Public', 'Confidential', 'Restricted')
                 or any(not isinstance(value, str) or value not in options for value, options in (
                     (self.access, SYSTEM_ACCESS_POINTS), (self.criticality, CRITICALITY_POINTS),
-                    (self.network_access, NETWORK_ACCESS_POINTS), (self.service_dependency, SERVICE_DEPENDENCY_POINTS)))):
+                    (self.network_access, NETWORK_ACCESS_POINTS), (self.service_dependency, SERVICE_DEPENDENCY_POINTS),
+                    (self.system_data_criticality, SYSTEM_DATA_CRITICALITY)))):
             raise ValueError('Choose the supported risk-context options.')
         if self.data_volume_records is not None and (type(self.data_volume_records) is not int
                 or not 0 <= self.data_volume_records <= MAX_VOLUME_RECORDS):
@@ -98,7 +101,13 @@ def data_scope(intake):
 
 
 def exposure_scope(intake):
-    system = SYSTEM_ACCESS_POINTS[intake.access]
+    unqualified_system = SYSTEM_ACCESS_POINTS[intake.access]
+    if intake.access == 'None' or intake.system_data_criticality == 'Does not host or process critical data':
+        system = 0
+    elif intake.system_data_criticality == 'Hosts or processes critical data':
+        system = unqualified_system
+    else:
+        system = None
     network = NETWORK_ACCESS_POINTS[intake.network_access]
     criticality = CRITICALITY_POINTS[intake.criticality]
     dependency = SERVICE_DEPENDENCY_POINTS[intake.service_dependency]
@@ -106,9 +115,14 @@ def exposure_scope(intake):
     # Explicit pilot record-count bands within the engine's existing 0–10 range.
     volume = None if records is None else 0 if records == 0 else 2 if records <= 1_000 else 5 if records <= 100_000 else 10
     missing = [name for name, value in (
-        ('system access', system), ('network access', network), ('data volume', volume),
+        ('system access', None if intake.access == 'Unknown' else system), ('network access', network), ('data volume', volume),
         ('business criticality', criticality), ('service dependency', dependency)) if value is None]
-    return {'policy': 'INTAKE-EXPOSURE-PILOT-1', 'system_access': intake.access,
+    if intake.access != 'None' and intake.system_data_criticality == 'Unknown':
+        missing.append('critical-system scope')
+    return {'policy': 'INTAKE-EXPOSURE-PILOT-2', 'system_access': intake.access,
+            'system_data_criticality': intake.system_data_criticality,
+            'system_access_unqualified_points': unqualified_system,
+            'system_access_basis': 'Only access to a system declared to host or process critical data contributes system-access points. Known noncritical systems contribute zero; unknown critical-data scope is unassessed. No access needs no criticality qualification. Actual access-related review requirements remain separate from this scoring qualification.',
             'system_access_points': system, 'network_access': intake.network_access,
             'network_access_points': network, 'data_volume_records': records,
             'data_volume_unit': 'records in the assessed use case', 'data_volume_points': volume,
@@ -118,7 +132,7 @@ def exposure_scope(intake):
             'effective_business_points': max((p for p in (criticality, dependency) if p is not None), default=0),
             'missing_inputs': missing,
             'uncertainties': (['Unknown exposure inputs: ' + ', '.join(missing) + '. Score is a known-input subtotal; tier is provisional, not a confirmed low-risk determination.'] if missing else []),
-            'basis': 'Pilot example policy, not approved customer rules. Access=max(system, network); business=max(criticality, service dependency), not additive. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10. Unknown is unassessed, not a zero-risk input.'}
+            'basis': 'Pilot example policy, not approved customer rules. Access=max(critical-data-system access, network); business=max(criticality, service dependency), not additive. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10. Unknown is unassessed, not a zero-risk input.'}
 
 
 @dataclass(frozen=True)
@@ -309,7 +323,7 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     drivers += ('Data types in scope: ' + ', '.join(intake.data_types),
                 f"Data sensitivity uses max(declared {scope_data['declared_sensitivity_points']}, data-type minimum {scope_data['data_type_minimum_points']}); categories are not added together.")
     drivers += tuple(scope_data['uncertainties'])
-    drivers += (f"System access: {intake.access}; network access: {intake.network_access}. Access uses the higher known contribution, not their sum.",
+    drivers += (f"System access: {intake.access}; critical-data scope: {intake.system_data_criticality}. Only systems hosting/processing critical data count toward system-access points. Network access: {intake.network_access}; its contribution remains separate. Access uses the higher known contribution, not their sum.",
                 f"Data volume: {intake.data_volume_records if intake.data_volume_records is not None else 'Unknown'} records; pilot bands 0=0, 1–1,000=2, 1,001–100,000=5, over 100,000=10 points.",
                 f"Service dependency: {intake.service_dependency}; business criticality: {intake.criticality}. Business exposure uses the higher known contribution, not their sum.")
     drivers += tuple(exposure_data['uncertainties'])

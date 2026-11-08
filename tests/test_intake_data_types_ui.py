@@ -18,6 +18,7 @@ def test_customer_selects_data_scope_and_it_survives_navigation_completion_and_r
     widget(at.multiselect, 'Data types in scope').set_value([]); run(at)
     assert widget(at.button, 'Create assessment').disabled
     widget(at.selectbox, 'Data sensitivity').set_value('Public')
+    widget(at.selectbox, 'Does the accessed system host or process critical data?').set_value('Hosts or processes critical data')
     widget(at.multiselect, 'Data types in scope').set_value(['Health data (PHI)', 'Personal data (PII)']); run(at)
     widget(at.button, 'Create assessment').click(); run(at)
     model = at.session_state['customer_assessment:model']
