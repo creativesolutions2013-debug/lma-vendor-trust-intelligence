@@ -1,5 +1,5 @@
 """Development-only upload adapter, not a document-understanding or decision engine."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from hashlib import sha256
 from io import BytesIO
@@ -8,15 +8,15 @@ import zlib
 from lzma import LZMAError
 from zipfile import ZipFile, BadZipFile, ZIP_BZIP2
 
-from src.applicability import VendorRiskContext, evaluate_applicability
+from src.applicability import ApplicabilityDecision, VendorRiskContext, evaluate_applicability
 from src.assessment_worklist import AssessmentScope, AssuranceLink, EvidenceNeed, RequirementMapping, build_assessment_worklist
 from src.assessment_worklist_pilot import WorklistScenario
 from src.control_assurance import ControlCase, CustomerThreshold, EvidenceExpectation, RequirementContext, bind_relevance
 from src.evidence_intelligence_mvp import evaluate_pilot_requirements
 from src.evidence_source_validation import bind_evidence, reuse_evidence_bindings
 from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole
-from src.scoring import InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
-from src.tiering import get_tier_profile
+from src.scoring import DATA_SENSITIVITY_POINTS, InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
+from src.tiering import CONTROL_LIBRARY, get_tier_profile
 from src.tls_assurance import TlsThreshold
 from src.dr_assurance import DrThreshold
 from src.upload_evaluation import evaluate_uploads, LIMITATION as EVALUATION_LIMITATION
@@ -25,6 +25,17 @@ MAX_FILES = 10
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 10 * 1024 * 1024
 LIMITATION = 'Local synthetic/nonconfidential documents only. ' + EVALUATION_LIMITATION
+
+# Map dataset categories to existing legacy-intake classifications, not new weights.
+DATA_TYPE_CLASSIFICATIONS = {
+    'Public data': 'Public', 'Internal business data': 'Internal',
+    'Confidential business data': 'Confidential', 'Personal data (PII)': 'PII',
+    'Sensitive personal data': 'Sensitive PII', 'Health data (PHI)': 'PHI / PCI / Credentials',
+    'Payment card data (PCI)': 'PHI / PCI / Credentials',
+    'Authentication credentials': 'PHI / PCI / Credentials',
+    'Financial records': 'Confidential', 'Other / not yet classified': None, 'Unknown': None,
+}
+DATA_TYPES = tuple(DATA_TYPE_CLASSIFICATIONS)
 
 
 @dataclass(frozen=True)
@@ -38,6 +49,7 @@ class Intake:
     criticality: str = 'Important'
     environment: str = 'production'
     as_of: date = field(default_factory=date.today)
+    data_types: tuple[str, ...] = ('Unknown',)
 
     def __post_init__(self):
         for value in (self.assessment_id, self.vendor, self.service, self.use_case, self.environment):
@@ -45,6 +57,25 @@ class Intake:
                 raise ValueError('Enter a vendor, service and business use case (up to 500 characters each).')
         if self.data not in ('Public', 'Confidential', 'Restricted') or self.access not in ('None', 'Production', 'Privileged') or self.criticality not in ('Limited', 'Important', 'Critical'):
             raise ValueError('Choose the supported risk-context options.')
+        if (not isinstance(self.data_types, tuple) or not self.data_types
+                or any(not isinstance(t, str) or t not in DATA_TYPES for t in self.data_types)
+                or len(set(self.data_types)) != len(self.data_types)):
+            raise ValueError('Select the data types in scope, or Unknown if not yet determined.')
+        object.__setattr__(self, 'data_types', tuple(t for t in DATA_TYPES if t in self.data_types))
+
+
+def data_scope(intake):
+    classifications = [DATA_TYPE_CLASSIFICATIONS[t] for t in intake.data_types]
+    declared = {'Public': 5, 'Confidential': 10, 'Restricted': 20}[intake.data]
+    minimum = max((DATA_SENSITIVITY_POINTS[c] for c in classifications if c), default=0)
+    uncertainties = (['Data types are not fully classified; score and tier are provisional and may increase after clarification.']
+                     if None in classifications else [])
+    return {'data_types': list(intake.data_types), 'declared_sensitivity': intake.data,
+            'declared_sensitivity_points': declared, 'data_type_minimum_points': minimum,
+            'effective_sensitivity_points': max(declared, minimum),
+            'regulated_data_review': 'PHI / PCI / Credentials' in classifications,
+            'uncertainties': uncertainties,
+            'basis': 'Highest existing legacy-intake classification or higher declared sensitivity; not additive per data type. Example policy, not a regulatory determination.'}
 
 
 @dataclass(frozen=True)
@@ -59,15 +90,25 @@ class UploadAssessment(DemoAssessment):
 
 
 def risk_and_applicability(intake):
-    points = ({'Public': 5, 'Confidential': 10, 'Restricted': 20}[intake.data],
+    scope = data_scope(intake)
+    points = (scope['effective_sensitivity_points'],
               {'None': 0, 'Production': 16, 'Privileged': 25}[intake.access],
               {'Limited': 5, 'Important': 15, 'Critical': 20}[intake.criticality], 0, 0, 0, 0, 0)
     score = calculate_inherent_risk(InherentRiskInput(*points))
-    context = VendorRiskContext(sensitive_data=intake.data != 'Public', system_access=intake.access != 'None',
+    context = VendorRiskContext(sensitive_data=points[0] >= 10,
+                                regulated_data=scope['regulated_data_review'], system_access=intake.access != 'None',
                                 privileged_access=intake.access == 'Privileged', internet_facing=intake.access != 'None',
                                 business_critical=intake.criticality != 'Limited')
-    profile = get_tier_profile(score, privileged_access=context.privileged_access)
-    return score, points, evaluate_applicability(profile, context)
+    profile = get_tier_profile(score, privileged_access=context.privileged_access, regulated_data=context.regulated_data)
+    applicable = evaluate_applicability(profile, context)
+    if scope['uncertainties']:
+        reason = 'Data scope is not fully classified; retain data-protection review pending clarification, not a confirmed sensitive-data assertion.'
+        controls = {c.control_id: c for c in applicable.controls}
+        controls.setdefault('DATA-01', CONTROL_LIBRARY['DATA-01'])
+        applicable = replace(applicable, controls=tuple(controls.values()), review_required=True,
+            review_reasons=applicable.review_reasons + (reason,),
+            decisions=applicable.decisions + (ApplicabilityDecision('INTAKE-DATA-UNKNOWN', True, 'control', 'DATA-01', reason),))
+    return score, points, applicable
 
 
 def safe_upload_name(filename):
@@ -199,8 +240,13 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     drivers = tuple(f'{name}: {value} points' for name, value in zip(
         ('Data sensitivity', 'System access', 'Business criticality', 'Data volume', 'Regulatory exposure',
          'Fourth-party dependency', 'Geographic risk', 'AI autonomy'), points))
+    scope_data = data_scope(intake)
+    drivers += ('Data types in scope: ' + ', '.join(intake.data_types),
+                f"Data sensitivity uses max(declared {scope_data['declared_sensitivity_points']}, data-type minimum {scope_data['data_type_minimum_points']}); categories are not added together.")
+    drivers += tuple(scope_data['uncertainties'])
     context = {'vendor': intake.vendor, 'service': intake.service, 'use_case': intake.use_case,
         'environment': intake.environment, 'data': intake.data, 'access': intake.access, 'criticality': intake.criticality,
+        'data_scope': scope_data,
         'limitations': LIMITATION, 'uncollected_risk_inputs': 'Volume, regulation, fourth parties, geography and AI use are unassessed (zero illustrative points).',
         'criteria_basis': 'Predefined synthetic example requirements, not organization-approved customer policy. TLS and recovery threshold descriptions reuse the existing threshold services.',
         'applicability_policy': applicable.policy_version, 'evaluations': evaluations,

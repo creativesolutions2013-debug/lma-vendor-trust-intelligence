@@ -11,7 +11,7 @@ from src.guided_assessment_demo import (
     record_action, report_payload, source_role,
 )
 from src.upload_assessment import (
-    Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
+    DATA_TYPES, Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
     build_assessment, read_upload, risk_and_applicability, suggested_requirements,
 )
 
@@ -110,14 +110,19 @@ def _about():
     service = st.text_input('Service being assessed', key=PREFIX + 'service', max_chars=200)
     purpose = st.text_area('Business use case', key=PREFIX + 'purpose', max_chars=500)
     environment = st.selectbox('Assessed environment', ('production', 'test'), key=PREFIX + 'environment')
+    data_types = st.multiselect('Data types in scope', DATA_TYPES, default=['Unknown'], key=PREFIX + 'data_types',
+                               help='Select all types the vendor will access, process or store for this use case. Unknown can accompany known types when scope is incomplete.')
+    st.caption('Data types set a minimum sensitivity using existing risk weights; a higher declared sensitivity still applies. Financial records use Confidential unless a higher selected type applies. No points are added per category.')
+    if 'Unknown' in data_types or 'Other / not yet classified' in data_types:
+        st.warning('Data scope needs clarification. The initial score and tier will remain provisional, not a confirmed low-risk determination.')
     cols = st.columns(3)
     data = cols[0].selectbox('Data sensitivity', ('Public', 'Confidential', 'Restricted'), index=1, key=PREFIX + 'data')
     access = cols[1].selectbox('Service access', ('None', 'Production', 'Privileged'), index=1, key=PREFIX + 'access')
     criticality = cols[2].selectbox('Business criticality', ('Limited', 'Important', 'Critical'), index=1, key=PREFIX + 'criticality')
     st.caption('Inherent risk uses the existing engine. Uncollected volume, regulation, fourth-party, geography and AI inputs contribute zero illustrative points; this is not a complete risk intake.')
-    if st.button('Create assessment', type='primary', disabled=not all(s.strip() for s in (vendor, service, purpose))):
+    if st.button('Create assessment', type='primary', disabled=not data_types or not all(s.strip() for s in (vendor, service, purpose))):
         try:
-            intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment, as_of=date.today())
+            intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment, as_of=date.today(), data_types=tuple(data_types))
             model = build_assessment(intake)
         except ValueError as error: st.error(str(error))
         else:
@@ -329,6 +334,9 @@ def render_upload_assessment():
     if intake is None:
         _about(); return
     st.text(intake.vendor + ' · ' + intake.service + ' · ' + intake.environment + ' · ' + intake.use_case)
+    st.text('Data types in scope: ' + ', '.join(intake.data_types))
+    for uncertainty in st.session_state[PREFIX + 'model'].customer_context['data_scope']['uncertainties']:
+        st.warning(uncertainty)
     pending = st.session_state.pop(PREFIX + 'pending_stage', None)
     if pending: st.session_state[PREFIX + 'stage'] = pending
     stage = st.radio('Assessment stage', STAGES, horizontal=True, key=PREFIX + 'stage')

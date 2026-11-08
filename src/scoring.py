@@ -4,6 +4,12 @@ from typing import List
 
 RESIDUAL_RISK_POLICY_VERSION = "RR-2.0"
 
+# Existing legacy-intake sensitivity weights; shared with the synthetic intake.
+DATA_SENSITIVITY_POINTS = {
+    "Public": 0, "Internal": 5, "Confidential": 10, "PII": 15,
+    "Sensitive PII": 20, "PHI / PCI / Credentials": 25,
+}
+
 
 @dataclass
 class InherentRiskInput:

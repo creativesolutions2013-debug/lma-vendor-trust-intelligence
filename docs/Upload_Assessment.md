@@ -12,7 +12,7 @@ only. Production authentication still refuses startup. PR #21 is not included.
 ## Five stages
 
 1. **About vendor:** Enter a synthetic vendor, service and business use case, then
-   choose data sensitivity, system access and criticality. The existing inherent
+   select all **Data types in scope** (or Unknown), then choose declared data sensitivity, system access and criticality. The existing inherent
    risk engine and tier/applicability services select all baseline/contextual
    requirements. Volume, regulation, fourth parties, geography and AI use are not
    collected in this slice and have explicitly disclosed zero illustrative points.
@@ -97,3 +97,13 @@ its selected original bytes and digest; every displayed citation must match an
 actual parsed location. No measured reviewer time savings or generic compliance
 accuracy is claimed. Owner hands-on UX acceptance and an independent code review
 remain necessary before merge or broader pilot claims.
+
+## Dataset scope and tier determination
+
+The requester selects public/internal/confidential business data, PII, sensitive personal data, PHI, payment-card data, credentials, financial records, Other/not yet classified and/or Unknown. These are use-case data categories, separate from sensitivity and uncollected volume. They do not describe uploaded evidence files. Empty selections are rejected; Unknown can accompany known categories when the scope is partial.
+
+The adapter reuses the existing legacy-intake sensitivity weights: Public=0, Internal=5, Confidential=10, PII=15, Sensitive PII=20, PHI/PCI/Credentials=25. Dataset mappings are synthetic example policy: financial records map to Confidential unless a higher selected category applies. The effective sensitivity contribution is the maximum of the declared sensitivity (the existing customer-path Public=5, Confidential=10, Restricted=20) and the highest known category, never the sum of categories. This preserves a higher declaration and avoids double counting. It does not assign regulatory-exposure points or infer jurisdiction. The existing PHI/PCI/credentials grouping enables the existing regulated-data requirement review; a full regulatory determination remains unassessed.
+
+For the default Production/Important relationship, Confidential business data yields 41/Tier 3; Personal data yields 46/Tier 3; PHI yields 56/Tier 2. Public declaration with PHI still yields 56. Other/Unknown has no invented numeric weight: known contributions remain and the score/tier is explicitly provisional pending clarification. Sensitive-data requirements are retained for unknown scope. No low-risk conclusion follows from unknown types.
+
+Selections, declared and effective points, mapping basis and uncertainty appear in report.json; the HTML summary and UI show selections, risk drivers and provisional warnings. Changes are included in existing review/completion fingerprints, even when scores are equal. Existing reset clears the selection. All scoring is illustrative; evidence review never approves a vendor or changes authoritative risk. The field is limited to the session-memory customer intake; legacy persistence, production authentication, extraction rules and PR #21 are unchanged.
