@@ -1,0 +1,66 @@
+{
+  "kind": "automated customer-journey diagnostic; not human usability measurement",
+  "base_commit": "0e7ec4f3f1c3040bfa53f7237fa4ab90a4f4cfe3",
+  "changed_module_sha256": "9ac78658e6faa08c9c8a54012450f102f0545be3c8cd7fdce2a3dfe1b77a5556",
+  "source_files": {
+    "synthetic-dr.txt": "698a8b359b1326d1bdca37bb286d4fe40ca16955ae74b434553dd1e5f5fb8b58",
+    "synthetic-tls.txt": "94bc70f1b26f71dab603ce173a13caf9e129646fa56210ec4470d0d595f59725"
+  },
+  "method": "Actual Chromium upload, stage navigation before initial evaluation, source metadata, finding/duplicate attempt, completion/download, reopening, metadata change, reevaluation and assessment reset. Native empty-uploader callback replay in AppTest failed before/pass after.",
+  "before": "Pending bytes erased by an empty remounted uploader; completed and reopened exports contained zero original evidence artifacts.",
+  "fixed_browser": {
+    "status": "completed",
+    "checks": [
+      "Pending metadata blocks stale report",
+      "Both source declarations survive navigation",
+      "Finding confirmation identifies selected requirement",
+      "Duplicate action attempted; inspect visible response and exported count",
+      "Reopen returns to review",
+      "Metadata edit invalidates completion and blocks stale export",
+      "Start another clears intake"
+    ]
+  },
+  "exports": [
+    {
+      "filename": "completed.zip",
+      "sha256": "bbcff99ca34062185a6dc8e76e4e34ddff1965e5007f16a5e8f10496e1a8ae9f",
+      "originals": 2,
+      "manifest_citations": 13,
+      "unconfirmed_fact_citations": 6,
+      "unresolved_findings": 1,
+      "residual_score": null,
+      "vendor_approved": false
+    },
+    {
+      "filename": "recompleted.zip",
+      "sha256": "f7d0ddb335368bf5cbd9a5f5f0da4bffe22d93bee6b3bd0441bf9c1d9218c825",
+      "originals": 2,
+      "manifest_citations": 13,
+      "unconfirmed_fact_citations": 6,
+      "unresolved_findings": 1,
+      "residual_score": null,
+      "vendor_approved": false
+    },
+    {
+      "filename": "reevaluated.zip",
+      "sha256": "7f81449b5ebaffb2c4cd32e50c9e7a1e8ae7346268462f8cd7b073594d71c263",
+      "originals": 2,
+      "manifest_citations": 13,
+      "unconfirmed_fact_citations": 6,
+      "unresolved_findings": 1,
+      "residual_score": null,
+      "vendor_approved": false
+    }
+  ],
+  "limitations": [
+    "One successful fixed browser journey with two new synthetic TXT files, not a population estimate.",
+    "An intermediate replay used the still-running old server module and reproduced the old failure; retained under after/, not counted as testing the loaded correction. Server restarted before fixed/.",
+    "No human effort, ROI, independent human TPRM validation, external holdout accuracy or arbitrary interleaving correctness established.",
+    "Application as_of uses live server date; these are not frozen holdout cases or pooled benchmark results."
+  ],
+  "parser_or_gold_changed": false,
+  "local_evidence_bundle": {
+    "path": "/tmp/lma-customer-usability/customer-usability-evidence.zip",
+    "sha256": "6d7066c690df67b11cd312a0a86da3e8b6a6a2abdb8b80ddd106d0284a3aca64"
+  }
+}

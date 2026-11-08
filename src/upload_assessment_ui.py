@@ -82,7 +82,8 @@ def _capture_files(widget_key):
     _invalidate_uploads()
     files = st.session_state.get(widget_key, [])
     if not files:
-        st.session_state[PREFIX + 'pending_files'] = ()
+        # A picker remounts empty after stage navigation. Pending originals are
+        # durable draft data; only the explicit discard/reset actions remove them.
         st.session_state.pop(PREFIX + 'file_error', None)
         return
     if len(files) > MAX_FILES or sum(f.size for f in files) > MAX_TOTAL_BYTES or any(f.size > MAX_UPLOAD_BYTES for f in files):
@@ -138,7 +139,7 @@ def _uploads(intake):
     st.write('No vendor files are preloaded. Upload nonconfidential synthetic PDF, DOCX or UTF-8 TXT files. Files stay in this browser session on the development server; they are not sent to an AI provider or saved to the legacy database.')
     st.caption('Limits: 10 files, 2 MB each, 10 MB total. Scans without readable text need local OCR before upload. This is not secure production document custody or malware scanning.')
     retained = st.session_state.get(PREFIX + 'uploads', ())
-    st.caption('Attached files are retained for this assessment. New selections add files; use Clear this assessment to remove all session data.')
+    st.caption('Attached files are retained for this assessment. New selections add files; Discard new file selections removes unevaluated selections. Clear this assessment removes all session data.')
     widget_key = PREFIX + 'files:' + str(st.session_state.get(PREFIX + 'upload_epoch', 0))
     st.file_uploader('Choose synthetic evidence', type=['pdf', 'docx', 'txt'], accept_multiple_files=True,
                      key=widget_key, max_upload_size=2, on_change=_capture_files, args=(widget_key,))
