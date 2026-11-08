@@ -1,6 +1,6 @@
 # M5C independent TPRM gold-review packet
 
-**Status: owner case-level triage review recorded; full independent TPRM/typed-gold validation remains pending.** This packet prepares the prerequisite in Issue #28; it is not a completed independent review or permission to change extraction rules.
+**Status: experienced owner source-and-annotation review recorded; independent TPRM validation remains pending because authoring involvement was disclosed.** This packet prepares the prerequisite in Issue #28; it is not a completed independent review or permission to change extraction rules.
 
 Corpus: `M5C-holdout-1.1` · SHA-256 of original JSON bytes: `19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9`.
 Assessment date: `2026-11-01`. 16 synthetic cases: 8 proposed exception, 2 no-exception, 6 abstain.

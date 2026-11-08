@@ -6,11 +6,20 @@
   "reviewed_audit_sha256": "8c2e805ad9fdec646cc2743f85026126e1473030ae5c5be61b30964da201df8f",
   "reviewed_audit_commit": "963990402ea3919f75bc8a5af77a694dd375e90b",
   "accepted_scope": "Owner accepts the presented TLS/DR annotations with documented qualifications, including the two narrative metric qualifications.",
-  "reviewer_experience": "not provided",
-  "reviewer_independence": "not established",
+  "reviewer_experience": "Self-reported: five years as a GRC analyst at Amazon, reviewing and testing TLS and disaster-recovery evidence for third parties.",
+  "reviewer_independence": "Not independent of benchmark authoring: owner disclosed involvement in creating benchmark cases, expected answers or extraction rules; specific contributions were not differentiated.",
   "independent_human_tprm_validation_complete": false,
   "confirmed_vendor_facts": false,
   "gold_activated": false,
   "extractor_changes_authorized_by_this_statement": false,
-  "merge_authorized": false
+  "merge_authorized": false,
+  "subsequent_reviewer_disclosure": {
+    "exact_statement": "I have experience reviewing TLS configurations and disaster-recovery test evidence through A GRC analyst at amazon with for 5 years and have reviewed and tested TLS and disstaer recovery for third-parties. I was involved in creating these benchmark cases, expected answers or extraction rules. I reviewed the TLS requirements and the disaster recovery plan for the LMA projects and it meets industry requirements.",
+    "source_comparison_question": "Did you also compare the original excerpts in the 16-case review packet with the proposed facts?",
+    "exact_reply": "Yes I did",
+    "experience_independently_verified": false,
+    "industry_requirements_claim_independently_verified": false
+  },
+  "owner_source_and_annotation_review_complete": true,
+  "review_scope": "Owner confirms comparison of original source excerpts in the 16-case review packet against proposed facts; acceptance retains documented narrative qualifications. Experienced owner review, not independent human TPRM validation."
 }
