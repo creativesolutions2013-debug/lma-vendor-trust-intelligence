@@ -1,0 +1,11 @@
+# M5C AI-assisted typed-fact audit
+
+The owner delegated this review to the assistant. This supplement audits all 29 existing typed annotations and both empty-gold cases against all 16 unchanged source excerpts. It builds on the earlier case review; it is not another blind study or independent human TPRM validation. The assistant has prior implementation and baseline exposure.
+
+[Per-fact audit with exact source quotations](../benchmarks/reviews/m5c_ai_typed_fact_audit_1.json) records each annotation, original source hash, source location, semantic verdict and qualification. Corpus SHA-256 remains `19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9`; assessment date remains 2026-11-01. Physical locations follow the existing fixture layout; this continuation did not rerender artifacts.
+
+27 annotations are supported as qualified, unconfirmed source assertions. This includes historical, test-only and other-service observations that cannot become current Ledger Gateway production comparisons. Explicit exclusions preserve coverage concerns without proving dependency failure. Both empty-gold cases appropriately exclude unconditional achieved facts: conditional TLS activation is not actual activation, and recovery targets/future exercises are not completed results.
+
+Two narrative metric annotations require the already accepted qualifications: five hours converts to 300 elapsed minutes but needs formal RTO boundaries; up to ninety minutes is an upper bound, not exact achieved RPO. Completion remains supported. See the [existing decision and inactive correction proposal](M5C_Gold_Qualification_Decision.md). The provisional narrative concern remains.
+
+No new annotation disagreement was identified. This is a source-meaning judgment, not validation of document authenticity, operating effectiveness, exhaustive annotation completeness or real-world extraction accuracy. All source assertions require analyst confirmation. No active gold, parser, historical metrics, vendor/control approval or authoritative risk changed. Independent human TPRM validation remains outstanding under Issue #28; this delegated AI review does not satisfy it. PR #29 stays draft and unmerged.

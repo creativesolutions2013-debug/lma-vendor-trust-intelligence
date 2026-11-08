@@ -29,3 +29,5 @@ The remaining case, `dr-failover-narrative`, retains the [accepted narrative qua
 This completes the presented case-level triage review. It does not establish complete typed-gold validation, reviewer TPRM expertise or independence, confirmed vendor facts, or adoption of the candidate rubric. The independent TPRM prerequisite for extractor changes is not established by this record alone. No extractor changes follow from these confirmations.
 
 The original corpus, source artifacts, historical scores and inactive correction proposal remain unchanged. No control or vendor approval, authoritative risk change, or merge authorization follows from this review. PR #29 remains draft.
+
+The subsequent delegated [AI-assisted per-fact audit](M5C_AI_Typed_Fact_Audit.md) covers all 29 typed annotations and both empty-gold cases, with the same human-validation boundary.

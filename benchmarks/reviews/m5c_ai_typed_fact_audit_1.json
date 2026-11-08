@@ -1,0 +1,500 @@
+{
+  "review_type": "AI-assisted per-fact source audit; not independent human TPRM validation",
+  "corpus_version": "M5C-holdout-1.1",
+  "corpus_sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9",
+  "assessment": {
+    "vendor": "Orion Synthetic Services",
+    "service": "Orion Ledger Gateway",
+    "environment": "production",
+    "as_of": "2026-11-01",
+    "tls_minimum": "1.2",
+    "dr_max_rto_minutes": 240,
+    "dr_max_rpo_minutes": 60,
+    "dr_max_test_age_days": 365
+  },
+  "independence_disclosure": "Same assistant with implementation, prior source-review and baseline exposure. Not blind or independent human assurance review. No reviewer credentials inferred.",
+  "method": "Read every source and all 29 annotations; check literal quotation, value conversion, subject, modality, service, date and scope. Quote matching checks provenance only; semantic verdicts are AI judgments. Physical locations follow the existing synthetic fixture layout, not a newly rendered artifact verification.",
+  "summary": {
+    "annotations": 29,
+    "supported_as_qualified_source_assertion": 27,
+    "requires_qualification_not_exact_metric": 2,
+    "empty_gold_cases": [
+      "tls-conditional",
+      "dr-plan-only"
+    ]
+  },
+  "empty_gold_review": {
+    "tls-conditional": "May be enabled during fallback does not justify unconditional activation; preserve fallback concern.",
+    "dr-plan-only": "Targets and future scheduled exercises do not justify achieved results or completion."
+  },
+  "human_tprm_validation_complete": false,
+  "gold_changed": false,
+  "extractor_changed": false,
+  "facts_confirmed": false,
+  "facts": [
+    {
+      "case_id": "tls-alt-backdoor",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 13,
+        "subject": "endpoint 443",
+        "phrase": "TLS 1.3"
+      },
+      "source_text_sha256": "d6e0404ca7bf96dbe7f0867d45fec4fa0944c49551481e6fa76eb2f5c1923a66",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Primary endpoint 443: TLS 1.3 is enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-alt-backdoor",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 11,
+        "subject": "endpoint 9443",
+        "phrase": "TLS 1.1"
+      },
+      "source_text_sha256": "d6e0404ca7bf96dbe7f0867d45fec4fa0944c49551481e6fa76eb2f5c1923a66",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Alternate production endpoint 9443: TLS 1.1 is enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-rejected-legacy",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "disabled_version",
+        "value": 10,
+        "subject": "listener edge443",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "af6705def6741979d5aa71d18f5b231682b58b5b3b537c66ea9052a6536faae8",
+      "source_display_line": 5,
+      "physical_location": "Page 1",
+      "quote": "Listener edge443: TLS 1.0 is disabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-rejected-legacy",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 12,
+        "subject": "listener edge443",
+        "phrase": "TLS 1.2"
+      },
+      "source_text_sha256": "af6705def6741979d5aa71d18f5b231682b58b5b3b537c66ea9052a6536faae8",
+      "source_display_line": 6,
+      "physical_location": "Page 1",
+      "quote": "Listener edge443: TLS 1.2 is enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-port-prose",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 10,
+        "subject": "port 8443",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "148c9ffe56dbbecbdab3fc505f213c93ecbe742b713868da4be7e83aaeb62bd5",
+      "source_display_line": 5,
+      "physical_location": "Paragraph 5",
+      "quote": "Traffic on port 8443 still accepts TLS 1.0 connections.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-old-record",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 10,
+        "subject": "listener 443",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "f3b26de6951652a0b4ce51fcefc4c07cad82c1457d230a9e9a5675619a85d067",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Listener 443: TLS 1.0 is enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Historical 2025-01-10 assertion only; not current production proof."
+    },
+    {
+      "case_id": "tls-test-only",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 10,
+        "subject": "endpoint 7001",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "7243e5e1af72ee8e57893fad05c1238896a01768e9ca310ecc21f63565825855",
+      "source_display_line": 5,
+      "physical_location": "Page 1",
+      "quote": "Test endpoint 7001: TLS 1.0 is enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Line-specific test endpoint overrides production header for this fact."
+    },
+    {
+      "case_id": "tls-gateway-caption",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 10,
+        "subject": "gateway port 9443",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "30dc08b50cb63fe8f2a6face77c6e907c80f4f93198ab1ab7c69fac3faec4252",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Client sessions on legacy gateway port 9443 accept TLS 1.0.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-mixed-enabled",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 10,
+        "subject": "listener 443",
+        "phrase": "TLS 1.0"
+      },
+      "source_text_sha256": "c1808a1054dabfee79baec2cf827dc7cb2ae18f0c5b3c7c37db55ef7c35ca4bf",
+      "source_display_line": 5,
+      "physical_location": "Paragraph 5",
+      "quote": "Listener 443: TLS 1.0 and TLS 1.3 are enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "tls-mixed-enabled",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "enabled_version",
+        "value": 13,
+        "subject": "listener 443",
+        "phrase": "TLS 1.3"
+      },
+      "source_text_sha256": "c1808a1054dabfee79baec2cf827dc7cb2ae18f0c5b3c7c37db55ef7c35ca4bf",
+      "source_display_line": 5,
+      "physical_location": "Paragraph 5",
+      "quote": "Listener 443: TLS 1.0 and TLS 1.3 are enabled.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-breached-objectives",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "Recovery exercise completed"
+      },
+      "source_text_sha256": "d4c4173d1661b2df04022eacfe3ae81017c808d464e89bdc7598db5e8180bfe7",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Reported results exceed 240/60 minutes; broker exclusion limits coverage; verify dependency applicability."
+    },
+    {
+      "case_id": "dr-breached-objectives",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 360,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "RTO 6 hours"
+      },
+      "source_text_sha256": "d4c4173d1661b2df04022eacfe3ae81017c808d464e89bdc7598db5e8180bfe7",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Observed RTO 6 hours and RPO 2 hours.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Reported results exceed 240/60 minutes; broker exclusion limits coverage; verify dependency applicability."
+    },
+    {
+      "case_id": "dr-breached-objectives",
+      "gold_index": 2,
+      "annotation": {
+        "dimension": "achieved_rpo_minutes",
+        "value": 120,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "RPO 2 hours"
+      },
+      "source_text_sha256": "d4c4173d1661b2df04022eacfe3ae81017c808d464e89bdc7598db5e8180bfe7",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Observed RTO 6 hours and RPO 2 hours.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Reported results exceed 240/60 minutes; broker exclusion limits coverage; verify dependency applicability."
+    },
+    {
+      "case_id": "dr-breached-objectives",
+      "gold_index": 3,
+      "annotation": {
+        "dimension": "scope_complete",
+        "value": false,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "excluded message broker"
+      },
+      "source_text_sha256": "d4c4173d1661b2df04022eacfe3ae81017c808d464e89bdc7598db5e8180bfe7",
+      "source_display_line": 7,
+      "physical_location": "Line 7",
+      "quote": "The exercise excluded message broker failover.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Reported results exceed 240/60 minutes; broker exclusion limits coverage; verify dependency applicability."
+    },
+    {
+      "case_id": "dr-failover-narrative",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 300,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "five hours"
+      },
+      "source_text_sha256": "3e64c44425e64177b01650dbd22e48637590abe158fbcc14cb1c02e6dd93c185",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Switching the service took five hours, with up to ninety minutes of data loss.",
+      "verdict": "requires_qualification_not_exact_metric",
+      "qualification": "Five hours = 300 elapsed minutes; formal achieved RTO mapping needs start/restoration acceptance definitions."
+    },
+    {
+      "case_id": "dr-failover-narrative",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "achieved_rpo_minutes",
+        "value": 90,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "ninety minutes"
+      },
+      "source_text_sha256": "3e64c44425e64177b01650dbd22e48637590abe158fbcc14cb1c02e6dd93c185",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Switching the service took five hours, with up to ninety minutes of data loss.",
+      "verdict": "requires_qualification_not_exact_metric",
+      "qualification": "Up to ninety minutes is <=90, not exact achieved RPO=90; proves neither >60 nor <=60."
+    },
+    {
+      "case_id": "dr-failover-narrative",
+      "gold_index": 2,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "3e64c44425e64177b01650dbd22e48637590abe158fbcc14cb1c02e6dd93c185",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-compliant-sample",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "f846e4532c694ea6f94056a6204e7be9e7caebf8aa9d65504441c66dab86b2fa",
+      "source_display_line": 5,
+      "physical_location": "Page 1",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-compliant-sample",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 90,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "RTO 90"
+      },
+      "source_text_sha256": "f846e4532c694ea6f94056a6204e7be9e7caebf8aa9d65504441c66dab86b2fa",
+      "source_display_line": 6,
+      "physical_location": "Page 1",
+      "quote": "Achieved RTO 90 minutes and RPO 15 minutes.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-compliant-sample",
+      "gold_index": 2,
+      "annotation": {
+        "dimension": "achieved_rpo_minutes",
+        "value": 15,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "RPO 15"
+      },
+      "source_text_sha256": "f846e4532c694ea6f94056a6204e7be9e7caebf8aa9d65504441c66dab86b2fa",
+      "source_display_line": 6,
+      "physical_location": "Page 1",
+      "quote": "Achieved RTO 90 minutes and RPO 15 minutes.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-uncovered-idp",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "scope_complete",
+        "value": false,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "not tested"
+      },
+      "source_text_sha256": "d9d15d6e72884979103a480fb6c2f4fbb232286e8cc480af92098329fccdc7fc",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Identity federation was not tested in this exercise.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "An untested dependency is an exercise coverage limitation; dependency applicability needs verification, not inferred recovery failure."
+    },
+    {
+      "case_id": "dr-uncovered-idp",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "d9d15d6e72884979103a480fb6c2f4fbb232286e8cc480af92098329fccdc7fc",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "An untested dependency is an exercise coverage limitation; dependency applicability needs verification, not inferred recovery failure."
+    },
+    {
+      "case_id": "dr-compound-duration",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 270,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "4 hours 30 minutes"
+      },
+      "source_text_sha256": "1d6bca3fe9032a7bb02bcab2883eab3aa8fabf4e548d82fe6e5612756aae2b28",
+      "source_display_line": 6,
+      "physical_location": "Paragraph 6",
+      "quote": "Measured RTO 4 hours 30 minutes.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-compound-duration",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "1d6bca3fe9032a7bb02bcab2883eab3aa8fabf4e548d82fe6e5612756aae2b28",
+      "source_display_line": 5,
+      "physical_location": "Paragraph 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Unconfirmed source assertion only; does not establish full coverage or control approval."
+    },
+    {
+      "case_id": "dr-unrelated-service",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 300,
+        "subject": "exercise for orion data warehouse",
+        "phrase": "RTO 300"
+      },
+      "source_text_sha256": "55ff69d75e2b4e7560d1f314ef9c104fbe124da2c14b69ce9c70338bcf379373",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Achieved RTO 300 minutes and RPO 90 minutes.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Orion Data Warehouse only; cannot transfer to Ledger Gateway."
+    },
+    {
+      "case_id": "dr-unrelated-service",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion data warehouse",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "55ff69d75e2b4e7560d1f314ef9c104fbe124da2c14b69ce9c70338bcf379373",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Orion Data Warehouse only; cannot transfer to Ledger Gateway."
+    },
+    {
+      "case_id": "dr-unrelated-service",
+      "gold_index": 2,
+      "annotation": {
+        "dimension": "achieved_rpo_minutes",
+        "value": 90,
+        "subject": "exercise for orion data warehouse",
+        "phrase": "RPO 90"
+      },
+      "source_text_sha256": "55ff69d75e2b4e7560d1f314ef9c104fbe124da2c14b69ce9c70338bcf379373",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Achieved RTO 300 minutes and RPO 90 minutes.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "Orion Data Warehouse only; cannot transfer to Ledger Gateway."
+    },
+    {
+      "case_id": "dr-year-qualified",
+      "gold_index": 0,
+      "annotation": {
+        "dimension": "achieved_rto_minutes",
+        "value": 300,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "RTO 300"
+      },
+      "source_text_sha256": "6ace9fb243f1ac46d8ac25f61a8842de7a6663fa8ff779e2820bca9fed7802c4",
+      "source_display_line": 6,
+      "physical_location": "Line 6",
+      "quote": "Achieved RTO 300 minutes in 2024.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "RTO belongs to 2024 despite 2026 header; completion does not tie that metric to a current exercise."
+    },
+    {
+      "case_id": "dr-year-qualified",
+      "gold_index": 1,
+      "annotation": {
+        "dimension": "completed",
+        "value": true,
+        "subject": "exercise for orion ledger gateway",
+        "phrase": "completed"
+      },
+      "source_text_sha256": "6ace9fb243f1ac46d8ac25f61a8842de7a6663fa8ff779e2820bca9fed7802c4",
+      "source_display_line": 5,
+      "physical_location": "Line 5",
+      "quote": "Recovery exercise completed.",
+      "verdict": "supported_as_qualified_source_assertion",
+      "qualification": "RTO belongs to 2024 despite 2026 header; completion does not tie that metric to a current exercise."
+    }
+  ]
+}
