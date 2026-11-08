@@ -31,3 +31,9 @@ This completes the presented case-level triage review. It does not establish com
 The original corpus, source artifacts, historical scores and inactive correction proposal remain unchanged. No control or vendor approval, authoritative risk change, or merge authorization follows from this review. PR #29 remains draft.
 
 The subsequent delegated [AI-assisted per-fact audit](M5C_AI_Typed_Fact_Audit.md) covers all 29 typed annotations and both empty-gold cases, with the same human-validation boundary.
+
+## Subsequent owner annotation acceptance
+
+After the remaining individual-fact review was explained, the owner replied **“evrything looks good for the TLS/DR”**. This records acceptance of the presented TLS/DR fact annotations with their documented qualifications, in addition to the earlier case-level decisions. The [separate acceptance record](../benchmarks/reviews/m5c_owner_annotation_acceptance_1.json) binds this response to the audit at commit `9639904` and preserves the earlier decision history.
+
+The owner has now accepted the presented annotations; that acceptance is no longer pending. Reviewer experience and independence were not supplied, so this does not establish Issue #28's independent TPRM prerequisite. No further acceptance of the same interpretations is requested. The frozen corpus and inactive correction proposal remain unchanged; no parser change, vendor/control approval or merge follows automatically.

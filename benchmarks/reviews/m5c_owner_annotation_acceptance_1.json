@@ -1,0 +1,16 @@
+{
+  "decision_type": "owner acceptance of presented TLS/DR annotation review",
+  "owner_exact_statement": "evrything looks good for the TLS/DR",
+  "context": "Response to explanation that remaining review covers individual source-supported fact annotations, date/service scope, exclusions, uncertainty and provisional triage.",
+  "corpus_sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9",
+  "reviewed_audit_sha256": "8c2e805ad9fdec646cc2743f85026126e1473030ae5c5be61b30964da201df8f",
+  "reviewed_audit_commit": "963990402ea3919f75bc8a5af77a694dd375e90b",
+  "accepted_scope": "Owner accepts the presented TLS/DR annotations with documented qualifications, including the two narrative metric qualifications.",
+  "reviewer_experience": "not provided",
+  "reviewer_independence": "not established",
+  "independent_human_tprm_validation_complete": false,
+  "confirmed_vendor_facts": false,
+  "gold_activated": false,
+  "extractor_changes_authorized_by_this_statement": false,
+  "merge_authorized": false
+}
