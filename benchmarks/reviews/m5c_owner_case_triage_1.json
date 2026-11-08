@@ -1,0 +1,120 @@
+{
+  "status": "case_triage_chat_review_complete_not_full_independent_TPRM_validation",
+  "corpus_version": "M5C-holdout-1.1",
+  "corpus_sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9",
+  "assessment_as_of": "2026-11-01",
+  "accepted_scope": "Case-level provisional triage interpretations only; not confirmed vendor facts, complete typed-gold validation, adopted rubric or merge approval. Reviewer expertise and independence not established.",
+  "decisions": [
+    {
+      "case_id": "tls-alt-backdoor",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Case-level interpretation presented in chat, with TLS 1.2 minimum; no full-coverage or control approval inferred."
+    },
+    {
+      "case_id": "tls-rejected-legacy",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "no_exception",
+      "scope": "Case-level interpretation presented in chat, with TLS 1.2 minimum; no full-coverage or control approval inferred."
+    },
+    {
+      "case_id": "tls-port-prose",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Case-level interpretation presented in chat, with TLS 1.2 minimum; no full-coverage or control approval inferred."
+    },
+    {
+      "case_id": "tls-conditional",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Conditional/historical/test-scoped source assertions do not prove current production failure; retain concerns and request appropriate evidence."
+    },
+    {
+      "case_id": "tls-old-record",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Conditional/historical/test-scoped source assertions do not prove current production failure; retain concerns and request appropriate evidence."
+    },
+    {
+      "case_id": "tls-test-only",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Conditional/historical/test-scoped source assertions do not prove current production failure; retain concerns and request appropriate evidence."
+    },
+    {
+      "case_id": "tls-gateway-caption",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Retain source-cited provisional threshold concerns; strong protocols do not offset weak enabled protocols, and reported recovery overruns/exclusions need verification rather than automatic control failure."
+    },
+    {
+      "case_id": "tls-mixed-enabled",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Retain source-cited provisional threshold concerns; strong protocols do not offset weak enabled protocols, and reported recovery overruns/exclusions need verification rather than automatic control failure."
+    },
+    {
+      "case_id": "dr-breached-objectives",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Retain source-cited provisional threshold concerns; strong protocols do not offset weak enabled protocols, and reported recovery overruns/exclusions need verification rather than automatic control failure."
+    },
+    {
+      "case_id": "dr-plan-only",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Plan targets are not achieved results; reported within-limit timings do not establish full-service coverage; untested identity federation is a provisional coverage concern subject to dependency verification."
+    },
+    {
+      "case_id": "dr-compliant-sample",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "no_exception",
+      "scope": "Plan targets are not achieved results; reported within-limit timings do not establish full-service coverage; untested identity federation is a provisional coverage concern subject to dependency verification."
+    },
+    {
+      "case_id": "dr-uncovered-idp",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Plan targets are not achieved results; reported within-limit timings do not establish full-service coverage; untested identity federation is a provisional coverage concern subject to dependency verification."
+    },
+    {
+      "case_id": "dr-compound-duration",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "exception",
+      "scope": "Completed exercise reports four hours thirty minutes (270 minutes), exceeding the 240-minute threshold; provisional exception requiring verification."
+    },
+    {
+      "case_id": "dr-unrelated-service",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Exercise covers Orion Data Warehouse rather than Orion Ledger Gateway; do not transfer results; request the Gateway exercise record."
+    },
+    {
+      "case_id": "dr-year-qualified",
+      "owner_reply": "Yes",
+      "verdict": "agree_with_presented_provisional_triage",
+      "triage": "abstain",
+      "scope": "Header states 2026 but the RTO result explicitly refers to 2024; treat as historical, reconcile dates and request current evidence."
+    }
+  ],
+  "narrative_qualification": {
+    "case_id": "dr-failover-narrative",
+    "owner_reply": "I accept those qualifications",
+    "record": "docs/M5C_Gold_Qualification_Decision.md",
+    "scope": "300 elapsed minutes requires formal RTO measurement-boundary clarification; up to ninety minutes is an upper bound, not exact achieved RPO. Retain provisional concern."
+  }
+}

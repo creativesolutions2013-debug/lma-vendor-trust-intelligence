@@ -1,6 +1,6 @@
 # M5C independent TPRM gold-review packet
 
-**Status: pending human TPRM review.** This packet prepares the prerequisite in Issue #28; it is not a completed independent review or permission to change extraction rules.
+**Status: owner case-level triage review recorded; full independent TPRM/typed-gold validation remains pending.** This packet prepares the prerequisite in Issue #28; it is not a completed independent review or permission to change extraction rules.
 
 Corpus: `M5C-holdout-1.1` · SHA-256 of original JSON bytes: `19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9`.
 Assessment date: `2026-11-01`. 16 synthetic cases: 8 proposed exception, 2 no-exception, 6 abstain.
@@ -30,7 +30,9 @@ The corpus and annotations are unchanged. The source author knew product interfa
 }
 ```
 
-For every case: reviewer verdict = **pending**; revised facts = **unreviewed**; smallest next action = **not yet supplied**. Original JSON is the source of truth. TXT locations are Line N; generated DOCX locations are Paragraph N, one paragraph per source line; generated PDFs put these source lines on Page 1. Display line numbers below are an aid, not PDF line citations. Verify actual artifacts using the existing benchmark renderer if needed.
+The [owner case-level triage record](M5C_Owner_Case_Triage_Review.md) covers 15 agreements and the separately accepted narrative qualification. The original packet below is preserved; its pending fields refer to the broader independent review procedure, not an absence of owner triage responses.
+
+For every case in that broader procedure: reviewer verdict = **pending**; revised facts = **unreviewed**; smallest next action = **not yet supplied**. Original JSON is the source of truth. TXT locations are Line N; generated DOCX locations are Paragraph N, one paragraph per source line; generated PDFs put these source lines on Page 1. Display line numbers below are an aid, not PDF line citations. Verify actual artifacts using the existing benchmark renderer if needed.
 
 ## tls-alt-backdoor · ENC-01 · TXT
 
