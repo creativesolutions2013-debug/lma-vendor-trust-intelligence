@@ -12,9 +12,9 @@ only. Production authentication still refuses startup. PR #21 is not included.
 ## Five stages
 
 1. **About vendor:** Enter a synthetic vendor, service and business use case, then
-   select all **Data types in scope** (or Unknown), then choose declared data sensitivity, system access and criticality. The existing inherent
+   select all **Data types in scope** (or Unknown), then choose declared data sensitivity, system/network access, estimated record volume, criticality and service dependency. The existing inherent
    risk engine and tier/applicability services select all baseline/contextual
-   requirements. Volume, regulation, fourth parties, geography and AI use are not
+   requirements. Regulation, fourth parties, geography and AI use are not
    collected in this slice and have explicitly disclosed zero illustrative points.
 2. **Upload evidence:** Select your own UTF-8 TXT, PDF or DOCX files. No fixtures
    enter this path. The file details expose parse result, role, declared scope,
@@ -100,10 +100,27 @@ remain necessary before merge or broader pilot claims.
 
 ## Dataset scope and tier determination
 
-The requester selects public/internal/confidential business data, PII, sensitive personal data, PHI, payment-card data, credentials, financial records, Other/not yet classified and/or Unknown. These are use-case data categories, separate from sensitivity and uncollected volume. They do not describe uploaded evidence files. Empty selections are rejected; Unknown can accompany known categories when the scope is partial.
+The requester selects public/internal/confidential business data, PII, sensitive personal data, PHI, payment-card data, credentials, financial records, Other/not yet classified and/or Unknown. These are use-case data categories, separate from sensitivity and estimated record volume. They do not describe uploaded evidence files. Empty selections are rejected; Unknown can accompany known categories when the scope is partial.
 
 The adapter reuses the existing legacy-intake sensitivity weights: Public=0, Internal=5, Confidential=10, PII=15, Sensitive PII=20, PHI/PCI/Credentials=25. Dataset mappings are synthetic example policy: financial records map to Confidential unless a higher selected category applies. The effective sensitivity contribution is the maximum of the declared sensitivity (the existing customer-path Public=5, Confidential=10, Restricted=20) and the highest known category, never the sum of categories. This preserves a higher declaration and avoids double counting. It does not assign regulatory-exposure points or infer jurisdiction. The existing PHI/PCI/credentials grouping enables the existing regulated-data requirement review; a full regulatory determination remains unassessed.
 
-For the default Production/Important relationship, Confidential business data yields 41/Tier 3; Personal data yields 46/Tier 3; PHI yields 56/Tier 2. Public declaration with PHI still yields 56. Other/Unknown has no invented numeric weight: known contributions remain and the score/tier is explicitly provisional pending clarification. Sensitive-data requirements are retained for unknown scope. No low-risk conclusion follows from unknown types.
+For the Production/Important relationship, the known-input subtotal before volume is 41/Tier 3 for Confidential business data, 46/Tier 3 for Personal data and 56/Tier 2 for PHI. These are provisional if network access, volume or dependency is unknown; collecting those factors can raise the score/tier. Other/Unknown has no invented numeric weight: known contributions remain and the score/tier is explicitly provisional pending clarification. Sensitive-data requirements are retained for unknown scope. No low-risk conclusion follows from unknown types.
 
 Selections, declared and effective points, mapping basis and uncertainty appear in report.json; the HTML summary and UI show selections, risk drivers and provisional warnings. Changes are included in existing review/completion fingerprints, even when scores are equal. Existing reset clears the selection. All scoring is illustrative; evidence review never approves a vendor or changes authoritative risk. The field is limited to the session-memory customer intake; legacy persistence, production authentication, extraction rules and PR #21 are unchanged.
+
+## Combined relationship exposure (pilot definitions)
+
+Tiering combines data type/sensitivity, system/network access, data volume and business exposure through the existing eight-factor scoring/tier services. Dataset type alone never determines the tier. The same intake form now asks:
+
+- **System access:** None=0, Production=16, Privileged=25, or Unknown (existing customer-path weights).
+- **Network access:** None=0, Network connectivity=12 (existing legacy network weight), or Unknown. Access contribution is the higher of system and network points, not their sum. Connectivity does not assert that a service is public/internet-facing.
+- **Estimated records in scope:** approximate maximum records accessed, processed or stored for this use case, not GB, daily transaction throughput or a unique-person count. Blank is Unknown; 0 explicitly means no records. Pilot volume bands within the engine's existing 0–10 range: 0=0 points, 1–1,000=2, 1,001–100,000=5, over 100,000=10. These band boundaries and intermediate weights are synthetic pilot assumptions, not an existing approved customer policy.
+- **Dependency on this service:** No operational dependency=0, Workaround available=5, Material operational disruption=15, Critical dependency/no viable workaround=20, or Unknown. This captures the consequence of unavailability and replaceability, distinct from general business criticality. It shares the existing business contribution: max(criticality, dependency), not a second score. It is not fourth-party dependency.
+
+The definitions are versioned `INTAKE-EXPOSURE-PILOT-1`; replace them with approved customer definitions before governed use. Numeric policy ranges are reused, while the new business-facing volume/dependency definitions are explicitly proposed pilot policy. The capped engine total and tier thresholds are unchanged.
+
+With identical Confidential business data, Limited criticality, no system/network access, 0 records and no service dependency, the example score is 15/Tier 4. Changing only network connectivity raises it to 27/Tier 3; changing only volume to 100,001 records raises it to 25/Tier 3; changing only dependency to Critical raises it to 30/Tier 3. PHI + Privileged access + Critical dependency + 100,001 records gives 80/Tier 1. No single field is an unconditional tier assignment.
+
+Unknown fields retain null point estimates, explicit missing-input lists, provisional tier status and visible warnings. The engine computes only a subtotal of known contributions; omitted unknowns are not reported as known zero-risk inputs. Precautionary IAM/encryption, recovery or data-protection reviews are retained where related inputs are unknown, without asserting those exposures as confirmed facts. The UI and HTML display unassessed contributions as unassessed; JSON includes the raw values, units, versioned basis and per-factor contributions under `assessment_context.exposure_scope`. Every change participates in the existing history/completion fingerprints, including record-count changes within the same score band. Existing reset clears the fields.
+
+Regulation, fourth-party dependency, geography, AI and public internet exposure remain uncollected and disclosed. Risk and tier remain illustrative even with these fields complete; no vendor approval, authoritative residual-risk change or additional approval workflow is introduced.

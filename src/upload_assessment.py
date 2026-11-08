@@ -36,6 +36,16 @@ DATA_TYPE_CLASSIFICATIONS = {
     'Financial records': 'Confidential', 'Other / not yet classified': None, 'Unknown': None,
 }
 DATA_TYPES = tuple(DATA_TYPE_CLASSIFICATIONS)
+SYSTEM_ACCESS_POINTS = {'None': 0, 'Production': 16, 'Privileged': 25, 'Unknown': None}
+NETWORK_ACCESS_POINTS = {'None': 0, 'Network connectivity': 12, 'Unknown': None}
+CRITICALITY_POINTS = {'Limited': 5, 'Important': 15, 'Critical': 20, 'Unknown': None}
+# Pilot dependency descriptions reuse the existing criticality contribution.
+SERVICE_DEPENDENCY_POINTS = {
+    'No operational dependency': 0, 'Workaround available': 5,
+    'Material operational disruption': 15,
+    'Critical dependency / no viable workaround': 20, 'Unknown': None,
+}
+MAX_VOLUME_RECORDS = 10**12
 
 
 @dataclass(frozen=True)
@@ -50,13 +60,22 @@ class Intake:
     environment: str = 'production'
     as_of: date = field(default_factory=date.today)
     data_types: tuple[str, ...] = ('Unknown',)
+    network_access: str = 'Unknown'
+    data_volume_records: int | None = None
+    service_dependency: str = 'Unknown'
 
     def __post_init__(self):
         for value in (self.assessment_id, self.vendor, self.service, self.use_case, self.environment):
             if not isinstance(value, str) or not value.strip() or len(value) > 500 or any(ord(c) < 32 for c in value):
                 raise ValueError('Enter a vendor, service and business use case (up to 500 characters each).')
-        if self.data not in ('Public', 'Confidential', 'Restricted') or self.access not in ('None', 'Production', 'Privileged') or self.criticality not in ('Limited', 'Important', 'Critical'):
+        if (self.data not in ('Public', 'Confidential', 'Restricted')
+                or any(not isinstance(value, str) or value not in options for value, options in (
+                    (self.access, SYSTEM_ACCESS_POINTS), (self.criticality, CRITICALITY_POINTS),
+                    (self.network_access, NETWORK_ACCESS_POINTS), (self.service_dependency, SERVICE_DEPENDENCY_POINTS)))):
             raise ValueError('Choose the supported risk-context options.')
+        if self.data_volume_records is not None and (type(self.data_volume_records) is not int
+                or not 0 <= self.data_volume_records <= MAX_VOLUME_RECORDS):
+            raise ValueError('Enter a nonnegative whole-record estimate, or leave volume unknown.')
         if (not isinstance(self.data_types, tuple) or not self.data_types
                 or any(not isinstance(t, str) or t not in DATA_TYPES for t in self.data_types)
                 or len(set(self.data_types)) != len(self.data_types)):
@@ -78,6 +97,30 @@ def data_scope(intake):
             'basis': 'Highest existing legacy-intake classification or higher declared sensitivity; not additive per data type. Example policy, not a regulatory determination.'}
 
 
+def exposure_scope(intake):
+    system = SYSTEM_ACCESS_POINTS[intake.access]
+    network = NETWORK_ACCESS_POINTS[intake.network_access]
+    criticality = CRITICALITY_POINTS[intake.criticality]
+    dependency = SERVICE_DEPENDENCY_POINTS[intake.service_dependency]
+    records = intake.data_volume_records
+    # Explicit pilot record-count bands within the engine's existing 0–10 range.
+    volume = None if records is None else 0 if records == 0 else 2 if records <= 1_000 else 5 if records <= 100_000 else 10
+    missing = [name for name, value in (
+        ('system access', system), ('network access', network), ('data volume', volume),
+        ('business criticality', criticality), ('service dependency', dependency)) if value is None]
+    return {'policy': 'INTAKE-EXPOSURE-PILOT-1', 'system_access': intake.access,
+            'system_access_points': system, 'network_access': intake.network_access,
+            'network_access_points': network, 'data_volume_records': records,
+            'data_volume_unit': 'records in the assessed use case', 'data_volume_points': volume,
+            'service_dependency': intake.service_dependency, 'service_dependency_points': dependency,
+            'declared_criticality_points': criticality,
+            'effective_access_points': max((p for p in (system, network) if p is not None), default=0),
+            'effective_business_points': max((p for p in (criticality, dependency) if p is not None), default=0),
+            'missing_inputs': missing,
+            'uncertainties': (['Unknown exposure inputs: ' + ', '.join(missing) + '. Score is a known-input subtotal; tier is provisional, not a confirmed low-risk determination.'] if missing else []),
+            'basis': 'Pilot example policy, not approved customer rules. Access=max(system, network); business=max(criticality, service dependency), not additive. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10. Unknown is unassessed, not a zero-risk input.'}
+
+
 @dataclass(frozen=True)
 class Upload:
     evidence: object
@@ -91,14 +134,16 @@ class UploadAssessment(DemoAssessment):
 
 def risk_and_applicability(intake):
     scope = data_scope(intake)
+    exposure = exposure_scope(intake)
     points = (scope['effective_sensitivity_points'],
-              {'None': 0, 'Production': 16, 'Privileged': 25}[intake.access],
-              {'Limited': 5, 'Important': 15, 'Critical': 20}[intake.criticality], 0, 0, 0, 0, 0)
+              exposure['effective_access_points'], exposure['effective_business_points'],
+              exposure['data_volume_points'] if exposure['data_volume_points'] is not None else 0, 0, 0, 0, 0)
     score = calculate_inherent_risk(InherentRiskInput(*points))
     context = VendorRiskContext(sensitive_data=points[0] >= 10,
-                                regulated_data=scope['regulated_data_review'], system_access=intake.access != 'None',
-                                privileged_access=intake.access == 'Privileged', internet_facing=intake.access != 'None',
-                                business_critical=intake.criticality != 'Limited')
+                                regulated_data=scope['regulated_data_review'],
+                                system_access=intake.access in ('Production', 'Privileged') or intake.network_access == 'Network connectivity',
+                                privileged_access=intake.access == 'Privileged', internet_facing=False,
+                                business_critical=exposure['effective_business_points'] >= 15)
     profile = get_tier_profile(score, privileged_access=context.privileged_access, regulated_data=context.regulated_data)
     applicable = evaluate_applicability(profile, context)
     if scope['uncertainties']:
@@ -108,6 +153,21 @@ def risk_and_applicability(intake):
         applicable = replace(applicable, controls=tuple(controls.values()), review_required=True,
             review_reasons=applicable.review_reasons + (reason,),
             decisions=applicable.decisions + (ApplicabilityDecision('INTAKE-DATA-UNKNOWN', True, 'control', 'DATA-01', reason),))
+    if exposure['missing_inputs']:
+        # Retain precautionary review without asserting unprovided exposure facts.
+        missing = exposure['missing_inputs']
+        precautionary = []
+        if 'system access' in missing or 'network access' in missing: precautionary += ['IAM-01', 'ENC-01']
+        if 'data volume' in missing: precautionary += ['DATA-01']
+        if 'business criticality' in missing or 'service dependency' in missing: precautionary += ['BCP-01']
+        controls = {c.control_id: c for c in applicable.controls}
+        decisions = list(applicable.decisions)
+        reason = exposure['uncertainties'][0] + ' Precautionary review is not a confirmed exposure assertion.'
+        for control_id in precautionary:
+            controls.setdefault(control_id, CONTROL_LIBRARY[control_id])
+            decisions.append(ApplicabilityDecision('INTAKE-UNKNOWN-' + control_id, True, 'control', control_id, reason))
+        applicable = replace(applicable, controls=tuple(controls.values()), review_required=True,
+                             review_reasons=applicable.review_reasons + (reason,), decisions=tuple(decisions))
     return score, points, applicable
 
 
@@ -237,17 +297,28 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     # no specialist factual interpretations or FactReviews are invented from free text.
     screening = evaluate_pilot_requirements(tuple(u.evidence.document for u in uploads),
                                           privileged_access=intake.access == 'Privileged', today=intake.as_of)
-    drivers = tuple(f'{name}: {value} points' for name, value in zip(
-        ('Data sensitivity', 'System access', 'Business criticality', 'Data volume', 'Regulatory exposure',
-         'Fourth-party dependency', 'Geographic risk', 'AI autonomy'), points))
     scope_data = data_scope(intake)
+    exposure_data = exposure_scope(intake)
+    displayed_points = (points[0],
+        points[1] if exposure_data['system_access_points'] is not None or exposure_data['network_access_points'] is not None else None,
+        points[2] if exposure_data['declared_criticality_points'] is not None or exposure_data['service_dependency_points'] is not None else None,
+        exposure_data['data_volume_points'], None, None, None, None)
+    drivers = tuple(f'{name}: {value} points' if value is not None else f'{name}: unassessed; not included in known-input subtotal'
+        for name, value in zip(('Data sensitivity', 'System/network access', 'Business criticality/dependency', 'Data volume',
+                               'Regulatory exposure', 'Fourth-party dependency', 'Geographic risk', 'AI autonomy'), displayed_points))
     drivers += ('Data types in scope: ' + ', '.join(intake.data_types),
                 f"Data sensitivity uses max(declared {scope_data['declared_sensitivity_points']}, data-type minimum {scope_data['data_type_minimum_points']}); categories are not added together.")
     drivers += tuple(scope_data['uncertainties'])
+    drivers += (f"System access: {intake.access}; network access: {intake.network_access}. Access uses the higher known contribution, not their sum.",
+                f"Data volume: {intake.data_volume_records if intake.data_volume_records is not None else 'Unknown'} records; pilot bands 0=0, 1–1,000=2, 1,001–100,000=5, over 100,000=10 points.",
+                f"Service dependency: {intake.service_dependency}; business criticality: {intake.criticality}. Business exposure uses the higher known contribution, not their sum.")
+    drivers += tuple(exposure_data['uncertainties'])
     context = {'vendor': intake.vendor, 'service': intake.service, 'use_case': intake.use_case,
         'environment': intake.environment, 'data': intake.data, 'access': intake.access, 'criticality': intake.criticality,
         'data_scope': scope_data,
-        'limitations': LIMITATION, 'uncollected_risk_inputs': 'Volume, regulation, fourth parties, geography and AI use are unassessed (zero illustrative points).',
+        'exposure_scope': exposure_data,
+        'tier_status': 'Provisional — incomplete intake; known-input subtotal only' if scope_data['uncertainties'] or exposure_data['uncertainties'] else 'Illustrative tier based on requester-supplied inputs; not approved risk',
+        'limitations': LIMITATION, 'uncollected_risk_inputs': 'Regulation, fourth parties, geography, AI use and internet exposure remain unassessed. Numeric uncollected dimensions use zero only in this illustrative subtotal.',
         'criteria_basis': 'Predefined synthetic example requirements, not organization-approved customer policy. TLS and recovery threshold descriptions reuse the existing threshold services.',
         'applicability_policy': applicable.policy_version, 'evaluations': evaluations,
         'screening': [dict(requirement_id=r.requirement_id, draft_text_signal=r.outcome, not_control_result=True, reason=r.reason, follow_up=r.follow_up,

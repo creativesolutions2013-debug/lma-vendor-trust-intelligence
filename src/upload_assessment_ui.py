@@ -11,7 +11,8 @@ from src.guided_assessment_demo import (
     record_action, report_payload, source_role,
 )
 from src.upload_assessment import (
-    DATA_TYPES, Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
+    DATA_TYPES, SYSTEM_ACCESS_POINTS, NETWORK_ACCESS_POINTS, CRITICALITY_POINTS,
+    SERVICE_DEPENDENCY_POINTS, MAX_VOLUME_RECORDS, Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
     build_assessment, read_upload, risk_and_applicability, suggested_requirements,
 )
 
@@ -117,12 +118,23 @@ def _about():
         st.warning('Data scope needs clarification. The initial score and tier will remain provisional, not a confirmed low-risk determination.')
     cols = st.columns(3)
     data = cols[0].selectbox('Data sensitivity', ('Public', 'Confidential', 'Restricted'), index=1, key=PREFIX + 'data')
-    access = cols[1].selectbox('Service access', ('None', 'Production', 'Privileged'), index=1, key=PREFIX + 'access')
-    criticality = cols[2].selectbox('Business criticality', ('Limited', 'Important', 'Critical'), index=1, key=PREFIX + 'criticality')
-    st.caption('Inherent risk uses the existing engine. Uncollected volume, regulation, fourth-party, geography and AI inputs contribute zero illustrative points; this is not a complete risk intake.')
+    access = cols[1].selectbox('System access', tuple(SYSTEM_ACCESS_POINTS), index=1, key=PREFIX + 'access')
+    criticality = cols[2].selectbox('Business criticality', tuple(CRITICALITY_POINTS), index=1, key=PREFIX + 'criticality')
+    network = st.selectbox('Network access', tuple(NETWORK_ACCESS_POINTS), index=2, key=PREFIX + 'network_access',
+                           help='Does this service have connectivity into your network? Connectivity does not establish public internet exposure.')
+    volume = st.number_input('Estimated records in scope', min_value=0, max_value=MAX_VOLUME_RECORDS, value=None, step=1,
+                             key=PREFIX + 'data_volume_records', help='Approximate maximum records the vendor will access, process or store for this use case. Count records, not GB or unique people. Leave blank if unknown; 0 explicitly means no records.')
+    dependency = st.selectbox('Dependency on this service', tuple(SERVICE_DEPENDENCY_POINTS), index=4,
+                              key=PREFIX + 'service_dependency', help='What happens if this service is unavailable? Consider operational disruption and whether a viable workaround exists; this is not fourth-party dependency.')
+    st.caption('Pilot scoring: access uses the higher system/network contribution; business exposure uses the higher criticality/dependency contribution. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10 points. These example bands need customer policy validation.')
+    if access == 'Unknown' or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown':
+        st.warning('Complete or clarify unknown exposure inputs. The score is only a known-input subtotal and the tier remains provisional.')
+    st.caption('Inherent risk uses the existing engine. Regulation, fourth parties, geography and AI remain unassessed; their zero illustrative contributions are not proof of low exposure.')
     if st.button('Create assessment', type='primary', disabled=not data_types or not all(s.strip() for s in (vendor, service, purpose))):
         try:
-            intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment, as_of=date.today(), data_types=tuple(data_types))
+            intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment,
+                            as_of=date.today(), data_types=tuple(data_types), network_access=network,
+                            data_volume_records=volume, service_dependency=dependency)
             model = build_assessment(intake)
         except ValueError as error: st.error(str(error))
         else:
@@ -335,7 +347,9 @@ def render_upload_assessment():
         _about(); return
     st.text(intake.vendor + ' · ' + intake.service + ' · ' + intake.environment + ' · ' + intake.use_case)
     st.text('Data types in scope: ' + ', '.join(intake.data_types))
-    for uncertainty in st.session_state[PREFIX + 'model'].customer_context['data_scope']['uncertainties']:
+    context = st.session_state[PREFIX + 'model'].customer_context
+    st.caption(context['tier_status'])
+    for uncertainty in context['data_scope']['uncertainties'] + context['exposure_scope']['uncertainties']:
         st.warning(uncertainty)
     pending = st.session_state.pop(PREFIX + 'pending_stage', None)
     if pending: st.session_state[PREFIX + 'stage'] = pending
