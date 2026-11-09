@@ -101,6 +101,7 @@ class OrganizationMethodology:
                     if points is not None:raise ValueError('Unknown classifications cannot receive known numeric weights.')
                 else:_integer(points)
             if group in ('system','network') and weights['None']!=0:raise ValueError('No access must contribute zero.')
+            if group=='dependency' and weights['No operational dependency']!=0:raise ValueError('No operational dependency must contribute zero.')
         for key in ('nonpublic_types','regulated_types'):
             if not isinstance(d[key],list) or len(d[key])>64 or any(not isinstance(t,str) or t not in d['weights']['data_types'] or d['weights']['data_types'][t] is None for t in d[key]):raise ValueError('Data classification groups must reference known categories.')
             if len(set(d[key]))!=len(d[key]):raise ValueError('Duplicate data classification.')
@@ -199,7 +200,7 @@ def scale_decision(intake, data, exposure, baseline_score):
     if user_band is None:missing.append('active client users or workforce denominator')
     nonpublic=(intake.data in ('Confidential','Restricted') or bool(set(intake.data_types)&set(d['nonpublic_types'])))
     material_records=nonpublic and data['effective_sensitivity_points']>=u['material_sensitivity_min']
-    material_use=exposure['effective_business_points']>=u['material_dependency_min']
+    material_use=exposure['service_dependency_points'] is not None and exposure['service_dependency_points']>=u['material_dependency_min']
     eligible_records=record_band is not None and record_band>0 and material_records
     eligible_users=user_band is not None and user_band>0 and material_use
     candidate=(record_band==3 and material_records) or (user_band==3 and material_use)
@@ -237,5 +238,5 @@ def weighted_scale_points(intake, data, exposure):
     nonpublic=intake.data in ('Confidential','Restricted') or bool(set(intake.data_types)&set(d['nonpublic_types']))
     vb=volume_band(intake.methodology,intake.data_volume_records);ub=adoption_band(intake.methodology,intake.active_client_users,intake.workforce_size)
     volume=d['volume']['points'][vb] if vb is not None and nonpublic and data['effective_sensitivity_points']>=d['uplift']['material_sensitivity_min'] else 0
-    users=d['adoption']['points'][ub] if ub is not None and exposure['effective_business_points']>=d['uplift']['material_dependency_min'] else 0
+    users=d['adoption']['points'][ub] if ub is not None and exposure['service_dependency_points'] is not None and exposure['service_dependency_points']>=d['uplift']['material_dependency_min'] else 0
     return max(volume,users)

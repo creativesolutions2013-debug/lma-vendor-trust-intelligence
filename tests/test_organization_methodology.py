@@ -32,7 +32,7 @@ def decision(i):return build_assessment(i).customer_context['tier_decision']
 
 
 def test_default_scale_uplift_is_single_not_additive_and_already_counted_is_not_reused():
-    i=intake(data_volume_records=100001,active_client_users=1000,workforce_size=2000)
+    i=intake(data_volume_records=100001,active_client_users=1000,workforce_size=2000,service_dependency='Material operational disruption')
     m=build_assessment(i);d=m.customer_context['tier_decision']
     assert m.inherent_score==41 and d['baseline_tier']=='T3' and d['final_tier']=='T2'
     assert d['record_band']==d['adoption_band']==3
@@ -139,6 +139,7 @@ def test_typed_thresholds_freshness_and_evidence_kinds_use_captured_configuratio
 
 @pytest.mark.parametrize('change', [
     lambda d:d.update(unknown=1),lambda d:d['weights']['system'].update(Unknown=0),
+    lambda d:d['weights']['dependency'].update({'No operational dependency':1}),
     lambda d:d['tier_thresholds'].update(T2=20),lambda d:d['adoption'].update(high_percent=0),
     lambda d:d['requirements'].append(d['requirements'][0]),lambda d:d['requirements'][0].update(tiers=[{}]),
     lambda d:d['volume'].update(points=[0,5,2,10]),lambda d:d['assurance'].update(tls_minimum_version=10),
@@ -192,3 +193,17 @@ def test_organization_can_explicitly_configure_criticality_condition_without_fal
     assert not result['critical_consequence']
     unused=decision(replace(i,critical_consequence=None))
     assert 'critical consequence determination' not in unused['missing_inputs']
+
+
+def test_adoption_requires_material_service_dependency_not_general_business_criticality():
+    for strategy in ('scale_uplift','weighted'):
+        p=policy(strategy=strategy)
+        no_dependency=intake(p,active_client_users=1000,workforce_size=2000,data_volume_records=0)
+        result=decision(no_dependency)
+        assert not result['candidate_scale_uplift']
+        assert result['final_tier']=='T3'
+        assert build_assessment(no_dependency).inherent_score==41
+        material=replace(no_dependency,service_dependency='Material operational disruption')
+        assert decision(material)['final_tier']=='T2'
+        unknown=replace(no_dependency,service_dependency='Unknown')
+        assert not decision(unknown)['candidate_scale_uplift'] and decision(unknown)['provisional']
