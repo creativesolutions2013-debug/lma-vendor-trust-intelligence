@@ -38,7 +38,7 @@ def test_customer_sees_cited_tls_and_dr_exceptions_then_exports_and_reevaluates(
     stage(at,'Upload evidence')
     dates=at.date_input;dates[1].set_value(observed-timedelta(days=10));run(at)
     assert 'customer_assessment:completion' not in at.session_state
-    stage(at,'Report');assert not at.get('download_button')
+    stage(at,'Report');assert not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at,'Upload evidence');widget(at.button,'Evaluate attached evidence').click();run(at)
     revised=at.session_state['customer_assessment:model']
     recovery=next(e for e in revised.customer_context['evaluations'] if e['requirement_id']=='BCP-01')
@@ -88,7 +88,7 @@ def test_source_metadata_clicks_enable_unconfirmed_preview_and_preserve_history(
     suggestions(at)[0].click(); run(at)
     assert 'customer_assessment:completion' not in at.session_state
     assert at.session_state['customer_assessment:actions'] == history
-    stage(at, 'Report'); assert at.warning and not at.get('download_button')
+    stage(at, 'Report'); assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at, 'Upload evidence')
     assert [w.value for w in kinds()] == ['configuration', 'policy']
     assert at.date_input[0].value == date(2026,10,26)
@@ -118,7 +118,7 @@ def test_source_metadata_clicks_enable_unconfirmed_preview_and_preserve_history(
                 original = tls if f['filename'] == 'Cedarline_TLS.txt' else dr
                 assert f['quote'] == original.decode().splitlines()[int(f['location'].split()[-1])-1]
     stage(at, 'Upload evidence'); at.date_input[1].set_value(date(2026,11,1)); run(at)
-    stage(at, 'Report'); assert not at.get('download_button')
+    stage(at, 'Report'); assert not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at, 'Upload evidence'); widget(at.button, 'Evaluate attached evidence').click(); run(at)
     dr_result = next(e for e in at.session_state['customer_assessment:model'].customer_context['evaluations'] if e['requirement_id'] == 'BCP-01')
     assert not any(f['eligible_for_preview'] for f in dr_result['facts'])
@@ -133,7 +133,7 @@ def test_suggestions_preserve_other_pending_edits_and_partial_ambiguity(no_live_
     widget(at.text_input, 'Service stated by this document').set_value('Analyst scope challenge')
     at.date_input[0].set_value(intake.as_of); run(at)
     suggestions(at)[0].click(); run(at)
-    stage(at, 'Report'); assert not at.get('download_button')
+    stage(at, 'Report'); assert not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at, 'Upload evidence')
     assert not at.multiselect[0].value
     assert widget(at.text_input, 'Service stated by this document').value == 'Analyst scope challenge'
@@ -160,6 +160,6 @@ def test_confirming_already_matching_metadata_still_requires_explicit_evaluation
     stage(at, 'Upload evidence'); suggestions(at)[0].click(); run(at)
     assert at.session_state['customer_assessment:uploads_dirty']
     assert 'customer_assessment:completion' not in at.session_state
-    stage(at, 'Report'); assert at.warning and not at.get('download_button')
+    stage(at, 'Report'); assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at, 'Upload evidence'); widget(at.button, 'Evaluate attached evidence').click(); run(at)
     assert not at.session_state['customer_assessment:uploads_dirty']

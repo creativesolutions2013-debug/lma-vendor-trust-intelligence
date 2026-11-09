@@ -105,15 +105,17 @@ def _discard_pending():
     _invalidate_uploads()
 
 
-def _about():
+def _about(methodology):
+    definition=methodology.definition
     st.subheader('Start a synthetic vendor assessment')
+    st.caption('Pilot organization: '+definition['organization_id']+' · methodology '+definition['version']+' · '+definition['strategy'])
     vendor = st.text_input('Synthetic vendor name', key=PREFIX + 'vendor', max_chars=200)
     service = st.text_input('Service being assessed', key=PREFIX + 'service', max_chars=200)
     purpose = st.text_area('Business use case', key=PREFIX + 'purpose', max_chars=500)
     environment = st.selectbox('Assessed environment', ('production', 'test'), key=PREFIX + 'environment')
-    data_types = st.multiselect('Data types in scope', DATA_TYPES, default=['Unknown'], key=PREFIX + 'data_types',
+    data_types = st.multiselect('Data types in scope', tuple(definition['weights']['data_types']), default=['Unknown'], key=PREFIX + 'data_types:'+methodology.fingerprint,
                                help='Select all types the vendor will access, process or store for this use case. Unknown can accompany known types when scope is incomplete.')
-    st.caption('Data types set a minimum sensitivity using existing risk weights; a higher declared sensitivity still applies. Financial records use Confidential unless a higher selected type applies. No points are added per category.')
+    st.caption('The captured organization methodology uses the higher declared/type sensitivity contribution. Categories are not added together. Organization settings are available separately in the sidebar.')
     if 'Unknown' in data_types or 'Other / not yet classified' in data_types:
         st.warning('Data scope needs clarification. The initial score and tier will remain provisional, not a confirmed low-risk determination.')
     cols = st.columns(3)
@@ -131,7 +133,20 @@ def _about():
                              key=PREFIX + 'data_volume_records', help='Approximate maximum records the vendor will access, process or store for this use case. Count records, not GB or unique people. Leave blank if unknown; 0 explicitly means no records.')
     dependency = st.selectbox('Dependency on this service', tuple(SERVICE_DEPENDENCY_POINTS), index=4,
                               key=PREFIX + 'service_dependency', help='What happens if this service is unavailable? Consider operational disruption and whether a viable workaround exists; this is not fourth-party dependency.')
-    st.caption('Pilot scoring: access uses the higher system/network contribution; business exposure uses the higher criticality/dependency contribution. Volume: 0 records=0; 1–1,000=2; 1,001–100,000=5; over 100,000=10 points. These example bands need customer policy validation.')
+    users=st.number_input('Active or expected client users',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'client_users',help='Client employees using this vendor product, not vendor administrator accounts or people represented in records.')
+    workforce=st.number_input('Defined workforce population',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'workforce',help='Use the consistently defined organization/workforce scope for the assessed use case. A small department must not be described as enterprise-wide adoption.')
+    user_basis=st.selectbox('User-count basis',('Expected at rollout','Observed active users'),key=PREFIX+'user_basis')
+    a=definition['adoption'];v=definition['volume']
+    st.caption(f"Organization adoption bands: High at {a['high_count']} users or {a['high_percent']}% of the defined workforce. Observed counts use {a['window_days']} days; rollout counts are estimates. High record volume is over {v['moderate_max']} records. Storage size is not used.")
+    overlap_choice=st.selectbox('Is scale already included in the baseline assessment?',('Unknown','No','Yes'),key=PREFIX+'overlap',help='Avoid adding the same adoption/record-scale exposure twice.')
+    overlap_reason=st.text_input('Where is scale already represented?',max_chars=1000,key=PREFIX+'overlap_reason') if overlap_choice=='Yes' else ''
+    critical_choice='Unknown';critical_reason=''
+    if definition['uplift']['critical_override'] or definition['uplift']['critical_condition_required']:
+        critical_choice=st.selectbox('Critical consequence under organization methodology',('Unknown','Not identified','Identified'),key=PREFIX+'critical_consequence',help='Under the default methodology, counts alone do not establish criticality. This is a requester declaration of a defined critical consequence, not risk acceptance or vendor approval.')
+        critical_reason=st.text_input('Explain the critical consequence',max_chars=1000,key=PREFIX+'critical_reason') if critical_choice=='Identified' else ''
+    else:
+        st.caption('This organization methodology does not use a separate critical-consequence declaration.')
+    st.caption('Scale-uplift method: no additive volume points and at most one scale uplift. Weighted method: highest eligible user/record contribution only; no scale uplift. ' + ('Tier 1 requires baseline criticality or an explicit critical-consequence condition. ' if definition['uplift']['critical_condition_required'] else 'This organization explicitly permits scale-derived criticality under its configured method. ') + 'All results remain illustrative and subject to review.')
     if (access == 'Unknown' or (access != 'None' and system_data_criticality == 'Unknown')
             or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown'):
         st.warning('Complete or clarify unknown exposure inputs. The score is only a known-input subtotal and the tier remains provisional.')
@@ -140,7 +155,11 @@ def _about():
         try:
             intake = Intake('local-' + uuid4().hex, vendor.strip(), service.strip(), purpose.strip(), data, access, criticality, environment,
                             as_of=date.today(), data_types=tuple(data_types), network_access=network,
-                            data_volume_records=volume, service_dependency=dependency, system_data_criticality=system_data_criticality)
+                            data_volume_records=volume, service_dependency=dependency, system_data_criticality=system_data_criticality,
+                            organization_id=definition['organization_id'],methodology=methodology,
+                            active_client_users=users,workforce_size=workforce,user_count_basis=user_basis,
+                            scale_already_counted={'Unknown':None,'No':False,'Yes':True}[overlap_choice],scale_overlap_reason=overlap_reason,
+                            critical_consequence={'Unknown':None,'Not identified':False,'Identified':True}[critical_choice],critical_consequence_reason=critical_reason)
             model = build_assessment(intake)
         except ValueError as error: st.error(str(error))
         else:
@@ -344,17 +363,24 @@ def _report(model):
 
 
 def render_upload_assessment():
+    from src.organization_methodology_ui import render_methodology_settings
+    active_methodology=render_methodology_settings()
     st.title('New Assessment')
     st.info('Development-only · synthetic/nonconfidential documents only · session memory, no production custody or vendor approval')
     st.caption(LIMITATION)
     st.sidebar.button('Clear this assessment', on_click=_reset)
     intake = st.session_state.get(PREFIX + 'intake')
     if intake is None:
-        _about(); return
+        if active_methodology is None:st.info('Apply a valid pilot organization methodology before starting its assessment.')
+        else:_about(active_methodology)
+        return
     st.text(intake.vendor + ' · ' + intake.service + ' · ' + intake.environment + ' · ' + intake.use_case)
     st.text('Data types in scope: ' + ', '.join(intake.data_types))
     context = st.session_state[PREFIX + 'model'].customer_context
     st.caption(context['tier_status'])
+    if intake.methodology:
+        st.caption('This assessment retains '+intake.organization_id+' / '+intake.methodology.definition['version']+'. Settings changes apply to new assessments only.')
+        for missing in context['tier_decision']['missing_inputs']:st.warning('Unassessed methodology input: '+missing)
     for uncertainty in context['data_scope']['uncertainties'] + context['exposure_scope']['uncertainties']:
         st.warning(uncertainty)
     pending = st.session_state.pop(PREFIX + 'pending_stage', None)

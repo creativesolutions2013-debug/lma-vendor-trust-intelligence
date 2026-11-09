@@ -23,6 +23,8 @@ def test_requester_qualifies_access_and_report_retains_scope(no_live_effects, pa
     widget(at.selectbox,'Does the accessed system host or process critical data?').set_value(qualification)
     widget(at.selectbox,'Network access').set_value('None')
     widget(at.number_input,'Estimated records in scope').set_value(0)
+    widget(at.number_input,'Active or expected client users').set_value(0)
+    widget(at.selectbox,'Critical consequence under organization methodology').set_value('Not identified')
     widget(at.selectbox,'Dependency on this service').set_value('No operational dependency')
     run(at); widget(at.button,'Create assessment').click();run(at)
     model=at.session_state['customer_assessment:model']

@@ -301,6 +301,7 @@ def _assessment_payload(model, actions):
             "residual_score": None, "approved_risk": False,
             "residual_status": "Pending verified inputs / risk-owner decision",
             "residual_rating": None, "residual_hold_rating": model.inherent_rating,
+            **({"tier_decision":model.customer_context['tier_decision']} if getattr(model,'customer_context',None) and 'tier_decision' in model.customer_context else {}),
         },
         "requirements": [{
             "control_id": row.control_id, "requirement_id": row.requirement_id,

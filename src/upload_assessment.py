@@ -16,7 +16,8 @@ from src.evidence_intelligence_mvp import evaluate_pilot_requirements
 from src.evidence_source_validation import bind_evidence, reuse_evidence_bindings
 from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole
 from src.scoring import DATA_SENSITIVITY_POINTS, InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
-from src.tiering import CONTROL_LIBRARY, get_tier_profile
+from src.tiering import CONTROL_LIBRARY, ControlRequirement, get_tier_profile, get_tier_profile_for_tier
+from src.organization_methodology import OrganizationMethodology, scale_decision, weighted_scale_points, volume_band
 from src.tls_assurance import TlsThreshold
 from src.dr_assurance import DrThreshold
 from src.upload_evaluation import evaluate_uploads, LIMITATION as EVALUATION_LIMITATION
@@ -65,8 +66,35 @@ class Intake:
     data_volume_records: int | None = None
     service_dependency: str = 'Unknown'
     system_data_criticality: str = 'Unknown'
+    organization_id: str | None = None
+    methodology: OrganizationMethodology | None = None
+    active_client_users: int | None = None
+    workforce_size: int | None = None
+    user_count_basis: str = 'Expected at rollout'
+    scale_already_counted: bool | None = None
+    scale_overlap_reason: str = ''
+    critical_consequence: bool | None = None
+    critical_consequence_reason: str = ''
 
     def __post_init__(self):
+        if self.methodology is not None and (not isinstance(self.methodology, OrganizationMethodology)
+                or self.organization_id != self.methodology.definition['organization_id']):
+            raise ValueError('Use the methodology captured for this pilot organization.')
+        for count in (self.active_client_users, self.workforce_size):
+            if count is not None and (type(count) is not int or not 0 <= count <= MAX_VOLUME_RECORDS):
+                raise ValueError('User/workforce estimates must be nonnegative whole numbers or unknown.')
+        if self.active_client_users is not None and self.workforce_size is not None and self.active_client_users > self.workforce_size:
+            raise ValueError('Active client users cannot exceed the defined workforce population.')
+        if self.user_count_basis not in ('Observed active users', 'Expected at rollout'):
+            raise ValueError('Choose observed or expected user counts.')
+        for flag in (self.scale_already_counted, self.critical_consequence):
+            if flag is not None and type(flag) is not bool: raise ValueError('Scale and critical conditions must be explicit or unknown.')
+        for reason in (self.scale_overlap_reason, self.critical_consequence_reason):
+            if not isinstance(reason, str) or len(reason)>1000 or any(ord(c)<32 for c in reason): raise ValueError('Use a short plain-text condition explanation.')
+        if self.critical_consequence is True and not self.critical_consequence_reason.strip():
+            raise ValueError('Explain the critical consequence under the organization methodology.')
+        if self.scale_already_counted is True and not self.scale_overlap_reason.strip():
+            raise ValueError('Explain which baseline factor already includes scale.')
         for value in (self.assessment_id, self.vendor, self.service, self.use_case, self.environment):
             if not isinstance(value, str) or not value.strip() or len(value) > 500 or any(ord(c) < 32 for c in value):
                 raise ValueError('Enter a vendor, service and business use case (up to 500 characters each).')
@@ -79,14 +107,27 @@ class Intake:
         if self.data_volume_records is not None and (type(self.data_volume_records) is not int
                 or not 0 <= self.data_volume_records <= MAX_VOLUME_RECORDS):
             raise ValueError('Enter a nonnegative whole-record estimate, or leave volume unknown.')
+        keys = self.methodology.definition['weights']['data_types'] if self.methodology else DATA_TYPE_CLASSIFICATIONS
+        allowed_types = tuple(t for t in DATA_TYPES if t in keys) + tuple(sorted(set(keys)-set(DATA_TYPES)))
         if (not isinstance(self.data_types, tuple) or not self.data_types
-                or any(not isinstance(t, str) or t not in DATA_TYPES for t in self.data_types)
+                or any(not isinstance(t, str) or t not in allowed_types for t in self.data_types)
                 or len(set(self.data_types)) != len(self.data_types)):
             raise ValueError('Select the data types in scope, or Unknown if not yet determined.')
-        object.__setattr__(self, 'data_types', tuple(t for t in DATA_TYPES if t in self.data_types))
+        object.__setattr__(self, 'data_types', tuple(t for t in allowed_types if t in self.data_types))
 
 
 def data_scope(intake):
+    if intake.methodology:
+        d=intake.methodology.definition
+        values=[d['weights']['data_types'][t] for t in intake.data_types]
+        declared=d['weights']['sensitivity'][intake.data]
+        minimum=max((v for v in values if v is not None),default=0)
+        return {'data_types':list(intake.data_types),'declared_sensitivity':intake.data,
+                'declared_sensitivity_points':declared,'data_type_minimum_points':minimum,
+                'effective_sensitivity_points':max(declared,minimum),
+                'regulated_data_review':bool(set(intake.data_types)&set(d['regulated_types'])),
+                'uncertainties':['Data types are not fully classified; score and tier are provisional and may increase after clarification.'] if None in values else [],
+                'basis':'Requester-declared scope under captured organization methodology; not verified assurance.'}
     classifications = [DATA_TYPE_CLASSIFICATIONS[t] for t in intake.data_types]
     declared = {'Public': 5, 'Confidential': 10, 'Restricted': 20}[intake.data]
     minimum = max((DATA_SENSITIVITY_POINTS[c] for c in classifications if c), default=0)
@@ -101,19 +142,24 @@ def data_scope(intake):
 
 
 def exposure_scope(intake):
-    unqualified_system = SYSTEM_ACCESS_POINTS[intake.access]
+    weights=intake.methodology.definition['weights'] if intake.methodology else {
+        'system':SYSTEM_ACCESS_POINTS,'network':NETWORK_ACCESS_POINTS,'criticality':CRITICALITY_POINTS,'dependency':SERVICE_DEPENDENCY_POINTS}
+    unqualified_system = weights['system'][intake.access]
     if intake.access == 'None' or intake.system_data_criticality == 'Does not host or process critical data':
         system = 0
     elif intake.system_data_criticality == 'Hosts or processes critical data':
         system = unqualified_system
     else:
         system = None
-    network = NETWORK_ACCESS_POINTS[intake.network_access]
-    criticality = CRITICALITY_POINTS[intake.criticality]
-    dependency = SERVICE_DEPENDENCY_POINTS[intake.service_dependency]
+    network = weights['network'][intake.network_access]
+    criticality = weights['criticality'][intake.criticality]
+    dependency = weights['dependency'][intake.service_dependency]
     records = intake.data_volume_records
     # Explicit pilot record-count bands within the engine's existing 0–10 range.
     volume = None if records is None else 0 if records == 0 else 2 if records <= 1_000 else 5 if records <= 100_000 else 10
+    if intake.methodology:
+        band=volume_band(intake.methodology,records)
+        volume=None if band is None else intake.methodology.definition['volume']['points'][band]
     missing = [name for name, value in (
         ('system access', None if intake.access == 'Unknown' else system), ('network access', network), ('data volume', volume),
         ('business criticality', criticality), ('service dependency', dependency)) if value is None]
@@ -151,19 +197,28 @@ def risk_and_applicability(intake):
     exposure = exposure_scope(intake)
     points = (scope['effective_sensitivity_points'],
               exposure['effective_access_points'], exposure['effective_business_points'],
-              exposure['data_volume_points'] if exposure['data_volume_points'] is not None else 0, 0, 0, 0, 0)
+              weighted_scale_points(intake,scope,exposure) if intake.methodology else exposure['data_volume_points'] if exposure['data_volume_points'] is not None else 0, 0, 0, 0, 0)
     score = calculate_inherent_risk(InherentRiskInput(*points))
-    context = VendorRiskContext(sensitive_data=points[0] >= 10,
+    limits=intake.methodology.definition['uplift'] if intake.methodology else {'material_sensitivity_min':10,'material_dependency_min':15}
+    context = VendorRiskContext(sensitive_data=points[0] >= limits['material_sensitivity_min'],
                                 regulated_data=scope['regulated_data_review'],
                                 system_access=intake.access in ('Production', 'Privileged') or intake.network_access == 'Network connectivity',
                                 privileged_access=intake.access == 'Privileged', internet_facing=False,
-                                business_critical=exposure['effective_business_points'] >= 15)
-    profile = get_tier_profile(score, privileged_access=context.privileged_access, regulated_data=context.regulated_data)
-    applicable = evaluate_applicability(profile, context)
+                                business_critical=exposure['effective_business_points'] >= limits['material_dependency_min'])
+    if intake.methodology:
+        decision=scale_decision(intake,scope,exposure,score)
+        d=intake.methodology.definition
+        profile=get_tier_profile_for_tier(decision['final_tier'],privileged_access=context.privileged_access,regulated_data=context.regulated_data)
+        profile=replace(profile,required_controls=tuple(ControlRequirement(r['id'],r['domain'],r['title'])
+            for r in d['requirements'] if decision['final_tier'] in r['tiers']),policy_version=d['organization_id']+':'+d['version'])
+    else:
+        profile = get_tier_profile(score, privileged_access=context.privileged_access, regulated_data=context.regulated_data)
+    library={r['id']:ControlRequirement(r['id'],r['domain'],r['title']) for r in intake.methodology.definition['requirements']} if intake.methodology else None
+    applicable = evaluate_applicability(profile, context, control_library=library)
     if scope['uncertainties']:
         reason = 'Data scope is not fully classified; retain data-protection review pending clarification, not a confirmed sensitive-data assertion.'
         controls = {c.control_id: c for c in applicable.controls}
-        controls.setdefault('DATA-01', CONTROL_LIBRARY['DATA-01'])
+        controls.setdefault('DATA-01', (library or CONTROL_LIBRARY)['DATA-01'])
         applicable = replace(applicable, controls=tuple(controls.values()), review_required=True,
             review_reasons=applicable.review_reasons + (reason,),
             decisions=applicable.decisions + (ApplicabilityDecision('INTAKE-DATA-UNKNOWN', True, 'control', 'DATA-01', reason),))
@@ -178,10 +233,12 @@ def risk_and_applicability(intake):
         decisions = list(applicable.decisions)
         reason = exposure['uncertainties'][0] + ' Precautionary review is not a confirmed exposure assertion.'
         for control_id in precautionary:
-            controls.setdefault(control_id, CONTROL_LIBRARY[control_id])
+            controls.setdefault(control_id, (library or CONTROL_LIBRARY)[control_id])
             decisions.append(ApplicabilityDecision('INTAKE-UNKNOWN-' + control_id, True, 'control', control_id, reason))
         applicable = replace(applicable, controls=tuple(controls.values()), review_required=True,
                              review_reasons=applicable.review_reasons + (reason,), decisions=tuple(decisions))
+    if intake.methodology and decision['missing_inputs']:
+        applicable=replace(applicable,review_required=True,review_reasons=applicable.review_reasons+tuple(decision['missing_inputs']))
     return score, points, applicable
 
 
@@ -261,6 +318,12 @@ def build_assessment(intake, uploads=(), *, tls_threshold=None, dr_threshold=Non
     # Relevance and worklist services rebind sources. Supply the already bounded
     # bindings for this build so neither path reparses untrusted original bytes.
     with reuse_evidence_bindings(u.evidence for u in uploads):
+        if intake.methodology:
+            a=intake.methodology.definition['assurance']
+            if tls_threshold is not None or dr_threshold is not None:
+                raise ValueError('Edit organization methodology thresholds rather than overriding its captured snapshot.')
+            tls_threshold=TlsThreshold(a['tls_minimum_version'])
+            dr_threshold=DrThreshold(a['dr_max_test_age_days'],a['rto_minutes'],a['rpo_minutes'])
         return _build_assessment(intake, uploads, tls_threshold or TlsThreshold(12), dr_threshold or DrThreshold(365, 240, 60))
 
 
@@ -279,16 +342,22 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     scope = AssessmentScope(intake.assessment_id, intake.service, intake.environment, intake.as_of)
     mappings, links, evaluations = [], [], []
     for control in applicable.controls:
+        rule=next((r for r in intake.methodology.definition['requirements'] if r['id']==control.control_id),None) if intake.methodology else None
         criteria = {
             'ENC-01': tls_threshold.describe() + ' Encryption at rest and key management also require manual review.',
             'BCP-01': dr_threshold.describe(),
         }.get(control.control_id, control.requirement + ': provide current in-scope implementation and operating evidence for manual assessment.')
+        if rule:
+            criteria=(criteria+' Organization evidence expectation: '+rule['criteria']) if control.control_id in ('ENC-01','BCP-01') else rule['criteria']
         threshold = {'ENC-01': tls_threshold, 'BCP-01': dr_threshold}.get(control.control_id, CustomerThreshold(criteria))
-        requirement = RequirementContext(control.control_id, 'synthetic-example-requirements', '2026.1',
+        policy_id=intake.methodology.definition['organization_id'] if intake.methodology else 'synthetic-example-requirements'
+        policy_version=intake.methodology.definition['version'] if intake.methodology else '2026.1'
+        kinds=tuple(rule['evidence_kinds']) if rule else ('policy','assertion','configuration','test')
+        requirement = RequirementContext(control.control_id, policy_id, policy_version,
             'Synthetic local example; not organizational approval', intake.as_of, intake.service, intake.environment,
-            scope_label, 90 if control.control_id == 'ENC-01' else dr_threshold.max_test_age_days if control.control_id == 'BCP-01' else 365,
+            scope_label, rule['max_age_days'] if rule else 90 if control.control_id == 'ENC-01' else dr_threshold.max_test_age_days if control.control_id == 'BCP-01' else 365,
             business_use_case=intake.use_case, required_evidence=(criteria,),
-            evidence_expectation=EvidenceExpectation('2026.1', ('policy', 'assertion', 'configuration', 'test')))
+            evidence_expectation=EvidenceExpectation(policy_version, kinds))
         documents = tuple(u.evidence.source for u in uploads if control.control_id in u.requirements)
         proposals = []
         if control.control_id in ('ENC-01', 'BCP-01'):
@@ -302,7 +371,7 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
                 rationale='Uploader selected this requirement for this file. This is routing for manual review, not proof of relevance or effectiveness.') for d in documents))
         need = EvidenceNeed('evidence-' + control.control_id, criteria, 'Current source evidence of: ' + criteria,
             f'Provide current {intake.service} evidence for {control.requirement}. {criteria}',
-            ('policy', 'assertion', 'configuration', 'test'), max_age_days=requirement.max_age_days)
+            kinds, max_age_days=requirement.max_age_days)
         mappings.append(RequirementMapping(control.control_id, requirement, threshold, (need,)))
         links.append(AssuranceLink(intake.assessment_id, control.control_id, case))
     scenario = WorklistScenario(intake.assessment_id, intake.vendor, scope, applicable, tuple(mappings), tuple(links))
@@ -311,6 +380,7 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     # no specialist factual interpretations or FactReviews are invented from free text.
     screening = evaluate_pilot_requirements(tuple(u.evidence.document for u in uploads),
                                           privileged_access=intake.access == 'Privileged', today=intake.as_of)
+    if intake.methodology:screening=()  # Legacy fixed-policy screening is not organization policy.
     scope_data = data_scope(intake)
     exposure_data = exposure_scope(intake)
     displayed_points = (points[0],
@@ -327,6 +397,20 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
                 f"Data volume: {intake.data_volume_records if intake.data_volume_records is not None else 'Unknown'} records; pilot bands 0=0, 1–1,000=2, 1,001–100,000=5, over 100,000=10 points.",
                 f"Service dependency: {intake.service_dependency}; business criticality: {intake.criticality}. Business exposure uses the higher known contribution, not their sum.")
     drivers += tuple(exposure_data['uncertainties'])
+    decision=scale_decision(intake,scope_data,exposure_data,score) if intake.methodology else None
+    if decision:
+        # The legacy volume driver is potential weighted points, not another charge
+        # under the scale-uplift strategy.
+        drivers=tuple(d for d in drivers if not d.startswith('Data volume:')) + (
+            'Data/user scale: '+('excluded from baseline; at most one tier uplift' if decision['strategy']=='scale_uplift' else str(points[3])+' points, highest eligible scale contribution only'),
+            'Record volume: '+str(intake.data_volume_records)+' records; active client users: '+str(intake.active_client_users)+'; workforce: '+str(intake.workforce_size),)
+        drivers=tuple(d for d in drivers if not d.startswith('Data volume:'))
+        exposure_data=dict(exposure_data,policy=intake.organization_id+':'+intake.methodology.definition['version'],
+                           data_volume_points_applied=points[3],basis='Captured organization methodology; scale is never counted both as points and uplift.')
+        drivers += ('Organization methodology: '+intake.organization_id+' / '+intake.methodology.definition['version'],
+            f"Baseline score {decision['baseline_score']}, {decision['baseline_tier']}; scored subtotal {decision['scored_subtotal']}; final tier {decision['final_tier']}. {decision['reason']}",
+            'Methodology strategy: '+decision['strategy']+'. Volume/user scale is not also added as a second uplift.')
+        drivers += tuple('Unassessed methodology input: '+m for m in decision['missing_inputs'])
     context = {'vendor': intake.vendor, 'service': intake.service, 'use_case': intake.use_case,
         'environment': intake.environment, 'data': intake.data, 'access': intake.access, 'criticality': intake.criticality,
         'data_scope': scope_data,
@@ -337,6 +421,16 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
         'applicability_policy': applicable.policy_version, 'evaluations': evaluations,
         'screening': [dict(requirement_id=r.requirement_id, draft_text_signal=r.outcome, not_control_result=True, reason=r.reason, follow_up=r.follow_up,
                            citations=[dict(filename=c.filename, location=c.location, excerpt=c.excerpt) for c in r.citations]) for r in screening]}
+    if decision:
+        context.update(organization_id=intake.organization_id,methodology_snapshot=intake.methodology.definition,
+            methodology_sha256=intake.methodology.fingerprint,tier_decision=decision,
+            adoption_inputs={'active_client_users':intake.active_client_users,'workforce_size':intake.workforce_size,
+                'basis':intake.user_count_basis,'measurement_days':intake.methodology.definition['adoption']['window_days'],
+                'scale_overlap_reason':intake.scale_overlap_reason})
+        context['tier_status']='Provisional — incomplete methodology inputs' if decision['provisional'] else 'Illustrative organization methodology result; not approved risk'
+        context['criteria_basis']='Captured pilot organization methodology; requester declarations and supplied criteria, not verified compliance or approved vendor risk.'
+    tier=(('Tier '+decision['final_tier'][1:]+' — '+intake.methodology.definition['tier_names'][decision['final_tier']]) if decision else tier_from_score(score))
+    rating=({'T1':'Critical','T2':'High','T3':'Moderate','T4':'Low'}[decision['final_tier']] if decision else rating_from_score(score))
     return UploadAssessment(intake.assessment_id, bool(uploads), f'{intake.data} / {intake.access} / {intake.criticality}',
-        scenario, worklist, score, rating_from_score(score), tier_from_score(score), drivers,
+        scenario, worklist, score, rating, tier, drivers,
         tuple(u.evidence for u in uploads if u.requirements), tuple(u.evidence for u in uploads if not u.requirements), context)

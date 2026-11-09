@@ -21,9 +21,13 @@ def test_customer_exposure_fields_persist_export_and_reset(no_live_effects, pack
     widget(at.selectbox, 'Business criticality').set_value('Important')
     widget(at.number_input, 'Estimated records in scope').set_value(100_001)
     widget(at.selectbox, 'Dependency on this service').set_value('Critical dependency / no viable workaround')
-    run(at);widget(at.button, 'Create assessment').click();run(at)
+    widget(at.number_input, 'Active or expected client users').set_value(0)
+    widget(at.selectbox, 'Is scale already included in the baseline assessment?').set_value('No')
+    widget(at.selectbox, 'Critical consequence under organization methodology').set_value('Identified'); run(at)
+    widget(at.text_input, 'Explain the critical consequence').set_value('Synthetic essential enterprise operation would stop under organization policy.'); run(at)
+    widget(at.button, 'Create assessment').click();run(at)
     model = at.session_state['customer_assessment:model']
-    assert model.inherent_score == 80 and model.inherent_tier == 'Tier 1 — Critical'
+    assert model.inherent_score == 70 and model.inherent_tier == 'Tier 1 — Critical'
     assert not model.customer_context['exposure_scope']['missing_inputs']
     for target in ('About vendor','Upload evidence','Evaluate','Review gaps','Report'):
         stage(at,target)
@@ -35,6 +39,8 @@ def test_customer_exposure_fields_persist_export_and_reset(no_live_effects, pack
         assert scope['system_access']=='Privileged' and scope['network_access']=='Network connectivity'
         assert scope['effective_access_points']==25 and scope['effective_business_points']==20
         assert scope['data_volume_points']==10
+        assert scope['data_volume_points_applied']==0
+        assert report['assessment_context']['tier_decision']['baseline_tier']=='T2'
         assert '100001 records' in z.read('summary.html').decode()
         assert 'Critical dependency / no viable workaround' in z.read('summary.html').decode()
         assert report['risk']['residual_score'] is None and not report['review_completion']['vendor_approved']

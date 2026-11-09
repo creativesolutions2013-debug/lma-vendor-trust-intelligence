@@ -81,6 +81,7 @@ def _decision(
 def evaluate_applicability(
     profile: TierProfile,
     context: VendorRiskContext,
+    *, control_library=None,
 ) -> ApplicabilityResult:
     """
     Apply contextual rules on top of the tier baseline.
@@ -402,7 +403,7 @@ def evaluate_applicability(
     )
 
     controls = tuple(
-        CONTROL_LIBRARY[control_id]
+        (control_library if control_library is not None else CONTROL_LIBRARY)[control_id]
         for control_id in control_ids
     )
 

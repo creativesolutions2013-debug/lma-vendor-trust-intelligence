@@ -18,6 +18,8 @@ synthetic vendor/service context, attach local synthetic PDF/DOCX/TXT documents,
 review exact source quotations and gaps, record draft findings, then finish and
 export the original uploaded bytes in a source-traceable ZIP.
 
+The sidebar’s [Organization methodology pilot](docs/Organization_Methodology_Pilot.md) provides editable default tiering/scale bands and full policy import/export. Each new assessment captures its organization/version and exports the configuration snapshot. Settings remain session-only; this does not provide production tenant administration.
+
 This local, memory-only first slice uses the existing applicability engine and
 source-bound manual review workflow. TLS and DR now have limited source-cited candidate extraction and comparisons
 against example customer thresholds; all facts and meanings require human confirmation.
