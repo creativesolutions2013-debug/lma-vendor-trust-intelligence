@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
 import json
+import pytest
 
 from streamlit.testing.v1 import AppTest
 from test_guided_assessment_demo_ui import no_live_effects, packages, run, widget
@@ -94,3 +95,28 @@ def test_invalid_new_organization_id_is_a_validation_error_not_app_crash(no_live
     assert not at.exception
     widget(at.button,'Apply pilot methodology').click();run(at)
     assert at.error and at.session_state['pilot_methodology:registry'].organizations==('pilot-default',)
+
+
+@pytest.mark.parametrize('field', ['rto_minutes','rpo_minutes'])
+def test_oversized_recovery_import_does_not_break_settings_or_replace_profile(no_live_effects, field):
+    at=start();original=at.session_state['pilot_methodology:registry'].get('pilot-default')
+    widget(at.radio,'Configure methodology').set_value('Import full configuration');run(at)
+    d=default_definition('pilot-default','2');d['assurance'][field]=2**53
+    at.get('file_uploader')[0].upload('oversized.json',json.dumps(d).encode());run(at)
+    widget(at.button,'Apply imported methodology').click();run(at)
+    assert at.error and not at.exception
+    assert at.session_state['pilot_methodology:registry'].get('pilot-default').fingerprint==original.fingerprint
+    widget(at.radio,'Configure methodology').set_value('Common settings');run(at)
+    assert widget(at.number_input,'Maximum achieved RTO minutes (blank means not applicable)').value==240
+    assert widget(at.number_input,'Maximum achieved RPO minutes (blank means not applicable)').value==60
+
+
+@pytest.mark.parametrize('value', [None,2**53-1])
+def test_allowed_nullable_or_maximum_recovery_values_render_after_import(no_live_effects,value):
+    at=start();widget(at.radio,'Configure methodology').set_value('Import full configuration');run(at)
+    d=default_definition('pilot-default','2');d['assurance'].update(rto_minutes=value,rpo_minutes=value)
+    at.get('file_uploader')[0].upload('allowed.json',json.dumps(d).encode());run(at)
+    widget(at.button,'Apply imported methodology').click();run(at)
+    assert not at.exception and not at.error
+    assert widget(at.number_input,'Maximum achieved RTO minutes (blank means not applicable)').value==value
+    assert widget(at.number_input,'Maximum achieved RPO minutes (blank means not applicable)').value==value

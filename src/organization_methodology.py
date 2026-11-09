@@ -10,6 +10,7 @@ import re
 from src.tiering import CONTROL_LIBRARY, get_tier_profile
 
 MAX_POLICY_BYTES = 128 * 1024
+MAX_RECOVERY_MINUTES = 2**53 - 1  # Streamlit/JavaScript safe-integer bound.
 TIER_NAMES = {'T1': 'Critical', 'T2': 'High', 'T3': 'Moderate', 'T4': 'Low'}
 
 
@@ -122,6 +123,8 @@ class OrganizationMethodology:
         from src.tls_assurance import TlsThreshold
         from src.dr_assurance import DrThreshold
         a=d['assurance'];TlsThreshold(a['tls_minimum_version']);DrThreshold(a['dr_max_test_age_days'],a['rto_minutes'],a['rpo_minutes'])
+        for objective in (a['rto_minutes'],a['rpo_minutes']):
+            if objective is not None:_integer(objective,0,MAX_RECOVERY_MINUTES)
         if not isinstance(d['requirements'],list) or not 1<=len(d['requirements'])<=64:raise ValueError('Provide 1–64 requirement definitions.')
         ids=[]
         for rule in d['requirements']:

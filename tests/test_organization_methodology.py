@@ -207,3 +207,11 @@ def test_adoption_requires_material_service_dependency_not_general_business_crit
         assert decision(material)['final_tier']=='T2'
         unknown=replace(no_dependency,service_dependency='Unknown')
         assert not decision(unknown)['candidate_scale_uplift'] and decision(unknown)['provisional']
+
+
+@pytest.mark.parametrize('field', ['rto_minutes','rpo_minutes'])
+def test_recovery_objectives_are_bounded_before_profile_activation(field):
+    registry=MethodologyRegistry();original=policy();registry.publish(original,'org-a')
+    d=original.definition;d['version']='2';d['assurance'][field]=2**53
+    with pytest.raises(ValueError):registry.publish(OrganizationMethodology.from_dict(d),'org-a')
+    assert registry.get('org-a').fingerprint==original.fingerprint

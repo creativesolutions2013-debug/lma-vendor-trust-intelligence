@@ -1,6 +1,6 @@
 """Session-only organization configuration, separate from requester intake."""
 import streamlit as st
-from src.organization_methodology import OrganizationMethodology, MethodologyRegistry, default_definition, MAX_POLICY_BYTES
+from src.organization_methodology import OrganizationMethodology, MethodologyRegistry, default_definition, MAX_POLICY_BYTES, MAX_RECOVERY_MINUTES
 
 KEY='pilot_methodology:'
 
@@ -41,8 +41,8 @@ def render_methodology_settings():
                 tls=st.selectbox('Minimum TLS version',(12,13),index=(12,13).index(d['assurance']['tls_minimum_version']),format_func=lambda n:f'TLS {n//10}.{n%10}',key=prefix+'tls')
                 tls_age=st.number_input('TLS evidence freshness days',min_value=1,max_value=3650,value=next(r['max_age_days'] for r in d['requirements'] if r['id']=='ENC-01'),key=prefix+'tls_age')
                 interval=st.number_input('Recovery exercise interval days',min_value=1,max_value=3650,value=d['assurance']['dr_max_test_age_days'],key=prefix+'interval')
-                rto=st.number_input('Maximum achieved RTO minutes (blank means not applicable)',min_value=0,value=d['assurance']['rto_minutes'],step=1,key=prefix+'rto')
-                rpo=st.number_input('Maximum achieved RPO minutes (blank means not applicable)',min_value=0,value=d['assurance']['rpo_minutes'],step=1,key=prefix+'rpo')
+                rto=st.number_input('Maximum achieved RTO minutes (blank means not applicable)',min_value=0,max_value=MAX_RECOVERY_MINUTES,value=d['assurance']['rto_minutes'],step=1,key=prefix+'rto')
+                rpo=st.number_input('Maximum achieved RPO minutes (blank means not applicable)',min_value=0,max_value=MAX_RECOVERY_MINUTES,value=d['assurance']['rpo_minutes'],step=1,key=prefix+'rpo')
             if st.button('Apply pilot methodology',key=prefix+'apply'):
                 d.update(organization_id=target,version=version,strategy=strategy)
                 d['adoption'].update(low_count=low_users,high_count=high_users,low_percent=low_pct,high_percent=high_pct,window_days=days)
