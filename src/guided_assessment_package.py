@@ -77,6 +77,9 @@ def summary_html(report):
     context = report.get('assessment_context')
     if context:
         parts.insert(3, f'<p>Vendor: {e(context["vendor"])} · Service: {e(context["service"])} · Use case: {e(context["use_case"])}</p><p>{e(context["limitations"])}</p><p>{e(context["criteria_basis"])}</p>')
+        if context.get('methodology_snapshot'):
+            d=context['tier_decision'];p=context['methodology_snapshot']
+            parts.insert(4,f'<p>Organization methodology: {e(p["organization_id"])} / {e(p["version"])} · {e(p["strategy"])}. Baseline score {e(d["baseline_score"])} ({e(d["baseline_tier"])}); scored subtotal {e(d["scored_subtotal"])}; final tier {e(d["final_tier"])}. {e(d["reason"])} · {e(context["tier_status"])}</p><p><a href="methodology.json">Captured methodology configuration</a> · SHA-256 {e(context["methodology_sha256"])}</p>')
     for driver in risk['drivers'] + risk['residual_drivers']:
         parts.append(f'<li>{e(driver)}</li>')
     parts.append('</ul><h2>Requirement outcomes and policy thresholds</h2>')
@@ -121,6 +124,11 @@ def assessment_package(report, sources):
     if {a['document_id'] for a in manifest['artifacts']} != set(originals):
         raise ValueError('Artifact inventory changed; reopen the review.')
     files = {'summary.html': summary_html(report), 'report.json': json_bytes(report), 'manifest.json': manifest_content}
+    context=report.get('assessment_context') or {}
+    if context.get('methodology_snapshot'):
+        policy=json.dumps(context['methodology_snapshot'],sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False).encode()
+        if sha256(policy).hexdigest()!=context['methodology_sha256']:raise ValueError('Captured methodology digest mismatch.')
+        files['methodology.json']=policy
     for artifact in manifest['artifacts']:
         bound, role = originals[artifact['document_id']]
         expected = artifact_manifest([(bound, role)], {artifact['document_id']: artifact['requirement_links']})['artifacts'][0]

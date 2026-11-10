@@ -79,7 +79,7 @@ def test_real_uploaded_files_to_completion_package_and_reassessment(no_live_effe
     assert 'customer_assessment:completion' not in at.session_state
     stage(at,'Report')
     assert any('current upload selections' in x.value for x in at.warning)
-    assert not at.get('download_button')
+    assert not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at,'Upload evidence')
     # Pending bytes also survive navigation; no manual reupload is needed.
     assert len(at.multiselect)==3
@@ -106,7 +106,7 @@ def test_empty_bad_scans_and_unrelated_files_remain_honest(no_live_effects,packa
     stage(at,'Upload evidence')
     at.get('file_uploader')[0].upload('bad.pdf',b'not a pdf');run(at)
     assert at.error and widget(at.button,'Evaluate attached evidence').disabled
-    stage(at,'Report');assert at.warning and not at.get('download_button')
+    stage(at,'Report');assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at,'Upload evidence');widget(at.button,'Discard new file selections').click();run(at);at.get('file_uploader')[0].set_value([('menu.txt',b'Synthetic lunch menu.','text/plain')]);run(at)
     assert not at.multiselect[0].value
     widget(at.button,'Evaluate attached evidence').click();run(at)
@@ -119,7 +119,7 @@ def test_pending_bytes_remain_in_memory_across_navigation_and_clear(no_live_effe
     run(at)
     assert len(at.multiselect)==1
     stage(at,'Report')
-    assert at.warning and not at.get('download_button')
+    assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at,'Upload evidence')
     assert len(at.multiselect)==1
     assert 'pending.txt' in shown(at)
@@ -149,7 +149,7 @@ def test_unsaved_metadata_survives_every_stage_and_cannot_restore_old_export(no_
     assert 'customer_assessment:completion' not in at.session_state
     for target in ('Evaluate', 'Review gaps', 'Report'):
         stage(at, target)
-        assert at.warning and not at.get('download_button')
+        assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
         stage(at, 'Upload evidence')
         assert [f.value for f in at.multiselect] == [['BCP-01'], ['BCP-01']]
         assert [f.value for f in at.date_input] == [date(2026,10,1)]*2

@@ -116,9 +116,14 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
     This narrow extractor consequently cannot propose a whole-control Met.
     """
     evaluator = TLS if requirement_id == 'ENC-01' else DR
+    policy=getattr(intake,'methodology',None)
+    rule=next((r for r in policy.definition['requirements'] if r['id']==requirement_id),None) if policy else None
+    max_age_days=rule['max_age_days'] if rule else 90 if requirement_id=='ENC-01' else threshold.max_test_age_days
     observations, facts, sources, eligible = [], [], [], []
     for bound in bounds:
-        rows, extracted, declared, traces, issues, observed = _context(bound, intake, requirement_id, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
+        rows, extracted, declared, traces, issues, observed = _context(bound, intake, requirement_id, max_age_days)
+        if rule and bound.source.evidence_kind not in rule['evidence_kinds']:
+            issues += ('Source kind is not accepted by the captured organization requirement.',)
         source_record = dict(document_id=bound.source.document_id, filename=bound.document.filename,
                              extracted=extracted, declared=declared, context_citations=traces, uncertainties=list(issues))
         sources.append(source_record)
@@ -148,10 +153,10 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
             if not limitation and (direction != 'unknown' or dimension in ('enabled_version', 'disabled_version')): eligible.append((observation, direction_source))
 
         for ordinal, location, line, source_line in _clauses(rows):
-            line_uncertainty = _line_uncertainties(line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
+            line_uncertainty = _line_uncertainties(line, intake.environment, observed, intake.as_of, max_age_days)
             if re.search(r'\b(?:except|or|while|until|alternatively|otherwise|instead|rather)\b|\bbut\s+not\b|;\s*not\b|\?', source_line, re.I):
                 line_uncertainty += ('Enclosing source line contains an exception, alternative, qualification or question; verify the complete context before a current comparison.',)
-            line_uncertainty += _enclosing_qualifications(source_line, line, intake.environment, observed, intake.as_of, 90 if requirement_id == 'ENC-01' else threshold.max_test_age_days)
+            line_uncertainty += _enclosing_qualifications(source_line, line, intake.environment, observed, intake.as_of, max_age_days)
             # Keep limitations and exclusions even when metric extraction is unavailable.
             scope_marker = bool(re.search(r'\b(exclud\w*|not tested|untested|incomplete)\b', line, re.I))
             negated_scope = scope_marker and bool(re.search(r"\b(?:no|none|never|not|neither|without|cannot)\b[^;.!?]*\b(?:exclud\w*|untested|incomplete)\b|n't\b[^;.!?]*\bexclud\w*", line, re.I))

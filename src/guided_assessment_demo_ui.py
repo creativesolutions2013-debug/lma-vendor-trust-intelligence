@@ -97,7 +97,14 @@ def _matches(model):
 
 def _risk_positions(risk):
     inherent, residual = st.columns(2)
-    inherent.metric("Inherent risk", f"{risk['inherent_score']} · {risk['inherent_rating']}")
+    if risk.get('tier_decision'):
+        decision=risk['tier_decision']
+        inherent.metric('Inherent risk tier',risk['inherent_tier'])
+        inherent.caption(f"Baseline score: {decision['baseline_score']} · baseline {decision['baseline_tier']} · scored subtotal: {decision['scored_subtotal']} · method {decision['strategy']}")
+        inherent.write(decision['reason'])
+        if decision['provisional']:inherent.warning('Provisional: methodology inputs or exposure remain unassessed.')
+    else:
+        inherent.metric("Inherent risk", f"{risk['inherent_score']} · {risk['inherent_rating']}")
     inherent.caption(risk["inherent_tier"])
     for driver in risk["drivers"]:
         inherent.caption(driver)

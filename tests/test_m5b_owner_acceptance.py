@@ -85,7 +85,7 @@ def test_cedarline_real_upload_one_click_metadata_threshold_and_export(no_live_e
     suggestions(at)[0].click()
     run(at)
     stage(at, "Report")
-    assert not at.get("download_button")  # Must reevaluate, never export stale evidence.
+    assert not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']  # Must reevaluate, never export stale evidence.
     stage(at, "Upload evidence")
     suggestions(at)[1].click()
     run(at)

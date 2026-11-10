@@ -319,8 +319,14 @@ def get_tier_profile(
     regulated_data: bool = False,
     privileged_access: bool = False,
 ) -> TierProfile:
-    tier = tier_code_from_score(score)
+    return get_tier_profile_for_tier(tier_code_from_score(score), ai_enabled=ai_enabled,
+                                     regulated_data=regulated_data, privileged_access=privileged_access)
 
+
+def get_tier_profile_for_tier(tier: str, *, ai_enabled=False, regulated_data=False, privileged_access=False) -> TierProfile:
+    """Select an existing tier's requirements without manufacturing a risk score."""
+    if tier not in _TIER_CONTROL_IDS:
+        raise ValueError("Choose an existing tier code.")
     control_ids = list(_TIER_CONTROL_IDS[tier])
     evidence_ids = list(_TIER_EVIDENCE_IDS[tier])
 

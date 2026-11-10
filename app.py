@@ -181,6 +181,7 @@ from src.response_reconciliation import (
     reconcile_evidence_response,
 )
 from src.scoring import (
+    DATA_SENSITIVITY_POINTS,
     InherentRiskInput,
     ResidualRiskContext,
     calculate_inherent_risk,
@@ -4939,14 +4940,7 @@ def render_intake():
 
         st.markdown("#### Risk factors")
 
-        data_map = {
-            "Public": 0,
-            "Internal": 5,
-            "Confidential": 10,
-            "PII": 15,
-            "Sensitive PII": 20,
-            "PHI / PCI / Credentials": 25,
-        }
+        data_map = DATA_SENSITIVITY_POINTS
         crit_map = {
             "Low": 5,
             "Moderate": 10,
