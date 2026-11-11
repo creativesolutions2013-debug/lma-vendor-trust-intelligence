@@ -240,11 +240,13 @@ def _uploads(intake):
     if not combined: st.info('No files selected. You can evaluate an empty assessment to see the evidence requests; no control will be marked satisfied.')
 
 
-def _details(row):
+def _details(row, evaluation=None):
     st.write('Customer example threshold: ' + row.threshold)
     st.text(f'{row.requirement.customer_policy_id} v{row.requirement.policy_version} · {row.requirement.service} · {row.requirement.environment}')
     st.info(row.outcome)
     st.text('Next action: ' + row.next_action)
+    if evaluation:
+        _narrative_alerts(evaluation)
     if row.review:
         displayed = set()
         for fact in row.review.facts:
@@ -265,9 +267,24 @@ def _details(row):
         st.caption('No specialist technical interpretation is supplied for arbitrary uploaded documents. Quotation matches and uploader routing do not establish meaning, operating effectiveness or compliance.')
 
 
+def _narrative_alerts(evaluation):
+    for alert in evaluation.get('review_alerts', ()):
+        st.warning(evaluation['requirement_id'] + ' · Narrative recovery statement — manual review required')
+        st.caption('Unconfirmed source context; meaning still needs review.' if alert['eligible_for_current_review'] else
+                   'Context-limited statement — not established as current in-scope exercise evidence.')
+        st.caption(alert['filename'] + ' · ' + alert['location'])
+        st.code(alert['quote'], language=None)
+        for citation in alert.get('context_citations', ()):
+            st.caption('Qualifying source context: ' + citation['filename'] + ' · ' + citation['location'])
+            st.code(citation['quote'], language=None)
+        for uncertainty in alert['uncertainties']: st.caption(uncertainty)
+        st.text('Next action: ' + alert['next_action'])
+
+
 def _evaluation(evaluation):
     st.markdown('**' + evaluation['requirement_id'] + ' · ' + evaluation['status'] + '**')
     st.text('Customer example threshold: ' + evaluation['threshold'])
+    _narrative_alerts(evaluation)
     facts = evaluation['facts']
     if facts:
         st.dataframe([{'Proposed comparison (unconfirmed)': f['comparison'], 'Source': f['filename'] + ' · ' + f['location'],
@@ -304,7 +321,8 @@ def _evaluate(model):
     st.caption('Candidate meanings require analyst confirmation. Draft review annotations do not confirm facts. TLS cipher suites, encryption at rest and other control families remain manual; AI and external calls are off.')
     selected = st.selectbox('Requirement details', [r.requirement_id for r in model.worklist.rows], key=PREFIX + 'detail')
     with st.expander('Full requirement and source review'):
-        _details(next(r for r in model.worklist.rows if r.requirement_id == selected))
+        _details(next(r for r in model.worklist.rows if r.requirement_id == selected),
+                 next((e for e in model.customer_context['evaluations'] if e['requirement_id'] == selected), None))
 
 
 def _review(model):
@@ -315,7 +333,7 @@ def _review(model):
                             on_change=lambda: st.session_state.pop(PREFIX + 'reason', None))
     row = next(r for r in model.worklist.rows if r.requirement_id == selected)
     st.write(f'Finding/review for {row.requirement_id} · {row.title}')
-    _details(row)
+    _details(row, next((e for e in model.customer_context['evaluations'] if e['requirement_id'] == selected), None))
     action = st.radio('Draft action', ACTIONS, format_func=lambda a: f'Create finding for {selected}' if a == 'Create Finding' else 'Accept draft for discussion only' if a == 'Accept' else a, key=PREFIX + 'action')
     rationale = st.text_area('Rationale', max_chars=1200, key=PREFIX + 'reason')
     if st.button('Record draft review', disabled=not rationale.strip()):

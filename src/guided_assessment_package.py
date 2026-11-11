@@ -102,6 +102,11 @@ def summary_html(report):
         parts.append('<h2>Unconfirmed source-cited threshold comparisons</h2>')
         for evaluation in context['evaluations']:
             parts.append(f'<h3>{e(evaluation["requirement_id"])} · {e(evaluation["status"])}</h3><p>{e(evaluation["threshold"])}</p>')
+            for alert in evaluation.get('review_alerts', ()):
+                context_label = 'Unconfirmed source context' if alert['eligible_for_current_review'] else 'Context-limited statement; not current in-scope proof'
+                parts.append(f'<h4>Narrative recovery statement — manual review required</h4><p>{e(context_label)} · {e(alert["filename"])} · {e(alert["location"])}</p><blockquote>{e(alert["quote"])}</blockquote><p>{e("; ".join(alert["uncertainties"]))}</p><p>Next action: {e(alert["next_action"])}</p>')
+                for citation in alert.get('context_citations', ()):
+                    parts.append(f'<p>Qualifying source context: {e(citation["filename"])} · {e(citation["location"])}</p><blockquote>{e(citation["quote"])}</blockquote>')
             for fact in evaluation['facts']:
                 parts.append(f'<p>{e(fact["comparison"])} · {e(fact["filename"])} · {e(fact["location"])}</p><blockquote>{e(fact["quote"])}</blockquote><p>{e("; ".join(fact["uncertainties"]))}</p>')
             for source in evaluation['sources']:
