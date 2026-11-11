@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/m5d-rc-revalidation
       - feature/m4c2b-tenant-read-boundary
 
 jobs:
@@ -31,7 +32,7 @@ jobs:
           pip install pytest
 
       - name: Compile application and M5D evaluator before tests
-        run: python -m py_compile app.py src/upload_evaluation.py
+        run: python -m py_compile app.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_package.py
 
       - name: Run tests
         run: pytest -q
@@ -47,6 +48,19 @@ jobs:
         with:
           name: m5c-baseline
           path: m5c-baseline.json
+          if-no-files-found: warn
+
+      - name: Record narrative manual-review visibility (not an exception score)
+        env:
+          M5D_NARRATIVE_REPORT_PATH: m5d-narrative-review.json
+        run: python -m pytest -q -s tests/test_m5d_narrative_attention.py
+
+      - name: Publish narrative manual-review report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5d-narrative-review
+          path: m5d-narrative-review.json
           if-no-files-found: warn
 
   postgres-compatibility:
@@ -87,7 +101,7 @@ jobs:
           pip install pytest
 
       - name: Compile application and M5D evaluator before PostgreSQL tests
-        run: python -m py_compile app.py src/upload_evaluation.py
+        run: python -m py_compile app.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_package.py
 
       - name: Apply Alembic migrations to PostgreSQL
         run: alembic upgrade head
