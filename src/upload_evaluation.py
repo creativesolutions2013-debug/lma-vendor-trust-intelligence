@@ -14,7 +14,7 @@ from src.evidence_source_validation import segment_id
 from src.tls_assurance import TlsThreshold, evaluate_tls, tls_direction, TLS_SIGNALS
 from src.dr_assurance import DrThreshold, evaluate_dr, dr_direction, DR_SIGNALS
 
-VERSION = 'M5B-candidates-12'
+VERSION = 'M5D-candidates-13'
 MAX_LINES = 2000
 MAX_LINE_CHARS = 2000
 MAX_FACTS = 128
@@ -119,7 +119,7 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
     policy=getattr(intake,'methodology',None)
     rule=next((r for r in policy.definition['requirements'] if r['id']==requirement_id),None) if policy else None
     max_age_days=rule['max_age_days'] if rule else 90 if requirement_id=='ENC-01' else threshold.max_test_age_days
-    observations, facts, sources, eligible = [], [], [], []
+    observations, facts, sources, eligible, review_alerts = [], [], [], [], []
     for bound in bounds:
         rows, extracted, declared, traces, issues, observed = _context(bound, intake, requirement_id, max_age_days)
         if rule and bound.source.evidence_kind not in rule['evidence_kinds']:
@@ -129,6 +129,8 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
         sources.append(source_record)
 
         first_fact = len(facts)
+        first_alert = len(review_alerts)
+        alert_budget_exceeded = False
         line_uncertainty = ()
         source_line = None
 
@@ -228,11 +230,47 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
                 if not re.search(r'\b(RTO|RPO)\b', line, re.I): continue
                 for dimension, value, uncertainty in _dr_metrics(line, extracted['kind'], source_line):
                     add(dimension, value, ordinal, location, line, subject, uncertainty)
+        if requirement_id == 'BCP-01':
+            # Whole source lines only: splitting a reported/qualified statement
+            # must never promote a fragment to a direct recovery observation.
+            for index, (ordinal, location, line) in enumerate(rows):
+                if not _narrative_recovery_result(line):
+                    continue
+                if len(review_alerts) - first_alert >= MAX_FACTS:
+                    alert_budget_exceeded = True
+                    source_record['uncertainties'].append('Narrative review is incomplete (alert budget exceeded); manually review the full original.')
+                    break
+                context_issues = tuple(dict.fromkeys((*issues,
+                    *_line_uncertainties(line, intake.environment, observed, intake.as_of, max_age_days))))
+                context_citations = []
+                if index:
+                    prev_ordinal, prev_location, previous = rows[index - 1]
+                    if previous.endswith(':') or re.search(
+                            r'\b(?:hypothetical|example|planned|historical|according to)\b|'
+                            r'\b(?:reports|states|says|claims|confirms)(?:\s+that)?\s*$', previous, re.I):
+                        context_issues += ('Preceding source context may attribute or qualify this narrative; confirm its relationship before treating it as a current exercise result.',)
+                        context_citations.append(_citation(bound, prev_ordinal, prev_location, previous))
+                review_alerts.append({**_citation(bound, ordinal, location, line),
+                    'kind': 'narrative_recovery', 'confirmed': False, 'authoritative': False,
+                    'eligible_for_current_review': not context_issues,
+                    'context_citations': context_citations,
+                    'uncertainties': list(context_issues) + [
+                        'Narrative recovery timing/data loss requires analyst interpretation; no exact achieved RTO/RPO or threshold breach is inferred.',
+                        'Meaning, scope and source authenticity remain unconfirmed.'],
+                    'next_action': ('Resolve the cited source-context limitations before interpreting this recovery statement.' if context_issues else
+                        'Confirm the complete recovery/data-loss meaning in the cited exercise, then compare it with the captured customer threshold.')})
         if any('incomplete:' in message for message in source_record['uncertainties']):
             for fact in facts[first_fact:]:
                 fact['eligible_for_preview'] = False
                 fact['uncertainties'] = list(dict.fromkeys((*fact['uncertainties'], *source_record['uncertainties'])))
             eligible = [(f,s) for f,s in eligible if s.document_id != bound.source.document_id]
+        # The review-cue budget must not suppress an independently extracted
+        # adverse metric. Existing fact/context incompleteness still gates both.
+        if alert_budget_exceeded or any('incomplete:' in message for message in source_record['uncertainties']):
+            for alert in review_alerts[first_alert:]:
+                alert['eligible_for_current_review'] = False
+                alert['uncertainties'] = list(dict.fromkeys((*alert['uncertainties'], *source_record['uncertainties'])))
+                alert['next_action'] = 'Review the full original; extraction is incomplete before any recovery interpretation.'
     result = evaluator.evaluate(threshold, tuple(eligible), intake.as_of)
     adverse = [f for f in facts if f['direction'] == 'adverse']
     missing = [c for c in result.checks if c.status == 'missing']
@@ -243,11 +281,35 @@ def evaluate_uploads(intake, bounds, requirement_id, threshold):
         'requirement_id': requirement_id, 'extractor_version': VERSION, 'threshold': threshold.describe(),
         'status': 'Unverified threshold concern' if adverse else 'Unverified evidence review',
         'authoritative': False, 'semantic_confirmation': False, 'facts': facts, 'sources': sources,
+        'review_alerts': review_alerts,
         'preview': {'basis': 'Hypothetical comparison of eligible candidates only, if individually confirmed; not a control result.',
                     'outcome_if_confirmed': result.outcome, 'conflicts': [asdict(c) for c in result.checks if c.status == 'conflict'],
                     'missing_dimensions': [c.dimension for c in missing]},
         'next_action': next_action, 'limitations': LIMITATION,
     }
+
+
+def _narrative_recovery_result(line):
+    """Lexical manual-review cue, never a duration parser or threshold rule.
+
+    Only direct, complete result wording is recognized. Preserve literal amounts
+    (including bounds/estimates) and reject attribution, quotations, questions,
+    negation and unrecognized qualifications rather than stripping their prefix.
+    This deliberately alerts on benign durations too; materiality is undecided.
+    """
+    amount = (r'(?:\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|'
+              r'eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|'
+              r'(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?|a|an|several|half)')
+    duration = (r'(?:(?:up to|at least|about|approximately)\s+)?' + amount +
+                r'\s+(?:seconds?|minutes?|hours?)')
+    return bool(re.fullmatch(
+        r'(?:(?:switching|restoring|recovering)\s+(?:the\s+)?service|'
+        r'service (?:restoration|recovery)|failover|recovery)\s+'
+        r'(?:took|required)\s+' + duration +
+        r'(?:,?\s+with\s+' + duration + r'\s+of data loss)?'
+        r'(?:\s+(?:on\s+\d{4}-\d{2}-\d{2}|in\s+(?:19|20)\d{2}|'
+        r'in\s+(?:the\s+)?(?:production|test|staging|development|sandbox)\s+environment))?'
+        r'[.!]?\s*', line, re.I))
 
 
 def _clauses(rows):
