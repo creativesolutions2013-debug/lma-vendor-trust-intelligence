@@ -1,0 +1,425 @@
+{
+  "review_type": "AI-assisted assurance review; not independent human TPRM validation",
+  "status": "Proposed review awaiting human confirmation",
+  "corpus_version": "M5C-holdout-1.1",
+  "corpus_sha256": "19b82edbbf93ff2baf975abe4f00307a8b37cf160c62dd3d8eebfb8a9c3607d9",
+  "assessment": {
+    "vendor": "Orion Synthetic Services",
+    "service": "Orion Ledger Gateway",
+    "environment": "production",
+    "as_of": "2026-11-01",
+    "tls_minimum": "1.2",
+    "dr_max_rto_minutes": 240,
+    "dr_max_rpo_minutes": 60,
+    "dr_max_test_age_days": 365
+  },
+  "independence_disclosure": "Same assistant has prior implementation and baseline exposure; not blinded, external or a replacement for qualified human assurance review.",
+  "method": "Reasoned reading of all frozen source excerpts, genre/scope/date qualifiers, arithmetic and gold. No evaluator output used to decide source meaning in this review; earlier baseline exposure is disclosed.",
+  "case_counts": {
+    "agree": 15,
+    "revise": 1,
+    "unresolved": 0
+  },
+  "human_tprm_validation_complete": false,
+  "gold_changed": false,
+  "extractor_changed": false,
+  "new_benchmark_metrics": null,
+  "human_effort_metrics": null,
+  "cases": [
+    {
+      "id": "tls-alt-backdoor",
+      "family": "ENC-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "TLS 1.1 < 1.2 on the alternate production endpoint. TLS 1.3 on the primary does not offset that statement.",
+      "gold_fact_review": "The two enabled-version gold facts and endpoint subjects are supported as unconfirmed source assertions. Neither proves fleet coverage.",
+      "citations": [
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Alternate production endpoint 9443: TLS 1.1 is enabled."
+        }
+      ],
+      "smallest_follow_up": "Request dated configuration and a protocol-rejection scan for endpoint 9443; investigate the reported below-minimum listener.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "d6e0404ca7bf96dbe7f0867d45fec4fa0944c49551481e6fa76eb2f5c1923a66"
+    },
+    {
+      "id": "tls-rejected-legacy",
+      "family": "ENC-01",
+      "format": "pdf",
+      "verdict": "agree",
+      "existing_gold_attention": "no_exception",
+      "recommended_attention": "no_exception",
+      "rationale": "No adverse statement in this excerpt: TLS 1.0 is disabled and TLS 1.2 enabled on edge443.",
+      "gold_fact_review": "Both local protocol-state facts are supported. Do not infer that TLS 1.1 is rejected, that 1.2 is the only enabled version, or that all endpoints were scanned.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Page 1",
+          "quote": "Listener edge443: TLS 1.0 is disabled."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Page 1",
+          "quote": "Listener edge443: TLS 1.2 is enabled."
+        }
+      ],
+      "smallest_follow_up": "Request missing legacy-version rejection and endpoint coverage evidence only; do not create a failure finding from absent proof.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "af6705def6741979d5aa71d18f5b231682b58b5b3b537c66ea9052a6536faae8"
+    },
+    {
+      "id": "tls-port-prose",
+      "family": "ENC-01",
+      "format": "docx",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Accepting TLS 1.0 connections on port 8443 is a material below-minimum source assertion despite unfamiliar syntax.",
+      "gold_fact_review": "enabled_version=10 with subject port 8443 is a defensible unconfirmed candidate. The verb accepts supplies activation meaning here, not mere product support.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Paragraph 5",
+          "quote": "Traffic on port 8443 still accepts TLS 1.0 connections."
+        }
+      ],
+      "smallest_follow_up": "Request a dated handshake scan and configuration for port 8443; target this port rather than resending a generic encryption questionnaire.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "148c9ffe56dbbecbdab3fc505f213c93ecbe742b713868da4be7e83aaeb62bd5"
+    },
+    {
+      "id": "tls-conditional",
+      "family": "ENC-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "May be enabled during fallback does not establish current activation; it does raise a fallback-path question.",
+      "gold_fact_review": "No unconditional enabled-version gold fact is justified. Retain the whole conditional statement as uncertainty, not harmlessness or a confirmed failure.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Listener 443: TLS 1.0 may be enabled during fallback."
+        }
+      ],
+      "smallest_follow_up": "Ask whether production fallback can activate TLS 1.0 and request its guard/configuration and a fallback test if applicable.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "5ed761ee90ddd475391fcbc9d35f5ab8e21d31d9811f9dc2015e90cea5c98b01"
+    },
+    {
+      "id": "tls-old-record",
+      "family": "ENC-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "The 2025-01-10 record is outside the pilot TLS freshness window at 2026-11-01. Preserve the adverse historical assertion without calling it a current exception.",
+      "gold_fact_review": "enabled_version=10/listener 443 is supported only with the historical source date. The bare triple must not be treated as current production proof.",
+      "citations": [
+        {
+          "display_line": 4,
+          "physical_location": "Line 4",
+          "quote": "Observation date: 2025-01-10"
+        },
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Listener 443: TLS 1.0 is enabled."
+        }
+      ],
+      "smallest_follow_up": "Request current dated listener configuration or a rejection scan and any evidence of remediation since this record.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "f3b26de6951652a0b4ce51fcefc4c07cad82c1457d230a9e9a5675619a85d067"
+    },
+    {
+      "id": "tls-test-only",
+      "family": "ENC-01",
+      "format": "pdf",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "The line-specific test endpoint overrides the document-wide production header for this observation; current production comparison must abstain.",
+      "gold_fact_review": "enabled_version=10/endpoint 7001 is supported as a test-scoped assertion only. Retain the header-versus-line scope discrepancy.",
+      "citations": [
+        {
+          "display_line": 3,
+          "physical_location": "Page 1",
+          "quote": "Environment: production"
+        },
+        {
+          "display_line": 5,
+          "physical_location": "Page 1",
+          "quote": "Test endpoint 7001: TLS 1.0 is enabled."
+        }
+      ],
+      "smallest_follow_up": "Confirm whether endpoint 7001 is isolated test infrastructure; request production endpoint evidence rather than assuming this is a production failure.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "7243e5e1af72ee8e57893fad05c1238896a01768e9ca310ecc21f63565825855"
+    },
+    {
+      "id": "tls-gateway-caption",
+      "family": "ENC-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Client sessions accepting TLS 1.0 on gateway port 9443 warrant a provisional below-minimum concern.",
+      "gold_fact_review": "enabled_version=10/gateway port 9443 is supported as an unconfirmed candidate. Gateway identity and service mapping still require verification.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Client sessions on legacy gateway port 9443 accept TLS 1.0."
+        }
+      ],
+      "smallest_follow_up": "Request the gateway port 9443 configuration and a dated handshake/rejection scan for that endpoint.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "30dc08b50cb63fe8f2a6face77c6e907c80f4f93198ab1ab7c69fac3faec4252"
+    },
+    {
+      "id": "tls-mixed-enabled",
+      "family": "ENC-01",
+      "format": "docx",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "TLS 1.0 and 1.3 coexist on listener 443; the strong protocol does not eliminate the weak enabled protocol.",
+      "gold_fact_review": "Both gold enabled-version observations are supported for the same listener. Different enabled versions are not inherently conflicting observations.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Paragraph 5",
+          "quote": "Listener 443: TLS 1.0 and TLS 1.3 are enabled."
+        }
+      ],
+      "smallest_follow_up": "Investigate removal of TLS 1.0 on listener 443 and request a dated scan confirming rejected legacy handshakes.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "c1808a1054dabfee79baec2cf827dc7cb2ae18f0c5b3c7c37db55ef7c35ca4bf"
+    },
+    {
+      "id": "dr-breached-objectives",
+      "family": "BCP-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Six hours = 360 minutes > 240; two hours = 120 minutes > 60. The explicit exercise exclusion also contradicts full-service testing.",
+      "gold_fact_review": "All four gold candidates are supported: completed=True, achieved RTO=360, achieved RPO=120 and scope_complete=False. Observed wording ties the measurements to the test; all remain unconfirmed.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Observed RTO 6 hours and RPO 2 hours."
+        },
+        {
+          "display_line": 7,
+          "physical_location": "Line 7",
+          "quote": "The exercise excluded message broker failover."
+        }
+      ],
+      "smallest_follow_up": "Request the executed exercise record and corrective retest covering message-broker failover and the exceeded recovery objectives.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "d4c4173d1661b2df04022eacfe3ae81017c808d464e89bdc7598db5e8180bfe7"
+    },
+    {
+      "id": "dr-plan-only",
+      "family": "BCP-01",
+      "format": "docx",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "Target values and future scheduled exercises are planning intent, not achieved operating results.",
+      "gold_fact_review": "An empty achieved-fact gold list is appropriate. Do not infer completed=True or actual recovery objectives from plan targets, even though the source labels a Test date.",
+      "citations": [
+        {
+          "display_line": 1,
+          "physical_location": "Paragraph 1",
+          "quote": "Recovery plan objectives"
+        },
+        {
+          "display_line": 5,
+          "physical_location": "Paragraph 5",
+          "quote": "Target RTO 60 minutes. Target RPO 15 minutes."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Paragraph 6",
+          "quote": "Exercises are scheduled for next quarter."
+        }
+      ],
+      "smallest_follow_up": "Request the latest completed exercise record with actual achieved timings, recovery point, scope and execution date.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "739de084ffdccbc71555200cc49ff59ebe25fe1005e785266002a473a1ed3982"
+    },
+    {
+      "id": "dr-failover-narrative",
+      "family": "BCP-01",
+      "format": "txt",
+      "verdict": "revise",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Retain provisional exception/targeted-review attention for the reported five-hour service switch. Do not claim an exact RPO breach from an upper bound; formal RTO measurement semantics also need confirmation.",
+      "gold_fact_review": "completed=True is supported. Five hours converts to 300 elapsed minutes, but whether switching duration is the defined achieved RTO is not established. Up to ninety minutes denotes <=90, not exact achieved RPO=90; it proves neither >60 nor <=60. Propose qualifying the RTO mapping and replacing the exact RPO gold with an unresolved upper-bound assertion in a separately approved gold version. Do not alter v1.1 now.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Switching the service took five hours, with up to ninety minutes of data loss."
+        }
+      ],
+      "smallest_follow_up": "Request the failover start/service-restoration acceptance timestamps and actual recovered data-point timestamps; clarify whether the ninety-minute phrase is an observed maximum or a hypothetical bound.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "3e64c44425e64177b01650dbd22e48637590abe158fbcc14cb1c02e6dd93c185"
+    },
+    {
+      "id": "dr-compliant-sample",
+      "family": "BCP-01",
+      "format": "pdf",
+      "verdict": "agree",
+      "existing_gold_attention": "no_exception",
+      "recommended_attention": "no_exception",
+      "rationale": "The reported achieved 90-minute RTO and 15-minute RPO are within the example limits, but full-service coverage is not established.",
+      "gold_fact_review": "All three gold facts are supported as unconfirmed results. No scope_complete=True fact is justified, and no whole-control Met follows.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Page 1",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Page 1",
+          "quote": "Achieved RTO 90 minutes and RPO 15 minutes."
+        }
+      ],
+      "smallest_follow_up": "Request only the missing dependency/coverage record and verify that completion and both measurements belong to the same exercise.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "f846e4532c694ea6f94056a6204e7be9e7caebf8aa9d65504441c66dab86b2fa"
+    },
+    {
+      "id": "dr-uncovered-idp",
+      "family": "BCP-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Not testing identity federation is an explicit exercise scope limitation, warranting review against full-service recovery requirements.",
+      "gold_fact_review": "completed=True and scope_complete=False are supported as provisional candidates. Confirm that identity federation is a required recovery dependency; the excerpt does not prove the dependency failed.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Identity federation was not tested in this exercise."
+        }
+      ],
+      "smallest_follow_up": "Confirm the identity dependency map and request an identity-federation-inclusive exercise result or a justified scope exception for human review.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "d9d15d6e72884979103a480fb6c2f4fbb232286e8cc480af92098329fccdc7fc"
+    },
+    {
+      "id": "dr-compound-duration",
+      "family": "BCP-01",
+      "format": "docx",
+      "verdict": "agree",
+      "existing_gold_attention": "exception",
+      "recommended_attention": "exception",
+      "rationale": "Four hours thirty minutes = 270 minutes, exceeding 240 by 30 minutes. Unsupported parser grammar does not make this an abstention in human gold.",
+      "gold_fact_review": "Both completed=True and achieved_rto_minutes=270 are supported as unconfirmed measured exercise results. RPO and full-service scope are absent, not passing or failed.",
+      "citations": [
+        {
+          "display_line": 5,
+          "physical_location": "Paragraph 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Paragraph 6",
+          "quote": "Measured RTO 4 hours 30 minutes."
+        }
+      ],
+      "smallest_follow_up": "Request the executed timing record and corrective RTO retest; ask for missing RPO/coverage evidence only if not already in that record.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "1d6bca3fe9032a7bb02bcab2883eab3aa8fabf4e548d82fe6e5612756aae2b28"
+    },
+    {
+      "id": "dr-unrelated-service",
+      "family": "BCP-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "The results concern Orion Data Warehouse, not the assessed Orion Ledger Gateway. They cannot become Gateway exceptions or coverage proof.",
+      "gold_fact_review": "All three result triples are supported for the Data Warehouse subject only. Their adverse values must stay bound to that different service.",
+      "citations": [
+        {
+          "display_line": 2,
+          "physical_location": "Line 2",
+          "quote": "Service: Orion Data Warehouse"
+        },
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Achieved RTO 300 minutes and RPO 90 minutes."
+        }
+      ],
+      "smallest_follow_up": "Request the Gateway exercise record; clarify shared-dependency relevance only if a service mapping supports it.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "55ff69d75e2b4e7560d1f314ef9c104fbe124da2c14b69ce9c70338bcf379373"
+    },
+    {
+      "id": "dr-year-qualified",
+      "family": "BCP-01",
+      "format": "txt",
+      "verdict": "agree",
+      "existing_gold_attention": "abstain",
+      "recommended_attention": "abstain",
+      "rationale": "The 2024 result is historical despite the 2026 Test date header. No day in 2024 falls within the 365-day interval at 2026-11-01.",
+      "gold_fact_review": "The 300-minute result is a historical assertion; retain its 2024 qualification and contradictory source context. Completed=True is a separate source assertion, not proof that this metric belongs to a current completed exercise.",
+      "citations": [
+        {
+          "display_line": 4,
+          "physical_location": "Line 4",
+          "quote": "Test date: 2026-10-18"
+        },
+        {
+          "display_line": 5,
+          "physical_location": "Line 5",
+          "quote": "Recovery exercise completed."
+        },
+        {
+          "display_line": 6,
+          "physical_location": "Line 6",
+          "quote": "Achieved RTO 300 minutes in 2024."
+        }
+      ],
+      "smallest_follow_up": "Request the current exercise record and reconcile the metric year with the header before relying on the 2026 date.",
+      "confirmed_vendor_facts": false,
+      "source_text_sha256": "6ace9fb243f1ac46d8ac25f61a8842de7a6663fa8ff779e2820bca9fed7802c4"
+    }
+  ]
+}

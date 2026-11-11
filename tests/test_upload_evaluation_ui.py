@@ -163,3 +163,22 @@ def test_confirming_already_matching_metadata_still_requires_explicit_evaluation
     stage(at, 'Report'); assert at.warning and not [b for b in at.get('download_button') if b.label == 'Download assessment package (.zip)']
     stage(at, 'Upload evidence'); widget(at.button, 'Evaluate attached evidence').click(); run(at)
     assert not at.session_state['customer_assessment:uploads_dirty']
+
+
+def test_next_action_uses_actual_source_uncertainties_in_customer_ui(no_live_effects):
+    at = start(); intake = at.session_state['customer_assessment:intake']
+    observed = intake.as_of - timedelta(days=5)
+    tls = source_text(intake, 'Traffic on port 8443 still accepts TLS 1.0 connections.',date=observed.isoformat()).encode()
+    dr = source_text(intake, 'Recovery exercise completed.\nIdentity federation was not tested in this exercise.','BCP-01',date=observed.isoformat()).encode()
+    at.get('file_uploader')[0].upload('port.txt',tls).upload('dependency.txt',dr);run(at)
+    for i in range(2): suggestions(at)[i].click();run(at)
+    widget(at.button,'Evaluate attached evidence').click();run(at)
+    clear = 'Next action: Confirm candidate meanings; obtain missing technical coverage or operating proof.'
+    uncertain = 'Next action: Review the listed source uncertainties and confirm candidate meanings; obtain missing technical coverage or operating proof.'
+    assert sum(t.value == clear for t in at.text) == 2
+    assert not any(t.value == uncertain for t in at.text)
+    stage(at,'Upload evidence');at.date_input[0].set_value(observed-timedelta(days=1));run(at)
+    widget(at.button,'Evaluate attached evidence').click();run(at)
+    assert sum(t.value == clear for t in at.text) == 1
+    assert sum(t.value == uncertain for t in at.text) == 1
+    assert all(not f['confirmed'] for e in at.session_state['customer_assessment:model'].customer_context['evaluations'] for f in e['facts'])

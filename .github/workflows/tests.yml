@@ -33,6 +33,32 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: Generate M5C holdout baseline (descriptive, not an accuracy gate)
+        env:
+          M5C_REPORT_PATH: m5c-baseline.json
+        run: python -m pytest -q -s tests/test_m5c_benchmark.py
+
+      - name: Publish M5C baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5c-baseline
+          path: m5c-baseline.json
+          if-no-files-found: warn
+
+      - name: Generate separate M5C candidate rubric (not an adopted baseline)
+        env:
+          M5C_CANDIDATE_REPORT_PATH: m5c-candidate.json
+        run: python -m pytest -q -s tests/test_m5c_candidate_benchmark.py
+
+      - name: Publish separate M5C candidate artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5c-candidate-not-active
+          path: m5c-candidate.json
+          if-no-files-found: warn
+
   postgres-compatibility:
     name: PostgreSQL compatibility
     runs-on: ubuntu-latest

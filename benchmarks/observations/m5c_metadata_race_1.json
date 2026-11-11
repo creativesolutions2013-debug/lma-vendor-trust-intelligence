@@ -1,0 +1,450 @@
+{
+  "version": "M5C-metadata-race-diagnostic-1",
+  "base_commit": "a9f2a7100340de0e10a655ceb1af67c5f37b6b00",
+  "fixed_module_sha256": "95cf4175e403312cfd52c0fa0b2ca2b1432c819c5990315f94809a0eac1105d9",
+  "method": "Real Chromium/Playwright browser, actual synthetic uploads, no source-state injection; outbound widget frames and downloaded assessment packages checked.",
+  "conclusion": "Two accepted source actions can be followed by an old widget snapshot that resets the first source. Per-source control revisions and obsolete-callback rejection preserve the durable draft.",
+  "controls": {
+    "mixed_TXT_DOCX_fast_before": {
+      "trials": 4,
+      "metadata_correct": 4
+    },
+    "mixed_TXT_DOCX_acknowledged_before": {
+      "trials": 2,
+      "metadata_correct": 2
+    }
+  },
+  "pdf_fast_before": {
+    "trials": 4,
+    "metadata_correct": 0
+  },
+  "pdf_fast_after": {
+    "trials": 4,
+    "metadata_correct": 4
+  },
+  "mixed_TXT_DOCX_fast_after": {
+    "trials": 2,
+    "metadata_correct": 2
+  },
+  "exports": {
+    "mixed-before": [
+      {
+        "trial": 0,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "26606034b1158ae19d2bccc5d9ed0634f0f5d6288d1b1af3ad3cfd6b4d8e0a31",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 1,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "a5206ab9fb25e78ec411e24d72fe3b4af69ea002821d078b801e785cf662592c",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 2,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "d784755b318f5c99729fc5c6cd12939d7aba7814b5b8621f5e413b1ae2cc4f4e",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 3,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "79803fa44c3a47194d45008bfe4753176ea30e12645bb176253bd008df806179",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      }
+    ],
+    "pdf": [
+      {
+        "trial": 0,
+        "both_button_events_received": true,
+        "ui_values_correct": false,
+        "exported_metadata_correct": false,
+        "declarations": {
+          "ENC-01": [
+            [
+              "assertion",
+              null
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "992e407adc892bbc81a974ad889444d301ef026422aca219e30bb7afb8c2ace1",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 1,
+        "both_button_events_received": true,
+        "ui_values_correct": false,
+        "exported_metadata_correct": false,
+        "declarations": {
+          "ENC-01": [
+            [
+              "assertion",
+              null
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "921ef70359cda16819246390cdb13d8fff3690f6ed9c74588053beba4fda3d44",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 2,
+        "both_button_events_received": true,
+        "ui_values_correct": false,
+        "exported_metadata_correct": false,
+        "declarations": {
+          "ENC-01": [
+            [
+              "assertion",
+              null
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "db7b997a6489ee41c313ce7dadcdf9fbbd12dc6097cb6ab5eff967051f2380ba",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 3,
+        "both_button_events_received": true,
+        "ui_values_correct": false,
+        "exported_metadata_correct": false,
+        "declarations": {
+          "ENC-01": [
+            [
+              "assertion",
+              null
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "171b4915ed1ea1a6dc4999356fe13b01a937d197a43fdc230b082350508fc44e",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      }
+    ],
+    "fixed-pdf": [
+      {
+        "trial": 0,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "addbbf1ee5c10185f1d38aeab6554990ef501aeb91da10d66d73bd5d3f512f32",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 1,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "247c2954000eff978fdcff6617aa4e23df2c116f6319698dd19ad9baed9e156f",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 2,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "ca35fbfcd0841a03d17e800cb21814606c17935c66d7f2747d31513ccdeefc42",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 3,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "f31465ccb3defb5695032c302291722991d995fbd218fa5fabe5cd218b305b49",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      }
+    ],
+    "fixed-mixed": [
+      {
+        "trial": 0,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "11e08ce79205c6b89c74614f5be6a9b0174e14e6498aac22eda8fbe8b4cefb54",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 1,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "889b5cc2142a04e7835a8dc34f56ba3cbe51f514a402ad3ff98108cc485cdc3d",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      }
+    ],
+    "ack": [
+      {
+        "trial": 0,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "1ee911fb64951e6debb481a519bba161c8620ebbe382bace63d8661ead1981cf",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      },
+      {
+        "trial": 1,
+        "both_button_events_received": true,
+        "ui_values_correct": true,
+        "exported_metadata_correct": true,
+        "declarations": {
+          "ENC-01": [
+            [
+              "configuration",
+              "2026-10-18"
+            ]
+          ],
+          "BCP-01": [
+            [
+              "test",
+              "2026-10-18"
+            ]
+          ]
+        },
+        "zip_sha256": "d9b55f144723ea9e80b16e30534df12d3d03e05156d8918bace97d2f30deba3e",
+        "source_bytes_verified": true,
+        "unconfirmed_facts": true,
+        "vendor_approved": false,
+        "residual_score": null
+      }
+    ]
+  },
+  "not_population_rates": true,
+  "human_effort_measured": false,
+  "independent_human_tprm_validation_complete": false,
+  "parser_or_gold_changed": false,
+  "automatic_approvals": false,
+  "evidence_bundle": {
+    "filename": "metadata-race-evidence.zip",
+    "sha256": "a277d4efbc5e70546172edba96ace88211fa3e85f3e6e37dc0e484c621ff24c9"
+  }
+}

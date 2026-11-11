@@ -588,3 +588,26 @@ def test_metadata_suggestions_reuse_bounded_context_without_changing_source(inta
         segment = bound.document.segments[int(citation['source_id'].rsplit(':',1)[1])-1]
         assert citation['quote'] in segment.text and citation['location'] == segment.location
         assert citation['source_fingerprint'] == bound.fingerprint
+
+
+@pytest.mark.parametrize('family,body', [
+    ('ENC-01', 'Traffic on port 8443 still accepts TLS 1.0 connections.'),
+    ('BCP-01', 'Recovery exercise completed.\nIdentity federation was not tested in this exercise.'),
+])
+def test_next_action_does_not_invent_metadata_discrepancies(intake, family, body):
+    matched = evaluation(build_assessment(intake, (upload(intake,body,family),)), family)
+    assert all(not s['uncertainties'] for s in matched['sources'])
+    assert matched['next_action'] == 'Confirm candidate meanings; obtain missing technical coverage or operating proof.'
+    assert matched['preview']['outcome_if_confirmed'] == 'Evidence Missing'
+    assert all(not fact['confirmed'] for fact in matched['facts'])
+    mismatched = evaluation(build_assessment(intake, (upload(intake,body,family,date='2026-10-21'),)), family)
+    assert any('differs from uploader' in issue for source in mismatched['sources'] for issue in source['uncertainties'])
+    assert mismatched['next_action'].startswith('Review the listed source uncertainties and confirm candidate meanings;')
+    assert not any(f['eligible_for_preview'] for f in mismatched['facts'])
+
+
+def test_empty_upload_next_action_requests_proof_without_inventing_source_issues(intake):
+    result = evaluation(build_assessment(intake))
+    assert not result['sources'] and not result['facts']
+    assert 'source uncertainties' not in result['next_action']
+    assert 'obtain missing technical coverage or operating proof' in result['next_action']
