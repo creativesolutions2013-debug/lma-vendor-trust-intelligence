@@ -389,6 +389,30 @@ def _explicit_tls_port_observation(clause):
     return subject, 10 + int(match.group('minor'))
 
 
+
+def _explicit_tls_port_observation(clause):
+    """Strict active-state port grammar; no status inferred from support or intent.
+
+    The caller keeps the original source line, exact segment and local qualifiers.
+    Never borrow a verb, port identity, or date from a neighbouring clause.
+    """
+    match = re.fullmatch(
+        r'(?:(?:traffic|client sessions|connections)\s+(?:on|through)\s+)'
+        r'(?P<subject>(?:(?:production|test|staging|development|sandbox|alternate|primary|legacy)\s+)*'
+        r'(?:(?:gateway|admin|service)\s+)?port\s+(?P<port>\d{1,5}))\s+'
+        r'(?:(?:currently|still)\s+)?(?:accept|accepts|allow|allows)\s+'
+        r'TLS\s*v?\s*1\.(?P<minor>[0-3])(?:\s+connections)?[.!]?\s*',
+        clause, re.I,
+    )
+    if match is None:
+        return None
+    port = int(match.group('port'))
+    if not 1 <= port <= 65535:
+        return None
+    subject = re.sub(r'\s+', ' ', match.group('subject').strip()).casefold()
+    return subject, 10 + int(match.group('minor'))
+
+
 def _tls_state(tail, head=''):
     """Associate a state with the protocol itself, never another feature's verb."""
     clause = re.split(r';|(?<=[.!?])\s+', tail, maxsplit=1)[0]
