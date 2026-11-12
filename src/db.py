@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -1449,6 +1450,112 @@ class RevalidationCaseRecord(Base):
     )
 
 
+class AnalystNoteRevision(Base):
+    """Append-only rationale snapshots; attribution is never inferred for legacy text.
+
+    Tenant/vendor/engagement and actor identifiers are immutable historical
+    snapshots. Target FKs prevent ordinary deletion from erasing linked history.
+    All reads still require current exact relationship authorization.
+    """
+    __tablename__ = "analyst_note_revisions"
+    __table_args__ = (
+        CheckConstraint("organization_id > 0 AND vendor_id > 0 AND engagement_id > 0 AND assessment_id > 0 AND object_id > 0", name="ck_note_revision_positive_scope"),
+        CheckConstraint("(object_type = 'assessment' AND evidence_id IS NULL AND object_id = assessment_id) OR (object_type = 'evidence' AND evidence_id IS NOT NULL AND evidence_id > 0 AND object_id = evidence_id)", name="ck_note_revision_target"),
+        CheckConstraint("length(content) > 0", name="ck_note_revision_content"),
+        CheckConstraint("(origin = 'analyst' AND actor_issuer IS NOT NULL AND length(trim(actor_issuer)) > 0 AND actor_subject IS NOT NULL AND length(trim(actor_subject)) > 0 AND actor_role IS NOT NULL AND actor_role IN ('Admin', 'Risk Manager', 'Analyst', 'Viewer') AND membership_id IS NOT NULL AND membership_id > 0 AND session_id IS NOT NULL AND length(trim(session_id)) > 0) OR (origin = 'legacy_unknown' AND actor_issuer IS NULL AND actor_subject IS NULL AND actor_role IS NULL AND membership_id IS NULL AND session_id IS NULL)", name="ck_note_revision_attribution"),
+        Index("ix_note_revision_scope_target", "organization_id", "object_type", "object_id", "id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, nullable=False)
+    vendor_id = Column(Integer, nullable=False)
+    engagement_id = Column(Integer, nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id", ondelete="RESTRICT"), nullable=False)
+    evidence_id = Column(Integer, ForeignKey("evidence.id", ondelete="RESTRICT"))
+    object_type = Column(String(20), nullable=False)
+    object_id = Column(Integer, nullable=False)
+    actor_issuer = Column(String(500))
+    actor_subject = Column(String(255))
+    actor_role = Column(String(80))
+    membership_id = Column(Integer)
+    session_id = Column(String(255))
+    created_at = Column(DateTime(timezone=True), nullable=False,
+                        default=lambda: datetime.now(timezone.utc))
+    content = Column(Text, nullable=False)
+    origin = Column(String(20), nullable=False)
+
+
+def note_revision_guard_statements(dialect, schema=None):
+    """Fixed history/target retention DDL; no request-controlled identifiers."""
+    quote = dialect.identifier_preparer.quote
+    prefix = quote(schema) + "." if schema else ""
+    table = prefix + quote("analyst_note_revisions")
+    if dialect.name == "sqlite":
+        statements = [
+            f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_revisions_no_' + action.lower())} "
+            f"BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'Analyst note revisions are append-only'); END"
+            for action in ("UPDATE", "DELETE")
+        ]
+        # SQLite REPLACE can implicitly DELETE without firing DELETE triggers
+        # when recursive_triggers is off. Block duplicate-ID INSERT explicitly.
+        statements.append(
+            f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_revisions_no_replace')} "
+            f"BEFORE INSERT ON {table} WHEN EXISTS (SELECT 1 FROM {table} WHERE id = NEW.id) "
+            "BEGIN SELECT RAISE(ABORT, 'Analyst note revisions are append-only'); END"
+        )
+        # build_engine intentionally leaves legacy SQLite FK settings alone.
+        # These narrow equivalents of target RESTRICT apply even with FKs and
+        # recursive triggers off, including both forms of implicit replacement.
+        for parent, reference in (("assessments", "assessment_id"), ("evidence", "evidence_id")):
+            parent_table = prefix + quote(parent)
+            old_reference = f"EXISTS (SELECT 1 FROM {table} WHERE {quote(reference)} = OLD.id)"
+            new_reference = f"EXISTS (SELECT 1 FROM {table} WHERE {quote(reference)} = NEW.id)"
+            for action, condition in (
+                ("DELETE", old_reference),
+                # INTEGER PRIMARY KEY aliases (rowid/oid/_rowid_) can change
+                # id without firing an UPDATE OF id trigger.
+                ("UPDATE", f"OLD.id IS NOT NEW.id AND ({old_reference} OR {new_reference})"),
+            ):
+                name = "note_history_" + parent + "_no_" + action.split()[0].lower()
+                statements.append(
+                    f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote(name)} BEFORE {action} ON {parent_table} "
+                    f"WHEN {condition} BEGIN SELECT RAISE(ABORT, 'Analyst note history target is retained'); END"
+                )
+            # An omitted INTEGER PRIMARY KEY is still -1 in BEFORE INSERT.
+            # Check its actual allocated ID too, so an older orphan reference
+            # cannot silently attach to a newly allocated target. ABORT rolls
+            # back the complete INSERT statement, including REPLACE deletion.
+            statements.append(
+                f"CREATE TRIGGER IF NOT EXISTS {prefix}{quote('note_history_' + parent + '_no_insert')} "
+                f"AFTER INSERT ON {parent_table} WHEN {new_reference} "
+                "BEGIN SELECT RAISE(ABORT, 'Analyst note history target is retained'); END"
+            )
+        return tuple(statements)
+    if dialect.name == "postgresql":
+        function = prefix + quote("reject_note_revision_mutation")
+        return (
+            f"CREATE OR REPLACE FUNCTION {function}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Analyst note revisions are append-only'; END; $$",
+            f"DROP TRIGGER IF EXISTS note_revisions_no_mutation ON {table}",
+            f"CREATE TRIGGER note_revisions_no_mutation BEFORE UPDATE OR DELETE ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()",
+            f"DROP TRIGGER IF EXISTS note_revisions_no_truncate ON {table}",
+            f"CREATE TRIGGER note_revisions_no_truncate BEFORE TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION {function}()",
+        )
+    raise RuntimeError("Append-only note revisions require SQLite or PostgreSQL.")
+
+
+def install_note_revision_guards(table, connection, **_):
+    """Use each fixture's translated schema rather than touching public tables."""
+    mapping = connection.get_execution_options().get("schema_translate_map") or {}
+    schema = mapping.get(table.schema, table.schema)
+    if connection.dialect.name == "postgresql" and schema is None:
+        schema = connection.exec_driver_sql("SELECT current_schema()").scalar_one()
+    for statement in note_revision_guard_statements(connection.dialect, schema):
+        connection.exec_driver_sql(statement)
+
+
+event.listen(AnalystNoteRevision.__table__, "after_create", install_note_revision_guards)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -1473,6 +1580,13 @@ class AuditLog(Base):
     actor_role = Column(
         String(80)
     )
+
+    # Nullable for historical events; secure operations explicitly populate
+    # issuer/tenant/member and a non-bearer session correlation identifier.
+    actor_issuer = Column(String(500))
+    organization_id = Column(Integer)
+    membership_id = Column(Integer)
+    session_id = Column(String(255))
 
     action = Column(
         String(120),
