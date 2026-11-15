@@ -23,10 +23,21 @@ def load_reference(path=SCENARIOS):
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate scenario ID")
     for case in cases:
-        if not isinstance(case["reference_concerns"], list) or not isinstance(case["necessary_questions"], list):
-            raise ValueError("Invalid reference annotations")
-        if not case["evidence"] or not case["customer_requirement"]:
+        if not isinstance(case, dict) or not isinstance(case.get("id"), str) or not case["id"].strip():
+            raise ValueError("Invalid scenario ID")
+        if not isinstance(case.get("evidence"), str) or not case["evidence"].strip() or not isinstance(case.get("customer_requirement"), str) or not case["customer_requirement"].strip():
             raise ValueError("Incomplete scenario")
+        concerns, questions = case.get("reference_concerns"), case.get("necessary_questions")
+        if not isinstance(concerns, list) or not isinstance(questions, list):
+            raise ValueError("Invalid reference annotations")
+        for collection, label in ((concerns, "concerns"), (questions, "questions")):
+            values = [item.get("id") for item in collection if isinstance(item, dict)]
+            if len(values) != len(collection) or any(not isinstance(v, str) or not v.strip() for v in values) or len(values) != len(set(values)):
+                raise ValueError("Invalid or duplicate reference " + label)
+        if any(not isinstance(item.get("quote"), str) or not item["quote"].strip() or item["quote"] not in case["evidence"] for item in concerns):
+            raise ValueError("Reference concern quote is absent from source evidence")
+        if any(not isinstance(item.get("question"), str) or not item["question"].strip() for item in questions):
+            raise ValueError("Reference question text is missing")
     return data
 
 
@@ -62,9 +73,13 @@ def evaluate(reference, observations):
         if key in seen:
             raise ValueError("Duplicate reviewer/case/mode session")
         seen.add(key)
-        concerns = _ids(session.get("concern_ids"), "concern_ids")
-        questions = _ids(session.get("question_ids"), "question_ids")
-        citations = session.get("citations")
+        # An explicitly recorded empty answer is different from an absent field.
+        # Otherwise incomplete observation forms silently become false misses.
+        if any(name not in session for name in ("concern_ids", "question_ids", "citations", "elapsed_seconds")):
+            raise ValueError("Incomplete observation: record all response fields, using [] or null explicitly")
+        concerns = _ids(session["concern_ids"], "concern_ids")
+        questions = _ids(session["question_ids"], "question_ids")
+        citations = session["citations"]
         if not isinstance(citations, list):
             raise ValueError("citations must be a list of evidence references")
         for citation in citations:
