@@ -97,3 +97,26 @@ def test_reference_is_json_serializable_and_quotes_are_present():
     for case in ref["cases"]:
         for concern in case["reference_concerns"]:
             assert concern["quote"] in case["evidence"]
+
+@pytest.mark.parametrize("field", ["concern_ids", "question_ids", "citations", "elapsed_seconds"])
+def test_missing_observation_field_cannot_be_scored_as_empty_response(field):
+    ref = m6.load_reference()
+    item = session(ref["cases"][0])
+    del item[field]
+    with pytest.raises(ValueError, match="Incomplete observation"):
+        m6.evaluate(ref, {"sessions": [item]})
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda c: c["reference_concerns"].append(dict(c["reference_concerns"][0])),
+    lambda c: c["reference_concerns"][0].update(quote="Not present in source"),
+    lambda c: c["necessary_questions"].append(dict(c["necessary_questions"][0])),
+    lambda c: c["necessary_questions"][0].update(question=""),
+])
+def test_invalid_reference_annotations_fail_closed(tmp_path, mutation):
+    ref = m6.load_reference()
+    mutation(ref["cases"][0])
+    path = tmp_path / "reference.json"
+    path.write_text(json.dumps(ref), encoding="utf-8")
+    with pytest.raises(ValueError, match="reference|Reference"):
+        m6.load_reference(path)
