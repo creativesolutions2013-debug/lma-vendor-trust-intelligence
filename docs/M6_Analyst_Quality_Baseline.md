@@ -6,8 +6,8 @@
 Measure whether an analyst using LMA finds material concerns with verifiable citations, requests only necessary vendor clarification, and completes a defensible review more efficiently than a comparable manual process. **Decision accuracy and safety take priority over speed.** No change to production evaluators, governance, policies, databases or authentication.
 
 ## Materials and independence
-- `benchmarks/m6_analyst_scenarios_v1.json`: ten **AI-authored, provisional** synthetic scenario seeds across PAM/MFA, TLS, DR and IR. They are not a fully blinded independent holdout. The named expected concerns and vendor questions are working hypotheses, not approved ground truth.
-- `benchmarks/m6_analyst_quality.py`: standalone scoring of explicitly recorded reviewer actions, separate from product code. Each reported concern must cite an **exact source quote** to be marked citation-verifiable. Quote match does not establish interpretation correctness.
+- `benchmarks/m6_analyst_scenarios_v1.json`: ten **AI-authored, provisional** synthetic scenario seeds across PAM/MFA, TLS, DR and IR. They are not a fully blinded independent holdout. The named expected concerns and vendor questions are working hypotheses, not approved ground truth. Passing schema and quotation-integrity checks cannot certify their substantive TPRM correctness.
+- `benchmarks/m6_analyst_quality.py`: standalone scoring of explicitly recorded reviewer actions, separate from product code. Each reported concern must cite an **exact source quote** to be marked citation-verifiable. Quote match does not establish interpretation correctness. Observation submissions must explicitly supply concern IDs, question IDs, citations and a nullable duration; missing fields are rejected rather than treated as a negative response. Reference IDs must be unique and reference quotations must occur in the synthetic source.
 - `tests/test_m6_analyst_quality.py`: deterministic input validation, citation, question and abstention checks.
 - Frozen M5C benchmark files/scorer are **unchanged**.
 
