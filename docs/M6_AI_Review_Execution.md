@@ -12,6 +12,10 @@ for the separate sealed outputs, provenance, all comparison differences and
 remaining interpretation limits. The older blocked records and simulation remain
 historical artifacts, not substitutes for those actual results.
 
+The separate [third-session AI coordinator workflow](M6_AI_Coordinator_Execution.md)
+uses the existing coordinator profile for model-based proposed reconciliation.
+It preserves the original A/B outputs and deterministic comparison.
+
 ## Roles and input boundary
 
 | Role | Configuration | Initial input | Focus |
@@ -136,9 +140,11 @@ Runtime-default reasoning and sampling settings are not attested by the CLI.
 ## Proposed reference and disagreement
 
 The `coordinate` command performs deterministic, conservative comparison after
-both successful sealed reviews are available. The separate coordinator agent
-configuration describes a possible later model-based semantic review; that model
-execution is not claimed by this implementation.
+both successful sealed reviews are available. The separate
+[`m6_ai_coordinator.py` workflow](M6_AI_Coordinator_Execution.md) executes the
+coordinator profile for model-based proposed reconciliation. Its actual execution
+records, rather than this configuration or the deterministic comparison, establish
+whether a third model session completed.
 
 Coordination compares both submitted assessments against the original case sources,
 separates technical exceptions from evidence insufficiency, and retains differences
