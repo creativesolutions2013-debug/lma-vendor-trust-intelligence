@@ -1,0 +1,21 @@
+{
+  "credential_material_accessed": false,
+  "raw_transport_persisted": false,
+  "summaries": [
+    {
+      "categories": [
+        "model_not_supported",
+        "http_400"
+      ],
+      "returncode": 1,
+      "stderr_present": false,
+      "stdout_event_types": [
+        "thread.started",
+        "item.completed",
+        "turn.started",
+        "error",
+        "turn.failed"
+      ]
+    }
+  ]
+}

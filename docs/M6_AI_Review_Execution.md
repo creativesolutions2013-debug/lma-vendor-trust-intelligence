@@ -6,6 +6,12 @@ the M6 provisional scoring reference, the frozen M5C benchmark and the independe
 human-review study. No result authorizes a vendor, approves a control, accepts risk
 or changes an authoritative decision.
 
+Actual execution on November 16, 2026 completed both reviews using approved
+device authentication. See the [live execution report](../benchmarks/executions/m6_live_20261116/EXECUTION_REPORT.md)
+for the separate sealed outputs, provenance, all comparison differences and
+remaining interpretation limits. The older blocked records and simulation remain
+historical artifacts, not substitutes for those actual results.
+
 ## Roles and input boundary
 
 | Role | Configuration | Initial input | Focus |
@@ -52,6 +58,19 @@ containing the other review. Sequential execution is acceptable when contexts ar
 separate and B's input is prepared without A's conclusions. Only the coordinator
 receives both reviews.
 
+For the authenticated CLI `0.163.0` execution, the advertised model was
+`gpt-6.1-sol`; the earlier `gpt-6.1` slug was rejected. A writable home must first
+be authenticated through the supported `codex login --device-auth` flow and
+verified with `codex login status`. Pass that home with `--codex-home`; never
+inspect, transfer or bundle credential files. The live execution used
+`--codex-home /workspace/m6-review-login-20261116`.
+
+Strict provider structured output rejects JSON Schema's `uniqueItems` keyword.
+The launcher supplies an adapted provider schema without that keyword while
+retaining it in the canonical sealed contract and enforcing uniqueness locally.
+A duplicate classification still rejects the response; input and canonical
+schema hashes are unchanged.
+
 The wrapper uses fresh ephemeral Codex contexts, ignores user configuration,
 disables shell/apps/plugins and related data-access capabilities, and supplies a
 bounded prompt. Check the actual command and recorded CLI version for the installed
@@ -89,7 +108,11 @@ vendor documents, logs, inventories or full testing records. Original-source quo
 verification proves that cited text occurs in the corresponding case; it does not
 prove the interpretation, completeness, operating effectiveness or real-world truth.
 
-## Observed execution blocker
+## Historical execution blocker
+
+This section describes the initial failed attempts at `f405119`, not the later
+completed execution linked above. Approved device authentication resolved HTTP
+401; the provider-schema adapter then resolved a separate HTTP 400 blocker.
 
 In this implementation environment, the default Codex home is read-only, so the
 CLI could not initialize there. A fresh writable home allowed a fresh thread to

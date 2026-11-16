@@ -1,0 +1,44 @@
+{
+  "A": {
+    "cases": 10,
+    "citation_count": 10,
+    "cli_version": "codex-cli 0.163.0",
+    "finished_at": "2026-11-16T20:04:50.619637+00:00",
+    "input_boundary": {
+      "notes": "Used only the supplied individual review instructions, output contract, and standalone synthetic packet for substantive assessment. No tools, external context, or other reviewer conclusions were used. This is a self-report; hidden runtime context and isolation cannot be independently verified. All conclusions are provisional and AI-only.",
+      "status": "clean"
+    },
+    "model_actual": null,
+    "model_requested": "gpt-6.1-sol",
+    "record_sha256": "61fe20933521e35066f704abfa015d1c59f4a08a725201b89e2b5e641b5d72eb",
+    "response_sha256": "0ae609a535d047a4a88c8278036085d04ce6dc730d7e7363ca304475323bd081",
+    "run_id": "2b5da31c-8ae9-43b1-ae28-a734eea8176f",
+    "session_ids": [
+      "01a1e5f5-1a5a-72f2-97a1-166b4cea299f"
+    ],
+    "started_at": "2026-11-16T20:03:27.668847+00:00",
+    "status": "completed",
+    "tool_events": []
+  },
+  "B": {
+    "cases": 10,
+    "citation_count": 18,
+    "cli_version": "codex-cli 0.163.0",
+    "finished_at": "2026-11-16T20:04:46.453009+00:00",
+    "input_boundary": {
+      "notes": "Used only the supplied blind packet, individual instructions, output contract and required session instructions. No tools, external sources, prior reviews or other reviewer outputs were used. Runtime isolation and hidden context cannot be independently verified. All findings are provisional AI recommendations.",
+      "status": "clean"
+    },
+    "model_actual": null,
+    "model_requested": "gpt-6.1-sol",
+    "record_sha256": "abd8372c243c316eb3b6136301de09e3f1e1db2ca7ba2def8a31fe5e4ad2dfa2",
+    "response_sha256": "b6d8389689137f1b4903baec80ea2848b373817774ceb36ab9460c6925029d8e",
+    "run_id": "571e4b7e-17c4-427d-b31b-3e0ca16e7bf0",
+    "session_ids": [
+      "01a1e5f5-1a8b-7d21-9e3f-43650afdcdf0"
+    ],
+    "started_at": "2026-11-16T20:03:27.668478+00:00",
+    "status": "completed",
+    "tool_events": []
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "agent_id": "B",
+  "config_sha256": "ca59938b25236f06dc81ef959421a82552ee20028e7a033a61dc18d39154f126",
+  "execution": {
+    "disabled_features": [
+      "shell_tool",
+      "unified_exec",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "browser_use",
+      "computer_use",
+      "view_image",
+      "image_generation"
+    ],
+    "ephemeral": true,
+    "ignore_user_config": true,
+    "project_doc_max_bytes": 0,
+    "timeout_seconds": 600,
+    "web_search": "disabled"
+  },
+  "failure_category": null,
+  "finished_at": null,
+  "input_sha256": "76f3293e7a5c2fd2ecd0bf89bd3648f7aab7c17fab80187ff50e9ac2597fa3e0",
+  "input_version": "M6 blind reviewer packet v1",
+  "isolation": {
+    "context_audit_passed": false,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": null
+  },
+  "model_actual": null,
+  "model_actual_note": "CLI does not attest the serving model; requested configuration only",
+  "model_requested": "gpt-6.1-sol",
+  "review": null,
+  "run_id": "571e4b7e-17c4-427d-b31b-3e0ca16e7bf0",
+  "schema_version": "m6-ai-review-v1",
+  "session_ids": [],
+  "started_at": "2026-11-16T20:03:27.668478+00:00",
+  "status": "started"
+}

@@ -1,8 +1,34 @@
 # M6 AI review validation — 2026-11-16
 
-The reviewer configurations, launcher, conservative coordinator and synthetic
-examples are implemented. **No live AI review completed, no model adjudication
-ran, and no independently human-validated assurance was obtained.**
+The initial implementation validation at `f405119` is retained below as a
+historical record. A subsequent execution completed two actual AI reviews and
+deterministic coordinator comparison; see the [live execution report](../benchmarks/executions/m6_live_20261116/EXECUTION_REPORT.md).
+Semantic model adjudication and independent qualified-human assurance remain
+unexecuted. The separate hand-constructed simulation is not an actual review.
+
+## Live execution follow-up
+
+Approved Codex device authentication in the existing writable home resolved the
+initial HTTP 401. The earlier `gpt-6.1` model name was rejected; both completed
+runs explicitly requested advertised `gpt-6.1-sol` with CLI `0.163.0`.
+Actual serving-model identity remains unverified/null. A second HTTP 400 exposed
+the provider's rejection of `uniqueItems`; executed commit
+`31657b2a9615511ef54ad1c910b1059f3c43e84a` adapts only the provider schema and
+preserves canonical/local uniqueness validation. Compilation and all **52**
+mocked workflow regressions passed before the completed runs.
+
+Both actual responses passed ten-case completeness and source checks (28 exact
+own-case citations), distinct-session/no-tool audits, and sealed response/record
+integrity checks before and after coordination. Classification sets agree on 7/10;
+weakness flags and evidence sufficiency on 10/10; action kinds on 5/10. All ten
+retain full-response differences. The linked report lists every agreement and
+difference and preserves both original outputs, hashes and run identifiers.
+No approval, authoritative risk change, time-saving measurement or human
+validation is claimed. Full-suite and hosted CI evidence for the final PR head
+is reported in PR #40 Checks and the final execution report returned to the
+operator; the older counts below describe the initial implementation only.
+
+## Historical implementation validation
 
 ## Scope and provenance
 
@@ -37,8 +63,8 @@ Commands (using the isolated test virtualenv):
 python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py
 DATABASE_URL=sqlite:///:memory: python -m pytest -q
 # Isolated disposable PostgreSQL only; never point these tests at customer data.
-DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1:55432/vendor_trust python -m alembic upgrade head
-GITHUB_ACTIONS=true DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1:55432/vendor_trust python -m pytest -q
+DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1: 55432/vendor_trust python -m alembic upgrade head
+GITHUB_ACTIONS=true DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1: 55432/vendor_trust python -m pytest -q
 git diff --check
 git diff --cached --check
 ```
