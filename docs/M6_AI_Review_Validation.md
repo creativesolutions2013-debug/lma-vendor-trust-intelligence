@@ -17,6 +17,14 @@ the provider's rejection of `uniqueItems`; executed commit
 preserves canonical/local uniqueness validation. Compilation and all **52**
 mocked workflow regressions passed before the completed runs.
 
+Fresh complete suites on that unchanged Python source passed: **2,129 SQLite
+tests / 65 PostgreSQL-only skips**, and **2,194 PostgreSQL tests / no skips**.
+PostgreSQL migrations/schema checks and full diff/whitespace review passed.
+The six tested source hashes remained unchanged. Existing Alembic warnings
+remain (6 SQLite / 12 PostgreSQL). No real AI calls occurred in the regression
+tests; the isolated disposable PostgreSQL container was removed. Exact commands,
+hashes and separate logs are in the [local validation record](../benchmarks/executions/m6_live_20261116/validation/summary.json).
+
 Both actual responses passed ten-case completeness and source checks (28 exact
 own-case citations), distinct-session/no-tool audits, and sealed response/record
 integrity checks before and after coordination. Classification sets agree on 7/10;
@@ -63,8 +71,8 @@ Commands (using the isolated test virtualenv):
 python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py
 DATABASE_URL=sqlite:///:memory: python -m pytest -q
 # Isolated disposable PostgreSQL only; never point these tests at customer data.
-DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1: 55432/vendor_trust python -m alembic upgrade head
-GITHUB_ACTIONS=true DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1: 55432/vendor_trust python -m pytest -q
+DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1:55432/vendor_trust python -m alembic upgrade head
+GITHUB_ACTIONS=true DATABASE_URL=postgresql+psycopg://lma:lma_test_password@127.0.0.1:55432/vendor_trust python -m pytest -q
 git diff --check
 git diff --cached --check
 ```
