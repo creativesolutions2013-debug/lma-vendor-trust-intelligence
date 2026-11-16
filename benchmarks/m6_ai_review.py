@@ -111,6 +111,17 @@ def review_schema() -> dict:
                     "cases": {"type": "array", "minItems": 10, "maxItems": 10, "items": case}})
 
 
+def provider_review_schema() -> dict:
+    """Adapt only the provider schema; local validation still requires uniqueness.
+
+    Strict structured outputs reject JSON Schema's ``uniqueItems`` keyword.
+    Keep it in the canonical contract and enforce it after model execution.
+    """
+    schema = review_schema()
+    del schema["properties"]["cases"]["items"]["properties"]["classifications"]["uniqueItems"]
+    return schema
+
+
 def _check_schema(value, schema):
     """Small validator for the schema subset above; no optional dependencies."""
     kind = schema["type"]
@@ -250,7 +261,7 @@ def run(bundle: Path, agent: str, model: str, codex_home: Path | None = None,
         # This is not a host-filesystem jail. No tool activity may be accepted.
         with tempfile.TemporaryDirectory(prefix=f"m6-{agent}-") as context:
             schema_path = Path(context) / "response.schema.json"
-            schema_path.write_bytes(encoded(review_schema()))
+            schema_path.write_bytes(encoded(provider_review_schema()))
             command = [executable, "exec", "--ignore-user-config", "--ignore-rules", "--ephemeral",
                        "--skip-git-repo-check", "--sandbox", "read-only", "--json", "--model", model,
                        "--output-schema", str(schema_path), "-C", context,

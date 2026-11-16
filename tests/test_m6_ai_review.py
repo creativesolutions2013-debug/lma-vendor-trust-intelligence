@@ -6,6 +6,7 @@ agent reviews, customer control approvals, or adjudicated benchmark labels.
 
 from copy import deepcopy
 import json
+from pathlib import Path
 import subprocess
 
 import pytest
@@ -254,7 +255,7 @@ def bundle(tmp_path):
 
 
 def mock_codex(monkeypatch, response, *, session="fresh-test-session", extra_events=None,
-               returncode=0, stderr=""):
+               returncode=0, stderr="", schema_check=None):
     """Substitute the CLI process; no model service or real credential is used."""
     calls = []
     events = [{"type": "thread.started", "thread_id": session}]
@@ -268,12 +269,50 @@ def mock_codex(monkeypatch, response, *, session="fresh-test-session", extra_eve
         calls.append((command, kwargs))
         if "--version" in command:
             return subprocess.CompletedProcess(command, 0, "codex synthetic-test-version\n", "")
+        if schema_check is not None:
+            schema_check(json.loads(Path(command[command.index("--output-schema") + 1]).read_text()))
         return subprocess.CompletedProcess(command, returncode,
                                            "\n".join(json.dumps(event) for event in events), stderr)
 
     monkeypatch.setattr(review.shutil, "which", lambda name: "/synthetic/bin/codex")
     monkeypatch.setattr(review.subprocess, "run", fake_process)
     return calls
+
+
+def test_runner_adapts_provider_schema_without_changing_canonical_contract(packet, bundle, monkeypatch):
+    canonical = review.review_schema()
+    manifest = review.load_sealed(bundle / "manifest.json")
+    expected_provider = deepcopy(canonical)
+    del expected_provider["properties"]["cases"]["items"]["properties"]["classifications"]["uniqueItems"]
+    observed = []
+
+    def check_provider_schema(schema):
+        observed.append(schema)
+        assert schema == expected_provider
+        assert '"uniqueItems"' not in json.dumps(schema)
+
+    mock_codex(monkeypatch, constructed_review(packet), schema_check=check_provider_schema)
+    result = review.run(bundle, "A", "configured-test-model")
+    assert result["status"] == "completed"
+    assert len(observed) == 1
+    assert review.review_schema() == canonical
+    assert review.load_sealed(bundle / "inputs/review.schema.json") == canonical
+    assert manifest["schema_sha256"] == review.digest(review.encoded(canonical))
+    assert review.load_sealed(bundle / "manifest.json") == manifest
+
+
+def test_provider_schema_adaptation_does_not_accept_duplicate_classifications(packet, bundle, monkeypatch):
+    response = constructed_review(packet)
+    response["cases"][0]["classifications"] = ["evidence_insufficient", "evidence_insufficient"]
+    with pytest.raises(ValueError, match="Duplicate array member"):
+        review.validate_review(packet, response)
+    mock_codex(monkeypatch, response)
+    result = review.run(bundle, "A", "configured-test-model")
+    assert result["status"] == "rejected"
+    assert result["failure_category"] == "invalid_response_or_event_stream"
+    assert result["review"] is None
+    assert result["isolation"]["context_audit_passed"] is False
+    assert not (bundle / "proposed_reference.json").exists()
 
 
 def test_runner_starts_fresh_context_without_peer_output_or_inherited_thread_identity(
