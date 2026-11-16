@@ -1,0 +1,187 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "agent_id": {
+      "enum": [
+        "A",
+        "B"
+      ],
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "alternative_interpretation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "case_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "quote": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "source_id": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source_id",
+                "quote"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "classifications": {
+            "items": {
+              "enum": [
+                "demonstrated_exception",
+                "evidence_insufficient",
+                "out_of_scope",
+                "stale_evidence",
+                "supported_with_limits",
+                "unresolved_ambiguity"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "demonstrated_weakness": {
+            "type": "boolean"
+          },
+          "evidence_sufficiency": {
+            "enum": [
+              "adequate",
+              "insufficient",
+              "uncertain",
+              "missing"
+            ],
+            "type": "string"
+          },
+          "minimal_action": {
+            "additionalProperties": false,
+            "properties": {
+              "justification": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "internal_verification",
+                  "analyst_review",
+                  "vendor_question",
+                  "no_action"
+                ],
+                "type": "string"
+              },
+              "text": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text",
+              "justification"
+            ],
+            "type": "object"
+          },
+          "reasoning": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "scope_and_freshness": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "uncertainty": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "unnecessary_questions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "reason": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "classifications",
+          "demonstrated_weakness",
+          "evidence_sufficiency",
+          "citations",
+          "reasoning",
+          "scope_and_freshness",
+          "uncertainty",
+          "alternative_interpretation",
+          "minimal_action",
+          "unnecessary_questions"
+        ],
+        "type": "object"
+      },
+      "maxItems": 10,
+      "minItems": 10,
+      "type": "array"
+    },
+    "input_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "notes": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "clean",
+            "contaminated",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "m6-ai-review-v1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "agent_id",
+    "input_boundary",
+    "cases"
+  ],
+  "type": "object"
+}

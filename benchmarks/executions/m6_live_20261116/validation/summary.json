@@ -1,0 +1,78 @@
+{
+  "affected_tests": {
+    "command": "DATABASE_URL=sqlite:///:memory: python -m pytest -q tests/test_m6_ai_review.py",
+    "failed": 0,
+    "log": "final-affected-tests.log",
+    "passed": 52,
+    "seconds": 0.79,
+    "status": "passed"
+  },
+  "compile": {
+    "command": "python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py",
+    "status": "passed"
+  },
+  "credentials_accessed": false,
+  "postgres_full": {
+    "command": "GITHUB_ACTIONS=true DATABASE_URL=postgresql+psycopg://lma@127.0.0.1:32768/vendor_trust python -m pytest -q",
+    "exit_code": 0,
+    "failed": 0,
+    "log": "final-postgres-full.log",
+    "passed": 2194,
+    "seconds": 510.21,
+    "skipped": 0,
+    "status": "passed",
+    "warnings": 12
+  },
+  "postgres_migrations": {
+    "command": "DATABASE_URL=postgresql+psycopg://lma@127.0.0.1:32768/vendor_trust python -m alembic upgrade head",
+    "log": "final-postgres-migrations.log",
+    "status": "passed"
+  },
+  "postgres_runtime": {
+    "authentication": "loopback-only disposable trust; no password credentials used",
+    "container_name": "lma-m6-validation-20261116",
+    "image": "postgres:16",
+    "port_binding": "127.0.0.1:32768",
+    "stopped_and_removed": true,
+    "synthetic_only": true
+  },
+  "postgres_schema": {
+    "expected_tables_present": [
+      "alembic_version",
+      "assessments",
+      "engagements",
+      "evidence",
+      "findings",
+      "monitoring_events",
+      "vendors"
+    ],
+    "log": "final-postgres-schema.log",
+    "status": "passed"
+  },
+  "python_executable": "/workspace/lma-vendor-trust-intelligence/.venv/bin/python",
+  "python_version": "3.12.14",
+  "real_ai_calls": false,
+  "source_code_modified_by_validator": false,
+  "source_sha256": {
+    "app.py": "65b8c4166c98bfbf3e626850492eccf14c2515bb279d7a764ebc796e04becbce",
+    "benchmarks/m6_ai_review.py": "519b0155c76979469a4a37dd4e5b464369d1ca2dc74e74fbdf3e3b84ae9f872b",
+    "benchmarks/m6_analyst_quality.py": "90f1a02e23c9e262d17ee408c9469697ec853a1ee061c92648ce50a6723f116b",
+    "src/upload_evaluation.py": "842b99e16758b4e017a0084e2ae33cbb12bab875668e2f4c9ab82490570546b1",
+    "tests/test_m6_ai_review.py": "1f17dc1e4016a8720c4dc7f0f407b2af197b72887988199e66eaee1ac760a571",
+    "tests/test_m6_analyst_quality.py": "0f87a7f49517bc2825f89da80017535e8576efb768e134ddd6da3d4ad8dd034a"
+  },
+  "sqlite_full": {
+    "command": "DATABASE_URL=sqlite:///:memory: python -m pytest -q",
+    "exit_code": 0,
+    "failed": 0,
+    "log": "final-sqlite-full.log",
+    "passed": 2129,
+    "seconds": 477.68,
+    "skipped": 65,
+    "status": "passed",
+    "warnings": 6
+  },
+  "tested_python_commit": "31657b2a9615511ef54ad1c910b1059f3c43e84a",
+  "tested_python_files_unchanged_after_run": true,
+  "warnings_note": "Existing Alembic path_separator deprecation warnings."
+}

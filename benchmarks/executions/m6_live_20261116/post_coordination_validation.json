@@ -1,0 +1,22 @@
+{
+  "action_kind_agreements": 5,
+  "authoritative_mutation": false,
+  "cases": 10,
+  "classification_agreements": 7,
+  "demonstrated_weakness_agreements": 10,
+  "evidence_sufficiency_agreements": 10,
+  "exact_agreements": 0,
+  "outputs_unchanged_after_coordination": true,
+  "unresolved_cases": [
+    "M6-01",
+    "M6-02",
+    "M6-03",
+    "M6-04",
+    "M6-05",
+    "M6-06",
+    "M6-07",
+    "M6-08",
+    "M6-09",
+    "M6-10"
+  ]
+}

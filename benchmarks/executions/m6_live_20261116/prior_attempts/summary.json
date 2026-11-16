@@ -1,0 +1,84 @@
+{
+  "actual_failed_executions": [
+    {
+      "agent": "B",
+      "attempt": 1,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1",
+      "record_path": "prior_attempts/attempt_01/runs/B/record.json",
+      "run_id": "72a65085-9374-4840-ac73-0c2e5054e7e5",
+      "session_ids": [
+        "01a1e5ef-df32-72a3-9645-f11b995df033"
+      ],
+      "status": "blocked"
+    },
+    {
+      "agent": "A",
+      "attempt": 1,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1",
+      "record_path": "prior_attempts/attempt_01/runs/A/record.json",
+      "run_id": "84732db4-03a3-4925-8921-fcf50cf9f3a3",
+      "session_ids": [
+        "01a1e5ef-dfd5-7953-b1c2-b0b74a27fb8b"
+      ],
+      "status": "blocked"
+    },
+    {
+      "agent": "A",
+      "attempt": 2,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1",
+      "record_path": "prior_attempts/attempt_02/runs/A/record.json",
+      "run_id": "1db4042b-b2d4-4d88-ac33-6323a4da8cda",
+      "session_ids": [
+        "01a1e5f1-05cf-7142-9f0c-40774db675bd"
+      ],
+      "status": "blocked"
+    },
+    {
+      "agent": "B",
+      "attempt": 3,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1-sol",
+      "record_path": "prior_attempts/attempt_03/runs/B/record.json",
+      "run_id": "eb6352f1-e91e-41b7-9c31-f19ad5949276",
+      "session_ids": [
+        "01a1e5f1-6a22-7783-807b-b515be294fae"
+      ],
+      "status": "blocked"
+    },
+    {
+      "agent": "A",
+      "attempt": 3,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1-sol",
+      "record_path": "prior_attempts/attempt_03/runs/A/record.json",
+      "run_id": "448e9e2b-bb0e-4cda-b424-5fc5d39a0d0c",
+      "session_ids": [
+        "01a1e5f1-6083-7430-9248-9e550f21fafe"
+      ],
+      "status": "blocked"
+    },
+    {
+      "agent": "A",
+      "attempt": 4,
+      "failure_category": "codex_execution_failed",
+      "model_actual": null,
+      "model_requested": "gpt-6.1-sol",
+      "record_path": "prior_attempts/attempt_04/runs/A/record.json",
+      "run_id": "a0f38078-3888-4029-9b80-e0ea88079de3",
+      "session_ids": [
+        "01a1e5f3-092a-77c0-9370-e5028ef3f424"
+      ],
+      "status": "blocked"
+    }
+  ],
+  "note": "These are failure records, not completed reviews. Attempt02 diagnosed unsupported gpt-6.1; attempt04 diagnosed strict schema uniqueItems rejection.",
+  "raw_transport_retained": false
+}

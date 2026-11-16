@@ -1,0 +1,64 @@
+{
+  "agent_id": "A",
+  "cli_version": "codex-cli 0.163.0",
+  "config_sha256": "ea9643b6c2d4eb526e86c489506620b34e2a17ffa78e70916eec348e881c7165",
+  "event_audit": [
+    {
+      "item_type": null,
+      "type": "thread.started"
+    },
+    {
+      "item_type": null,
+      "type": "turn.started"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "turn.failed"
+    }
+  ],
+  "execution": {
+    "disabled_features": [
+      "shell_tool",
+      "unified_exec",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "browser_use",
+      "computer_use",
+      "view_image",
+      "image_generation"
+    ],
+    "ephemeral": true,
+    "ignore_user_config": true,
+    "project_doc_max_bytes": 0,
+    "timeout_seconds": 600,
+    "web_search": "disabled"
+  },
+  "failure_category": "codex_execution_failed",
+  "finished_at": "2026-11-16T19:59:31.187593+00:00",
+  "input_sha256": "76f3293e7a5c2fd2ecd0bf89bd3648f7aab7c17fab80187ff50e9ac2597fa3e0",
+  "input_version": "M6 blind reviewer packet v1",
+  "isolation": {
+    "context_audit_passed": false,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": []
+  },
+  "model_actual": null,
+  "model_actual_note": "CLI does not attest the serving model; requested configuration only",
+  "model_requested": "gpt-6.1-sol",
+  "review": null,
+  "run_id": "448e9e2b-bb0e-4cda-b424-5fc5d39a0d0c",
+  "schema_version": "m6-ai-review-v1",
+  "session_ids": [
+    "01a1e5f1-6083-7430-9248-9e550f21fafe"
+  ],
+  "started_at": "2026-11-16T19:59:23.177652+00:00",
+  "status": "blocked"
+}

@@ -1,0 +1,108 @@
+{
+  "agent_id": "A",
+  "cli_version": "codex-cli 0.167.0-alpha.4",
+  "config_sha256": "ea9643b6c2d4eb526e86c489506620b34e2a17ffa78e70916eec348e881c7165",
+  "event_audit": [
+    {
+      "item_type": null,
+      "type": "thread.started"
+    },
+    {
+      "item_type": "error",
+      "type": "item.completed"
+    },
+    {
+      "item_type": null,
+      "type": "turn.started"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": "error",
+      "type": "item.completed"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "error"
+    },
+    {
+      "item_type": null,
+      "type": "turn.failed"
+    }
+  ],
+  "execution": {
+    "disabled_features": [
+      "shell_tool",
+      "unified_exec",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "browser_use",
+      "computer_use",
+      "view_image",
+      "image_generation"
+    ],
+    "ephemeral": true,
+    "ignore_user_config": true,
+    "project_doc_max_bytes": 0,
+    "timeout_seconds": 60,
+    "web_search": "disabled"
+  },
+  "failure_category": "authentication_unavailable",
+  "finished_at": "2026-11-16T16:39:49.422115+00:00",
+  "input_sha256": "76f3293e7a5c2fd2ecd0bf89bd3648f7aab7c17fab80187ff50e9ac2597fa3e0",
+  "input_version": "M6 blind reviewer packet v1",
+  "isolation": {
+    "context_audit_passed": false,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": []
+  },
+  "model_actual": null,
+  "model_actual_note": "CLI does not attest the serving model; requested configuration only",
+  "model_requested": "gpt-6.1",
+  "review": null,
+  "run_id": "20095d23-b482-4365-898c-953276d45b9b",
+  "schema_version": "m6-ai-review-v1",
+  "session_ids": [
+    "01a1e53a-70c5-7490-95a1-1fc2fbec9cff"
+  ],
+  "started_at": "2026-11-16T16:39:34.411842+00:00",
+  "status": "blocked"
+}

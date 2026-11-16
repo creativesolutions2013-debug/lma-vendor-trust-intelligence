@@ -1,0 +1,51 @@
+{
+  "canonical_schema_sha256": "34a40faa939c6b4b2b1fe5ca59096cd9460c525e562c5e821005ee615dfdd578",
+  "credentials_accessed_by_audit": false,
+  "input_sha256": "76f3293e7a5c2fd2ecd0bf89bd3648f7aab7c17fab80187ff50e9ac2597fa3e0",
+  "launcher_sha256": "519b0155c76979469a4a37dd4e5b464369d1ca2dc74e74fbdf3e3b84ae9f872b",
+  "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim.",
+  "packet_sha256": "3cf63d64a0cf0d7de5c36186588f2e93745fcb792052edc9c2c6d9d41e15698b",
+  "provider_schema_sha256": "a19b0c44c6e65c32c3acd26d156f0af6d08c469b2a74e49ace57f943f435b69d",
+  "raw_transport_persisted": false,
+  "reviewers": {
+    "A": {
+      "case_order": [
+        "M6-01",
+        "M6-02",
+        "M6-03",
+        "M6-04",
+        "M6-05",
+        "M6-06",
+        "M6-07",
+        "M6-08",
+        "M6-09",
+        "M6-10"
+      ],
+      "config_sha256": "ea9643b6c2d4eb526e86c489506620b34e2a17ffa78e70916eec348e881c7165",
+      "other_reviewer_instructions_present": false,
+      "prior_outputs_or_benchmark_labels_supplied": false,
+      "prompt_sha256": "f2c695ee9bee89a7f5619dc4f9edb48532cd1ffe76f071ea75a5f16669396e18",
+      "supplied_data_exactly_matches_blind_packet": true
+    },
+    "B": {
+      "case_order": [
+        "M6-10",
+        "M6-09",
+        "M6-08",
+        "M6-07",
+        "M6-06",
+        "M6-05",
+        "M6-04",
+        "M6-03",
+        "M6-02",
+        "M6-01"
+      ],
+      "config_sha256": "ca59938b25236f06dc81ef959421a82552ee20028e7a033a61dc18d39154f126",
+      "other_reviewer_instructions_present": false,
+      "prior_outputs_or_benchmark_labels_supplied": false,
+      "prompt_sha256": "8445480c82eaeba3156dbbaa16c88e83a2dbe6339e0c130cb455f2a9486efa5b",
+      "supplied_data_exactly_matches_blind_packet": true
+    }
+  },
+  "source_commit": "31657b2a9615511ef54ad1c910b1059f3c43e84a"
+}

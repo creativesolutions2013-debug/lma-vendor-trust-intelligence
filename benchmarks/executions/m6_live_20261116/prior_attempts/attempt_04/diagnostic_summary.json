@@ -1,0 +1,13 @@
+{
+  "raw_transport_persisted": false,
+  "summaries": [
+    {
+      "returncode": 1,
+      "sanitized_error_messages": [
+        "{\"type\":\"error\",\"error\":{\"message\":\"Invalid schema for response_format 'codex_output_schema': 'schema.properties.cases.items.properties.classifications.uniqueItems' is not permitted when strict is true.\",\"type\":\"invalid_request_error\",\"param\":\"text.format.schema\",\"code\":\"invalid_json_schema\"},\"status\":400}",
+        "{\"type\":\"error\",\"error\":{\"message\":\"Invalid schema for response_format 'codex_output_schema': 'schema.properties.cases.items.properties.classifications.uniqueItems' is not permitted when strict is true.\",\"type\":\"invalid_request_error\",\"param\":\"text.format.schema\",\"code\":\"invalid_json_schema\"},\"status\":400}"
+      ],
+      "stderr_present": false
+    }
+  ]
+}
