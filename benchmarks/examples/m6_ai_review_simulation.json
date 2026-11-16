@@ -1,0 +1,844 @@
+{
+  "actual_model_execution": false,
+  "artifact_kind": "hand_constructed_workflow_simulation",
+  "comparison_summary": {
+    "actual_model_execution": false,
+    "artifact_kind": "hand_constructed_workflow_simulation",
+    "authoritative_decision": null,
+    "cases": [
+      {
+        "agreement": true,
+        "case_id": "M6-01",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-02",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "demonstrated_exception"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-03",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "demonstrated_exception"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": false,
+        "case_id": "M6-04",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [
+          "alternative_interpretation",
+          "minimal_action"
+        ],
+        "proposed_classifications": null,
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": true
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-05",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "demonstrated_exception"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-06",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "supported_with_limits",
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-07",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "stale_evidence",
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-08",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "out_of_scope",
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-09",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      },
+      {
+        "agreement": true,
+        "case_id": "M6-10",
+        "citation_semantics_verified": false,
+        "citations_verified_against_packet": true,
+        "classification_agreement": true,
+        "differing_fields": [],
+        "proposed_classifications": [
+          "supported_with_limits",
+          "evidence_insufficient"
+        ],
+        "question_necessity_status": "unvalidated_reviewer_proposals",
+        "unresolved_disagreement": false
+      }
+    ],
+    "human_validated": false,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim.",
+    "measured_question_reduction": null,
+    "measured_time_saved": null,
+    "method": "Deterministic comparison of hand-constructed review fixtures; no model execution or semantic AI adjudication.",
+    "proposal_status": "simulation_only_not_a_reference_dataset",
+    "schema_version": "m6-ai-review-v1",
+    "semantic_ai_adjudication_executed": false,
+    "synthetic_only": true
+  },
+  "execution_status": "not_executed_hand_constructed_simulation",
+  "human_validated": false,
+  "input_version": "M6 blind reviewer packet v1",
+  "packet_sha256": "3cf63d64a0cf0d7de5c36186588f2e93745fcb792052edc9c2c6d9d41e15698b",
+  "purpose": "Demonstrate the synthetic review contract, original-source citation checks, and preserved disagreement. These manually constructed fixtures are not blind AI reviews, gold labels, an adjudicated reference, or evidence of model performance.",
+  "reviews": {
+    "A": {
+      "agent_id": "A",
+      "cases": [
+        {
+          "alternative_interpretation": "A phishing-resistant mechanism may already be enforced; its absence from this excerpt is not proof of its absence from the service.",
+          "case_id": "M6-01",
+          "citations": [
+            {
+              "quote": "Privileged MFA is enabled for all administrator accounts.",
+              "source_id": "M6-01"
+            },
+            {
+              "quote": "Authentication method and recovery path not specified.",
+              "source_id": "M6-01"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Existing scoped configuration could resolve the missing method and enforcement facts before a vendor request is needed.",
+            "kind": "internal_verification",
+            "text": "Check available Cedar Billing API identity configuration and recovery records for the privileged production authentication method and enforced fallback paths."
+          },
+          "reasoning": "The statement establishes an administrator MFA existence claim, but neither the authentication method nor recovery path establishes phishing resistance. The customer requires phishing-resistant privileged production access; unspecified details cannot demonstrate a method exception.",
+          "scope_and_freshness": "Cedar Billing API is named and all administrator accounts are claimed. Production enforcement, recovery behavior, source date and operating-test period are not supplied.",
+          "uncertainty": "The excerpt does not show whether all privileged production access routes are covered or whether a phishable fallback exists.",
+          "unnecessary_questions": [
+            {
+              "reason": "The supplied statement already claims it is enabled; the unresolved criterion is phishing resistance and applicable enforcement.",
+              "text": "Does administrator MFA exist?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An undocumented mandatory phishing-resistant factor could change the assessment of the complete authentication path, while leaving TOTP itself phishable.",
+          "case_id": "M6-02",
+          "citations": [
+            {
+              "quote": "Production admin authentication uses TOTP authenticator codes.",
+              "source_id": "M6-02"
+            },
+            {
+              "quote": "No alternative phishing-resistant mechanism documented.",
+              "source_id": "M6-02"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "This resolves whether the stated method exception is exposed or accompanied by an enforced phishing-resistant layer, without asking the vendor to repeat the named method.",
+            "kind": "internal_verification",
+            "text": "Verify the scoped production authentication chain in existing configuration records, including whether TOTP alone can grant privileged access."
+          },
+          "reasoning": "As described, production administrator authentication uses TOTP, which is susceptible to phishing and does not meet the stated phishing-resistant requirement. This is an affirmative method exception in the synthetic statement, rather than a failure inferred only from missing evidence. Adequacy here means enough stated detail to identify that exception, not whole-control approval or authenticated operating proof.",
+          "scope_and_freshness": "Cedar Billing API production administrators are expressly named. No dated configuration, test period or independent technical validation is available.",
+          "uncertainty": "The statement does not establish whether a separate mandatory phishing-resistant layer also protects every production route.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt already identifies TOTP; the missing fact concerns the enforced complete authentication chain.",
+              "text": "Which MFA method do production administrators use?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A newer retest could show the listener has been fixed; no such retest is supplied.",
+          "case_id": "M6-03",
+          "citations": [
+            {
+              "quote": "Primary listener 443 accepts TLS 1.3.",
+              "source_id": "M6-03"
+            },
+            {
+              "quote": "Production backup listener 9443 accepts TLS 1.1.",
+              "source_id": "M6-03"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "The weak listener and protocol are already identified; a listener-specific retest is narrower than repeating a full TLS questionnaire.",
+            "kind": "internal_verification",
+            "text": "Check existing remediation records and a current protocol-rejection retest for production listener 9443."
+          },
+          "reasoning": "The customer requires every production endpoint to reject protocols below TLS 1.2. The stated acceptance of TLS 1.1 on production listener 9443 directly contradicts that criterion. TLS 1.3 on listener 443 does not remove the secondary-listener exception. Adequacy identifies the declared exception, not independent scan verification.",
+          "scope_and_freshness": "Cedar Billing API production backup listener 9443 is explicit. Listener 443 is separately described. The excerpt supplies no scan timestamp, configuration provenance or remediation status.",
+          "uncertainty": "Current exposure, intervening remediation and the original test method are not independently verified.",
+          "unnecessary_questions": [
+            {
+              "reason": "Listener 443 already accepts TLS 1.3; that answer cannot resolve the TLS 1.1 exception on listener 9443.",
+              "text": "Does the production service use TLS 1.3?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "If 443 is the only production listener, the excerpt may cover the population; if additional listeners exist, their protocol rejection remains unproven.",
+          "case_id": "M6-04",
+          "citations": [
+            {
+              "quote": "Production listener 443 rejects TLS 1.0 and TLS 1.1. TLS 1.3 is accepted.",
+              "source_id": "M6-04"
+            },
+            {
+              "quote": "No other listeners are described.",
+              "source_id": "M6-04"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "An inventory check could resolve coverage without asking the vendor for unrelated TLS policies or repeating the provided listener result.",
+            "kind": "internal_verification",
+            "text": "Check the existing Cedar Billing API production endpoint inventory to establish whether listener 443 is the complete population."
+          },
+          "reasoning": "The stated behavior supports the minimum-protocol criterion for listener 443. The all-production-endpoints requirement also needs a complete scoped population. No other listeners are described, so neither their existence nor their weakness is established. Whole-service sufficiency remains unresolved.",
+          "scope_and_freshness": "Cedar Billing API production listener 443 is in scope; endpoint inventory completeness and test date are absent.",
+          "uncertainty": "The excerpt may cover the entire production population, but it does not explicitly establish that fact.",
+          "unnecessary_questions": [
+            {
+              "reason": "The unresolved fact is production endpoint population coverage, so a broad policy request exceeds the gap.",
+              "text": "Send every vendor security policy."
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A later scoped test could show recovery improvement, but it would not change what this reported exercise measured.",
+          "case_id": "M6-05",
+          "citations": [
+            {
+              "quote": "Production recovery test completed 2026-10-18.",
+              "source_id": "M6-05"
+            },
+            {
+              "quote": "Measured RTO 300 minutes and RPO 90 minutes.",
+              "source_id": "M6-05"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "The measured shortfall is already clear; the narrow remaining question concerns current remediation and retest status.",
+            "kind": "internal_verification",
+            "text": "Check existing corrective-action records and any subsequent scoped production recovery retest against RTO <=240 and RPO <=60 minutes."
+          },
+          "reasoning": "The stated achieved RTO of 300 minutes exceeds the customer maximum of 240, and achieved RPO of 90 exceeds the maximum of 60. These are affirmative measured-objective exceptions in a completed-test statement, not merely missing policy targets. Adequacy here supports identifying the reported test exception, not approving or independently verifying recovery capability.",
+          "scope_and_freshness": "The statement names Cedar Billing API and production recovery testing on 2026-10-18. Detailed workload coverage, test logs and independent provenance are absent.",
+          "uncertainty": "No corrective action, subsequent passing exercise or approved customer exception is supplied; none can be assumed.",
+          "unnecessary_questions": [
+            {
+              "reason": "Customer acceptance thresholds and the achieved test results are already stated; different policy targets would not resolve the demonstrated shortfall.",
+              "text": "What RTO and RPO does the DR policy target?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An existing current completed production test record could satisfy the operating-proof requirement without changing the policy.",
+          "case_id": "M6-06",
+          "citations": [
+            {
+              "quote": "DR policy targets RTO 120 minutes and RPO 30 minutes.",
+              "source_id": "M6-06"
+            },
+            {
+              "quote": "Next exercise is scheduled for December 2026.",
+              "source_id": "M6-06"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "A completed-test record addresses the specific operating-evidence gap before any need to contact the vendor.",
+            "kind": "internal_verification",
+            "text": "Check available completed Cedar Billing API production DR exercise records for execution date and achieved RTO/RPO."
+          },
+          "reasoning": "The policy targets are stricter than the customer maxima, supporting intended objectives only. A future scheduled exercise does not establish an executed annual production test or achieved recovery times. The excerpt does not prove that no earlier qualifying exercise occurred.",
+          "scope_and_freshness": "Cedar Billing API is named. Policy intent and a December 2026 schedule are present; production test execution date, measured outcomes and annual coverage are missing.",
+          "uncertainty": "There may be a prior completed exercise outside the supplied package. The schedule alone cannot establish a missed testing obligation.",
+          "unnecessary_questions": [
+            {
+              "reason": "The policy targets of 120 and 30 minutes are already provided; the missing fact is achieved results from an executed exercise.",
+              "text": "What recovery objectives does the DR policy target?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A newer qualifying exercise may exist in another record and would need to be evaluated independently.",
+          "case_id": "M6-07",
+          "citations": [
+            {
+              "quote": "Recovery report issued 2026-10-18.",
+              "source_id": "M6-07"
+            },
+            {
+              "quote": "The measured RTO 180 minutes relates to the exercise completed 2024-04-11.",
+              "source_id": "M6-07"
+            }
+          ],
+          "classifications": [
+            "stale_evidence",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Only current scoped exercise proof can close the freshness gap; another report cover date cannot.",
+            "kind": "internal_verification",
+            "text": "Check existing records for a Cedar Billing API production exercise executed within the 365-day window ending 2026-11-01."
+          },
+          "reasoning": "The exercise completed on 2024-04-11 is outside the specified 365-day window ending 2026-11-01. The report issuance date cannot refresh the exercise. This is stale operating evidence; it does not establish that the vendor failed to perform a newer exercise.",
+          "scope_and_freshness": "Cedar Billing API is named. Freshness must use the 2024-04-11 exercise date against 2026-11-01, rather than the 2026-10-18 report date.",
+          "uncertainty": "No statement excludes the existence of a separate current exercise. The measured 180-minute RTO does not resolve the date requirement.",
+          "unnecessary_questions": [
+            {
+              "reason": "The report date is already given and does not determine exercise freshness.",
+              "text": "When was the recovery report issued?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An exercise scope appendix could show Cedar Billing API participated; the excerpt alone does not.",
+          "case_id": "M6-08",
+          "citations": [
+            {
+              "quote": "Service: Cedar Warehouse.",
+              "source_id": "M6-08"
+            },
+            {
+              "quote": "Annual recovery exercise completed 2026-10-18 and achieved RTO 90 minutes.",
+              "source_id": "M6-08"
+            }
+          ],
+          "classifications": [
+            "out_of_scope",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "A scoped appendix could establish whether the existing exercise is relevant before requesting another test report.",
+            "kind": "internal_verification",
+            "text": "Check the exercise scope appendix or existing service mapping for explicit Cedar Billing API production recovery coverage."
+          },
+          "reasoning": "A completed Cedar Warehouse exercise does not establish the annual production recovery test required for Cedar Billing API. The date and RTO may describe valid evidence for the Warehouse service, but service scope cannot be transferred without an explicit supported relationship. No Billing API control failure is demonstrated.",
+          "scope_and_freshness": "The customer requirement names Cedar Billing API; the source names Cedar Warehouse. The 2026-10-18 exercise does not establish coverage of the required service.",
+          "uncertainty": "Shared infrastructure or an integrated exercise may exist, but no service mapping or coverage record is provided.",
+          "unnecessary_questions": [
+            {
+              "reason": "The 90-minute result is already supplied and cannot alone resolve Billing API service coverage.",
+              "text": "What RTO did Cedar Warehouse achieve?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An existing but omitted plan and exercise record could address the requirement.",
+          "case_id": "M6-09",
+          "citations": [
+            {
+              "quote": "No incident response evidence was provided with the synthetic package.",
+              "source_id": "M6-09"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "missing",
+          "minimal_action": {
+            "justification": "An inventory check avoids inferring control failure or sending a full questionnaire solely because this package is empty.",
+            "kind": "internal_verification",
+            "text": "Check the available evidence inventory for the Cedar Billing API incident-response procedure and its exercise record; request only those missing artifacts if unavailable."
+          },
+          "reasoning": "The packet explicitly records no supplied incident-response evidence. Neither documentation nor exercise of the Cedar Billing API process can be assessed from this package. This package-level absence statement is not vendor operating evidence and does not demonstrate that an incident-response process is absent or failed.",
+          "scope_and_freshness": "The requirement names Cedar Billing API. No vendor source, documentation date, exercise date or operating period is supplied.",
+          "uncertainty": "The package may be incomplete; actual process existence and operation remain unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "A TLS certificate does not close the documented-and-exercised incident-response evidence gap.",
+              "text": "Provide the service TLS certificate."
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A qualifying exercise may already be recorded separately from the approved plan.",
+          "case_id": "M6-10",
+          "citations": [
+            {
+              "quote": "Incident response plan v4 was approved 2026-08-01.",
+              "source_id": "M6-10"
+            },
+            {
+              "quote": "No tabletop or incident exercise results are included.",
+              "source_id": "M6-10"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "The plan already addresses documentation; the smallest remaining evidence request concerns the dated exercise record.",
+            "kind": "internal_verification",
+            "text": "Check available Cedar Billing API incident-response exercise records for a dated exercise within the required 12-month assessment window."
+          },
+          "reasoning": "The approved plan supports the documented-procedure element as a governance claim. It does not demonstrate exercise in the past 12 months. No included exercise results means operating proof is missing, not that no exercise occurred. Approval of the plan is not approval of the entire control.",
+          "scope_and_freshness": "Cedar Billing API is named and the plan approval date is 2026-08-01. No exercise execution date is supplied to compare to the 12-month requirement.",
+          "uncertainty": "The assessment date and a qualifying exercise record are not part of the excerpt; the plan date cannot substitute for either.",
+          "unnecessary_questions": [
+            {
+              "reason": "The plan approval is already described; repeating it does not establish exercised operation.",
+              "text": "Send the incident-response plan again."
+            }
+          ]
+        }
+      ],
+      "input_boundary": {
+        "notes": "Example clean-boundary declaration only; manually constructed simulation, with no actual reviewer execution or verified context.",
+        "status": "clean"
+      },
+      "schema_version": "m6-ai-review-v1"
+    },
+    "B": {
+      "agent_id": "B",
+      "cases": [
+        {
+          "alternative_interpretation": "A qualifying exercise may already be recorded separately from the approved plan.",
+          "case_id": "M6-10",
+          "citations": [
+            {
+              "quote": "Incident response plan v4 was approved 2026-08-01.",
+              "source_id": "M6-10"
+            },
+            {
+              "quote": "No tabletop or incident exercise results are included.",
+              "source_id": "M6-10"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "The plan already addresses documentation; the smallest remaining evidence request concerns the dated exercise record.",
+            "kind": "internal_verification",
+            "text": "Check available Cedar Billing API incident-response exercise records for a dated exercise within the required 12-month assessment window."
+          },
+          "reasoning": "The approved plan supports the documented-procedure element as a governance claim. It does not demonstrate exercise in the past 12 months. No included exercise results means operating proof is missing, not that no exercise occurred. Approval of the plan is not approval of the entire control.",
+          "scope_and_freshness": "Cedar Billing API is named and the plan approval date is 2026-08-01. No exercise execution date is supplied to compare to the 12-month requirement.",
+          "uncertainty": "The assessment date and a qualifying exercise record are not part of the excerpt; the plan date cannot substitute for either.",
+          "unnecessary_questions": [
+            {
+              "reason": "The plan approval is already described; repeating it does not establish exercised operation.",
+              "text": "Send the incident-response plan again."
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An existing but omitted plan and exercise record could address the requirement.",
+          "case_id": "M6-09",
+          "citations": [
+            {
+              "quote": "No incident response evidence was provided with the synthetic package.",
+              "source_id": "M6-09"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "missing",
+          "minimal_action": {
+            "justification": "An inventory check avoids inferring control failure or sending a full questionnaire solely because this package is empty.",
+            "kind": "internal_verification",
+            "text": "Check the available evidence inventory for the Cedar Billing API incident-response procedure and its exercise record; request only those missing artifacts if unavailable."
+          },
+          "reasoning": "The packet explicitly records no supplied incident-response evidence. Neither documentation nor exercise of the Cedar Billing API process can be assessed from this package. This package-level absence statement is not vendor operating evidence and does not demonstrate that an incident-response process is absent or failed.",
+          "scope_and_freshness": "The requirement names Cedar Billing API. No vendor source, documentation date, exercise date or operating period is supplied.",
+          "uncertainty": "The package may be incomplete; actual process existence and operation remain unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "A TLS certificate does not close the documented-and-exercised incident-response evidence gap.",
+              "text": "Provide the service TLS certificate."
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An exercise scope appendix could show Cedar Billing API participated; the excerpt alone does not.",
+          "case_id": "M6-08",
+          "citations": [
+            {
+              "quote": "Service: Cedar Warehouse.",
+              "source_id": "M6-08"
+            },
+            {
+              "quote": "Annual recovery exercise completed 2026-10-18 and achieved RTO 90 minutes.",
+              "source_id": "M6-08"
+            }
+          ],
+          "classifications": [
+            "out_of_scope",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "A scoped appendix could establish whether the existing exercise is relevant before requesting another test report.",
+            "kind": "internal_verification",
+            "text": "Check the exercise scope appendix or existing service mapping for explicit Cedar Billing API production recovery coverage."
+          },
+          "reasoning": "A completed Cedar Warehouse exercise does not establish the annual production recovery test required for Cedar Billing API. The date and RTO may describe valid evidence for the Warehouse service, but service scope cannot be transferred without an explicit supported relationship. No Billing API control failure is demonstrated.",
+          "scope_and_freshness": "The customer requirement names Cedar Billing API; the source names Cedar Warehouse. The 2026-10-18 exercise does not establish coverage of the required service.",
+          "uncertainty": "Shared infrastructure or an integrated exercise may exist, but no service mapping or coverage record is provided.",
+          "unnecessary_questions": [
+            {
+              "reason": "The 90-minute result is already supplied and cannot alone resolve Billing API service coverage.",
+              "text": "What RTO did Cedar Warehouse achieve?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A newer qualifying exercise may exist in another record and would need to be evaluated independently.",
+          "case_id": "M6-07",
+          "citations": [
+            {
+              "quote": "Recovery report issued 2026-10-18.",
+              "source_id": "M6-07"
+            },
+            {
+              "quote": "The measured RTO 180 minutes relates to the exercise completed 2024-04-11.",
+              "source_id": "M6-07"
+            }
+          ],
+          "classifications": [
+            "stale_evidence",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Only current scoped exercise proof can close the freshness gap; another report cover date cannot.",
+            "kind": "internal_verification",
+            "text": "Check existing records for a Cedar Billing API production exercise executed within the 365-day window ending 2026-11-01."
+          },
+          "reasoning": "The exercise completed on 2024-04-11 is outside the specified 365-day window ending 2026-11-01. The report issuance date cannot refresh the exercise. This is stale operating evidence; it does not establish that the vendor failed to perform a newer exercise.",
+          "scope_and_freshness": "Cedar Billing API is named. Freshness must use the 2024-04-11 exercise date against 2026-11-01, rather than the 2026-10-18 report date.",
+          "uncertainty": "No statement excludes the existence of a separate current exercise. The measured 180-minute RTO does not resolve the date requirement.",
+          "unnecessary_questions": [
+            {
+              "reason": "The report date is already given and does not determine exercise freshness.",
+              "text": "When was the recovery report issued?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An existing current completed production test record could satisfy the operating-proof requirement without changing the policy.",
+          "case_id": "M6-06",
+          "citations": [
+            {
+              "quote": "DR policy targets RTO 120 minutes and RPO 30 minutes.",
+              "source_id": "M6-06"
+            },
+            {
+              "quote": "Next exercise is scheduled for December 2026.",
+              "source_id": "M6-06"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "A completed-test record addresses the specific operating-evidence gap before any need to contact the vendor.",
+            "kind": "internal_verification",
+            "text": "Check available completed Cedar Billing API production DR exercise records for execution date and achieved RTO/RPO."
+          },
+          "reasoning": "The policy targets are stricter than the customer maxima, supporting intended objectives only. A future scheduled exercise does not establish an executed annual production test or achieved recovery times. The excerpt does not prove that no earlier qualifying exercise occurred.",
+          "scope_and_freshness": "Cedar Billing API is named. Policy intent and a December 2026 schedule are present; production test execution date, measured outcomes and annual coverage are missing.",
+          "uncertainty": "There may be a prior completed exercise outside the supplied package. The schedule alone cannot establish a missed testing obligation.",
+          "unnecessary_questions": [
+            {
+              "reason": "The policy targets of 120 and 30 minutes are already provided; the missing fact is achieved results from an executed exercise.",
+              "text": "What recovery objectives does the DR policy target?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A later scoped test could show recovery improvement, but it would not change what this reported exercise measured.",
+          "case_id": "M6-05",
+          "citations": [
+            {
+              "quote": "Production recovery test completed 2026-10-18.",
+              "source_id": "M6-05"
+            },
+            {
+              "quote": "Measured RTO 300 minutes and RPO 90 minutes.",
+              "source_id": "M6-05"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "The measured shortfall is already clear; the narrow remaining question concerns current remediation and retest status.",
+            "kind": "internal_verification",
+            "text": "Check existing corrective-action records and any subsequent scoped production recovery retest against RTO <=240 and RPO <=60 minutes."
+          },
+          "reasoning": "The stated achieved RTO of 300 minutes exceeds the customer maximum of 240, and achieved RPO of 90 exceeds the maximum of 60. These are affirmative measured-objective exceptions in a completed-test statement, not merely missing policy targets. Adequacy here supports identifying the reported test exception, not approving or independently verifying recovery capability.",
+          "scope_and_freshness": "The statement names Cedar Billing API and production recovery testing on 2026-10-18. Detailed workload coverage, test logs and independent provenance are absent.",
+          "uncertainty": "No corrective action, subsequent passing exercise or approved customer exception is supplied; none can be assumed.",
+          "unnecessary_questions": [
+            {
+              "reason": "Customer acceptance thresholds and the achieved test results are already stated; different policy targets would not resolve the demonstrated shortfall.",
+              "text": "What RTO and RPO does the DR policy target?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "The scoped assessment may already define a single production listener; if that cannot be established, a focused population-inventory check remains necessary.",
+          "case_id": "M6-04",
+          "citations": [
+            {
+              "quote": "Production listener 443 rejects TLS 1.0 and TLS 1.1. TLS 1.3 is accepted.",
+              "source_id": "M6-04"
+            },
+            {
+              "quote": "No other listeners are described.",
+              "source_id": "M6-04"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "The excerpt states no other listeners are described, which leaves coverage uncertain; an analyst scope interpretation may avoid a redundant inventory request, but cannot assume unmentioned endpoints are safe.",
+            "kind": "analyst_review",
+            "text": "Determine whether the assessment scope already defines listener 443 as the complete production population before proposing an inventory request."
+          },
+          "reasoning": "The stated behavior supports the minimum-protocol criterion for listener 443. The all-production-endpoints requirement also needs a complete scoped population. No other listeners are described, so neither their existence nor their weakness is established. Whole-service sufficiency remains unresolved.",
+          "scope_and_freshness": "Cedar Billing API production listener 443 is in scope; endpoint inventory completeness and test date are absent.",
+          "uncertainty": "The excerpt may cover the entire production population, but it does not explicitly establish that fact.",
+          "unnecessary_questions": [
+            {
+              "reason": "The unresolved fact is production endpoint population coverage, so a broad policy request exceeds the gap.",
+              "text": "Send every vendor security policy."
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A newer retest could show the listener has been fixed; no such retest is supplied.",
+          "case_id": "M6-03",
+          "citations": [
+            {
+              "quote": "Primary listener 443 accepts TLS 1.3.",
+              "source_id": "M6-03"
+            },
+            {
+              "quote": "Production backup listener 9443 accepts TLS 1.1.",
+              "source_id": "M6-03"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "The weak listener and protocol are already identified; a listener-specific retest is narrower than repeating a full TLS questionnaire.",
+            "kind": "internal_verification",
+            "text": "Check existing remediation records and a current protocol-rejection retest for production listener 9443."
+          },
+          "reasoning": "The customer requires every production endpoint to reject protocols below TLS 1.2. The stated acceptance of TLS 1.1 on production listener 9443 directly contradicts that criterion. TLS 1.3 on listener 443 does not remove the secondary-listener exception. Adequacy identifies the declared exception, not independent scan verification.",
+          "scope_and_freshness": "Cedar Billing API production backup listener 9443 is explicit. Listener 443 is separately described. The excerpt supplies no scan timestamp, configuration provenance or remediation status.",
+          "uncertainty": "Current exposure, intervening remediation and the original test method are not independently verified.",
+          "unnecessary_questions": [
+            {
+              "reason": "Listener 443 already accepts TLS 1.3; that answer cannot resolve the TLS 1.1 exception on listener 9443.",
+              "text": "Does the production service use TLS 1.3?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "An undocumented mandatory phishing-resistant factor could change the assessment of the complete authentication path, while leaving TOTP itself phishable.",
+          "case_id": "M6-02",
+          "citations": [
+            {
+              "quote": "Production admin authentication uses TOTP authenticator codes.",
+              "source_id": "M6-02"
+            },
+            {
+              "quote": "No alternative phishing-resistant mechanism documented.",
+              "source_id": "M6-02"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "This resolves whether the stated method exception is exposed or accompanied by an enforced phishing-resistant layer, without asking the vendor to repeat the named method.",
+            "kind": "internal_verification",
+            "text": "Verify the scoped production authentication chain in existing configuration records, including whether TOTP alone can grant privileged access."
+          },
+          "reasoning": "As described, production administrator authentication uses TOTP, which is susceptible to phishing and does not meet the stated phishing-resistant requirement. This is an affirmative method exception in the synthetic statement, rather than a failure inferred only from missing evidence. Adequacy here means enough stated detail to identify that exception, not whole-control approval or authenticated operating proof.",
+          "scope_and_freshness": "Cedar Billing API production administrators are expressly named. No dated configuration, test period or independent technical validation is available.",
+          "uncertainty": "The statement does not establish whether a separate mandatory phishing-resistant layer also protects every production route.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt already identifies TOTP; the missing fact concerns the enforced complete authentication chain.",
+              "text": "Which MFA method do production administrators use?"
+            }
+          ]
+        },
+        {
+          "alternative_interpretation": "A phishing-resistant mechanism may already be enforced; its absence from this excerpt is not proof of its absence from the service.",
+          "case_id": "M6-01",
+          "citations": [
+            {
+              "quote": "Privileged MFA is enabled for all administrator accounts.",
+              "source_id": "M6-01"
+            },
+            {
+              "quote": "Authentication method and recovery path not specified.",
+              "source_id": "M6-01"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Existing scoped configuration could resolve the missing method and enforcement facts before a vendor request is needed.",
+            "kind": "internal_verification",
+            "text": "Check available Cedar Billing API identity configuration and recovery records for the privileged production authentication method and enforced fallback paths."
+          },
+          "reasoning": "The statement establishes an administrator MFA existence claim, but neither the authentication method nor recovery path establishes phishing resistance. The customer requires phishing-resistant privileged production access; unspecified details cannot demonstrate a method exception.",
+          "scope_and_freshness": "Cedar Billing API is named and all administrator accounts are claimed. Production enforcement, recovery behavior, source date and operating-test period are not supplied.",
+          "uncertainty": "The excerpt does not show whether all privileged production access routes are covered or whether a phishable fallback exists.",
+          "unnecessary_questions": [
+            {
+              "reason": "The supplied statement already claims it is enabled; the unresolved criterion is phishing resistance and applicable enforcement.",
+              "text": "Does administrator MFA exist?"
+            }
+          ]
+        }
+      ],
+      "input_boundary": {
+        "notes": "Example clean-boundary declaration only; manually constructed simulation, with no actual reviewer execution or verified context.",
+        "status": "clean"
+      },
+      "schema_version": "m6-ai-review-v1"
+    }
+  }
+}
