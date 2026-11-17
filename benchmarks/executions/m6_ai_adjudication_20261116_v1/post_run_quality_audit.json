@@ -1,0 +1,17 @@
+{
+  "audit_type": "post_execution_AI_assisted_quality_audit_not_human_adjudication",
+  "byte_exact_citations_verified": 10,
+  "issues": [
+    {
+      "case_id": "M6-02",
+      "issue": "Proposed stated-TOTP-path exception remains conditional on the unknown additional mandatory phishing-resistant factor. Do not infer independently verified full-path noncompliance."
+    },
+    {
+      "case_id": "M6-04",
+      "issue": "The supplied 443 result rejects TLS1.0 and1.1. Additional older-protocol requests may expand the TLS<1.2 threshold unnecessarily; endpoint population coverage is the clear remaining gap. Preserve raw proposal and seek qualified-human adjudication."
+    }
+  ],
+  "original_outputs_modified": false,
+  "release_recommendation": "keep_draft_defer_release_pending_qualified_human_adjudication",
+  "semantic_correctness_verified": false
+}

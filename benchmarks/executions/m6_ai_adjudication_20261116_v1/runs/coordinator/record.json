@@ -1,0 +1,1316 @@
+{
+  "adjudication": {
+    "authoritative_risk_mutation": false,
+    "automatic_approval": false,
+    "cases": [
+      {
+        "case_id": "M6-01",
+        "customer_requirement": "Privileged production access requires phishing-resistant MFA.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "A includes both method and recovery uncertainty; B also permits either resistant or phishable MFA.",
+            "uncertainty": "Neither possibility is established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "Both reviews' quotations match M6-01 exactly and are correctly attributed. A preserves the two relevant statements together.",
+            "uncertainty": "Exact quotation does not verify implementation.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "classifications",
+            "rationale": "A records insufficiency alone; B additionally preserves limited positive support for administrator MFA enablement. That support does not establish phishing resistance.",
+            "uncertainty": "Production enforcement remains unestablished.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "Both request vendor configuration immediately. First conditionally check whether suitable evidence is already held; otherwise make the focused request.",
+            "uncertainty": "Internal evidence availability is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "A explicitly distinguishes asserted administrator coverage from required production, method and recovery enforcement; B's narrower account is compatible.",
+            "uncertainty": "Enablement is only statement-level support.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves the source location, absent date and absent production mapping without inventing a freshness rule.",
+            "uncertainty": "No configuration date is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "A identifies method, recovery and privileged-production population gaps; B emphasizes the same enforcement uncertainty.",
+            "uncertainty": "No additional evidence resolves these facts.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both generic MFA questions are answered by the enablement assertion. A's complete entry is retained; B's wording is separately assessed below.",
+            "uncertainty": "Enablement does not establish phishing resistance.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "2398f17f788a26c89cacd9777bbc6856b1e22cb5a9584725d8a3a83950e77f0c",
+          "B": "6f4ee0ac9ab2dde73aa12b5fff502c3a41f6f240aa7e544482013d2d2c216c64"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "The unspecified MFA method could be phishing-resistant, but it could also use phishable codes or recovery.",
+          "case_id": "M6-01",
+          "citations": [
+            {
+              "quote": "Privileged MFA is enabled for all administrator accounts. Authentication method and recovery path not specified.",
+              "source_id": "M6-01"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Method and recovery enforcement are missing; further internal evidence may or may not be available.",
+            "kind": "internal_verification",
+            "text": "If relevant internal evidence is available, check the mandatory MFA methods and recovery paths for all privileged production access; otherwise request that specific configuration evidence from the vendor."
+          },
+          "reasoning": "Criterion: \"Privileged production access requires phishing-resistant MFA.\" Administrator MFA coverage is asserted, but neither phishing resistance nor production and recovery enforcement is demonstrated. This is a provisional AI-only assessment.",
+          "scope_and_freshness": "Cedar Billing API; docs/M6_Blind_Reviewer_Packet.md:15. No evidence date or explicit production mapping is supplied; the criterion specifies no freshness period.",
+          "uncertainty": "Actual authentication methods, recovery routes, and privileged production population remain unspecified.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt already asserts this; the missing fact is the enforced method.",
+              "text": "Is MFA enabled for administrator accounts?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "The requested facts are missing, but an immediate vendor request is conditional on whether suitable evidence can already be located.",
+            "smallest_action": {
+              "justification": "Avoid repeating a request if adequate evidence is already available.",
+              "kind": "internal_verification",
+              "text": "If internal authentication evidence is available, check production methods and recovery coverage; otherwise request those facts from the vendor."
+            },
+            "source_id": "A:minimal_action",
+            "uncertainty": "Availability of internal evidence is unknown.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "Administrator MFA enablement is already asserted.",
+            "smallest_action": {
+              "justification": "Repeating the assertion does not resolve phishing resistance.",
+              "kind": "no_action",
+              "text": "Do not repeat this generic enablement question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "The assertion is not independently verified.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "Mandatory method and fallback configuration are relevant missing facts; vendor contact depends on evidence availability.",
+            "smallest_action": {
+              "justification": "A focused configuration check is sufficient.",
+              "kind": "internal_verification",
+              "text": "If suitable internal evidence exists, inspect mandatory production MFA and fallback paths; otherwise request the configuration extract."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "Internal holdings and actual enforcement are unknown.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "The evidence already states coverage for all administrator accounts.",
+            "smallest_action": {
+              "justification": "Generic coverage confirmation adds no missing technical property.",
+              "kind": "no_action",
+              "text": "Do not repeat this administrator MFA question."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Production mapping remains unestablished.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-02",
+        "customer_requirement": "Privileged production access requires phishing-resistant MFA.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both allow an undocumented additional mechanism; A preserves the distinction between the affirmative TOTP statement and missing documentation.",
+            "uncertainty": "Additional mandatory factors are unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All A and B quotations match M6-02 exactly with correct identifiers; A retains both statements together.",
+            "uncertainty": "Quotation matching does not establish complete path coverage.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "minimal_action",
+            "rationale": "Both propose analyst review; B explicitly preserves uncertainty about an additional mandatory factor while reviewing the stated exception.",
+            "uncertainty": "The actual complete authentication chain is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "reasoning",
+            "rationale": "B explicitly bases the exception on affirmative TOTP use rather than absence of alternative documentation.",
+            "uncertainty": "The exception concerns the described mechanism.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A identifies production scope, source location and absent observation date without adding a freshness requirement.",
+            "uncertainty": "Configuration date is absent.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "uncertainty",
+            "rationale": "B isolates the material uncertainty: an additional mandatory resistant factor on this path.",
+            "uncertainty": "No supplied fact resolves that possibility.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "A's method question is explicitly answered; B's generic MFA question is also unnecessary and separately assessed.",
+            "uncertainty": "Known TOTP use does not establish the entire authentication chain.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "3ba7a4aa68ad09aee74643cbdee615c4684edf2b7ec6cf379da2b9f4f98a342f",
+          "B": "2c3ba1010e834e1ea247f37d2b13c3f07c26ad2da7cd0d44bf4b695865fa4e04"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "An undocumented additional phishing-resistant mechanism might exist, but the supplied statement describes TOTP as the production admin method.",
+          "case_id": "M6-02",
+          "citations": [
+            {
+              "quote": "Production admin authentication uses TOTP authenticator codes. No alternative phishing-resistant mechanism documented.",
+              "source_id": "M6-02"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "The documented production administrator mechanism is TOTP, which does not provide phishing resistance.",
+            "kind": "analyst_review",
+            "text": "Record the provisional exception for the stated TOTP administrator authentication path, preserving uncertainty about any additional mandatory mechanism."
+          },
+          "reasoning": "The affirmative TOTP statement supports a technical weakness against the phishing-resistant requirement. Absence of alternative documentation alone would not prove that no alternative exists. Source location: docs/M6_Blind_Reviewer_Packet.md:21.",
+          "scope_and_freshness": "Cedar Billing API production admin authentication; docs/M6_Blind_Reviewer_Packet.md:21. No observation date or freshness requirement is supplied.",
+          "uncertainty": "Whether an additional phishing-resistant factor is mandatory on this path remains unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "The method is already explicitly supplied.",
+              "text": "Which MFA method does production admin authentication use?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "TOTP authenticator codes are explicitly identified.",
+            "smallest_action": {
+              "justification": "The method question is answered.",
+              "kind": "no_action",
+              "text": "Do not request the stated method again."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Additional mandatory factors remain unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "Generic MFA confirmation does not resolve the phishing-resistance issue in the stated TOTP method.",
+            "smallest_action": {
+              "justification": "Analyst review can use the supplied method statement.",
+              "kind": "no_action",
+              "text": "Do not repeat generic MFA confirmation."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Complete authentication-path coverage is unknown.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-03",
+        "customer_requirement": "All production endpoints must reject TLS versions older than 1.2.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "A addresses restricted exposure without inventing an exception; B's favorable primary-listener interpretation also cannot offset the backup exception.",
+            "uncertainty": "Exposure restrictions are not supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-03 exactly and are correctly attributed; A includes primary and backup evidence.",
+            "uncertainty": "Primary TLS 1.3 acceptance does not establish a minimum version.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "minimal_action",
+            "rationale": "Both actions refer the same explicit production exception for analyst review; A's wording is sufficient.",
+            "uncertainty": "Remediation is not documented.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "A explicitly applies the all-endpoint criterion and avoids interpreting TLS 1.3 acceptance as rejection of older protocols.",
+            "uncertainty": "Other endpoint behavior is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves source location and absent observation date; B identifies the same scope.",
+            "uncertainty": "Current configuration is unverified.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "A includes actual configuration, other endpoints and the primary minimum-version gap; B additionally mentions unknown remediation.",
+            "uncertainty": "No real-world configuration verification is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both proposed questions are explicitly answered. A's complete entry is retained and B's is separately assessed.",
+            "uncertainty": "Neither answer establishes remediation.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "3f28098560897035d2db43aafa2854092e2db8a7115dc0a82b95a4f3ce35a005",
+          "B": "31ba90a24a2635882a0e042801e8aa9c84691d89418625207ff0bebbed2dcda6"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "The backup listener might have restricted exposure, but the criterion includes all production endpoints without an exposure exception.",
+          "case_id": "M6-03",
+          "citations": [
+            {
+              "quote": "Primary listener 443 accepts TLS 1.3. Production backup listener 9443 accepts TLS 1.1.",
+              "source_id": "M6-03"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "One explicitly production endpoint accepts a prohibited version.",
+            "kind": "analyst_review",
+            "text": "Review production backup listener 9443 accepting TLS 1.1 as a provisional exception."
+          },
+          "reasoning": "Criterion: \"All production endpoints must reject TLS versions older than 1.2.\" Listener 9443 accepting TLS 1.1 contradicts the threshold. Listener 443 accepting TLS 1.3 does not establish rejection of older versions. This conclusion is provisional and AI-only.",
+          "scope_and_freshness": "Cedar Billing API production listeners; docs/M6_Blind_Reviewer_Packet.md:27. No observation date or freshness threshold is supplied.",
+          "uncertainty": "Actual configuration is not independently verified; other endpoints and listener 443's minimum version remain unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "The supplied statement explicitly answers this.",
+              "text": "Does backup listener 9443 accept TLS 1.1?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "TLS 1.1 acceptance is explicitly supplied.",
+            "smallest_action": {
+              "justification": "No clarification is needed to identify the stated exception.",
+              "kind": "no_action",
+              "text": "Do not repeat the TLS 1.1 acceptance question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Current remediation is unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "The evidence expressly calls 9443 a production backup listener.",
+            "smallest_action": {
+              "justification": "Production scope is already stated.",
+              "kind": "no_action",
+              "text": "Do not repeat the production-scope question."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Real-world implementation remains unverified.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-04",
+        "customer_requirement": "All production endpoints must reject TLS versions older than 1.2.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both allow 443 to be the entire population without treating that possibility as established.",
+            "uncertainty": "Endpoint completeness is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-04 exactly with correct identifiers. A additionally preserves stated TLS 1.3 acceptance.",
+            "uncertainty": "Acceptance is not a minimum-version result.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A assumes an existing inventory; B requests a full inventory and results immediately. Use a conditional scope check, then seek only missing coverage and rejection evidence.",
+            "uncertainty": "Internal inventory availability is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both preserve limited listener support and incomplete population coverage; A also retains uncertainty about every below-1.2 protocol.",
+            "uncertainty": "Whole-control support is insufficient.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A limits support to 443 and does not invent a freshness period; B agrees the test date and full population are absent.",
+            "uncertainty": "Observation date is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "Both identify incomplete population and remaining legacy-protocol uncertainty.",
+            "uncertainty": "No other listener is demonstrated vulnerable.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "A's legacy-rejection question and B's TLS 1.3 question are both answered; each is assessed below.",
+            "uncertainty": "Neither repeated answer resolves complete coverage.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "4da8d228a24f1a7da3be9479b1acbb7e0d7d9794200933bce9cd1160d4868782",
+          "B": "f71197df032e8273de9d56b1ca377ea5540a6372623aa7f4ac026bac313dddbd"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "Listener 443 could be the complete production endpoint population, but the excerpt does not establish that.",
+          "case_id": "M6-04",
+          "citations": [
+            {
+              "quote": "Production listener 443 rejects TLS 1.0 and TLS 1.1. TLS 1.3 is accepted. No other listeners are described.",
+              "source_id": "M6-04"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "443 has limited positive evidence; population coverage and complete below-1.2 rejection remain unestablished.",
+            "kind": "internal_verification",
+            "text": "If an internal production endpoint inventory and protocol evidence are available, compare them with the supplied 443 result; otherwise request only confirmation of the complete endpoint population and the missing below-1.2 rejection evidence."
+          },
+          "reasoning": "Criterion: \"All production endpoints must reject TLS versions older than 1.2.\" Explicit rejection of TLS 1.0 and 1.1 supports the described listener. It does not establish complete endpoint coverage or rejection of every older protocol. Whole-control support remains insufficient; the assessment is provisional and AI-only.",
+          "scope_and_freshness": "Cedar Billing API production listener 443 only; docs/M6_Blind_Reviewer_Packet.md:33. No observation date is supplied and no freshness period is required.",
+          "uncertainty": "The complete production endpoint population and any other older protocol support are unspecified.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt supplies explicit rejection evidence for this listener.",
+              "text": "Does listener 443 reject TLS 1.0 and TLS 1.1?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "443 rejection of TLS 1.0 and 1.1 is explicit.",
+            "smallest_action": {
+              "justification": "This subquestion is answered.",
+              "kind": "no_action",
+              "text": "Do not request the same 443 rejection result again."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Other protocol and endpoint coverage remains unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "Complete endpoint coverage is relevant, but requesting all results again is broader than the known gap.",
+            "smallest_action": {
+              "justification": "Retain the supplied 443 result and seek only missing population and protocol coverage.",
+              "kind": "internal_verification",
+              "text": "If relevant internal records are available, check endpoint completeness and missing legacy-protocol results; otherwise ask the vendor for those specific gaps."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "Internal evidence and additional endpoints are not established.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "TLS 1.3 acceptance is already stated and does not demonstrate rejection of older protocols.",
+            "smallest_action": {
+              "justification": "Repeating modern-protocol support adds no needed coverage.",
+              "kind": "no_action",
+              "text": "Do not repeat the TLS 1.3 support question."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Minimum accepted version remains incompletely established.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-05",
+        "customer_requirement": "Current annual production DR test must demonstrate RTO <=240 minutes and RPO <=60 minutes.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "A permits another qualifying test; B specifically permits a later retest. Neither is supplied and neither removes this test's exceedances.",
+            "uncertainty": "Other tests are unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-05 exactly with correct identifiers; A keeps date and measurements together.",
+            "uncertainty": "Methodology is unverified.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "minimal_action",
+            "rationale": "Both propose analyst review of the two explicit exceedances; A states measurements and thresholds directly.",
+            "uncertainty": "Annual-cycle applicability is unverified.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both correctly compare 300 with 240 and 90 with 60. A explicitly limits the conclusion to synthetic results.",
+            "uncertainty": "Adequacy is for identifying the stated exception.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "B calls the test recent relative to review context; A more precisely preserves the requirement's missing current-cycle reference date.",
+            "uncertainty": "Current annual-cycle applicability is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "uncertainty",
+            "rationale": "A raises scope, methodology and annual applicability; B raises later remediation or retesting. Preserve both sets of limits.",
+            "uncertainty": "No further test evidence is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both questions ask for already supplied measurements; A's entry is retained and B's assessed separately.",
+            "uncertainty": "No repeated measurement request is justified.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "adb2a4b1c3bca12d34acbaf3983135b3558b29c730e1196aba9e77e49ae8c535",
+          "B": "5b301de63395c1d023fc7bd372fbe6f758c64f94ed13de2bcaeb547f3a71e1d7"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "A different qualifying test might exist, but the supplied completed test exceeds both required limits.",
+          "case_id": "M6-05",
+          "citations": [
+            {
+              "quote": "Production recovery test completed 2026-10-18. Measured RTO 300 minutes and RPO 90 minutes.",
+              "source_id": "M6-05"
+            }
+          ],
+          "classifications": [
+            "demonstrated_exception"
+          ],
+          "demonstrated_weakness": true,
+          "evidence_sufficiency": "adequate",
+          "minimal_action": {
+            "justification": "Both measured results exceed the explicit thresholds.",
+            "kind": "analyst_review",
+            "text": "Review the completed production recovery test's RTO 300 minutes and RPO 90 minutes as provisional exceptions to the 240-minute and 60-minute limits."
+          },
+          "reasoning": "Criterion: \"Current annual production DR test must demonstrate RTO <=240 minutes and RPO <=60 minutes.\" The completed production test reports RTO 300 >240 and RPO 90 >60. Both thresholds are missed. This is a provisional AI-only conclusion from synthetic results.",
+          "scope_and_freshness": "Cedar Billing API production recovery test dated 2026-10-18; docs/M6_Blind_Reviewer_Packet.md:39. The criterion does not define the reference date or annual cycle for 'current'; freshness ambiguity does not remove the measured exceedances.",
+          "uncertainty": "Test scope, methodology and annual-cycle applicability are not independently verified; later remediation, retesting or another qualifying test are unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "Both measured results are already supplied.",
+              "text": "What RTO and RPO did this recovery test achieve?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "RTO 300 and RPO 90 minutes are explicitly supplied.",
+            "smallest_action": {
+              "justification": "The supplied values support analyst review without reasking.",
+              "kind": "no_action",
+              "text": "Do not request these achieved measurements again."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Test methodology is unverified.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "The October test's measurements are already supplied.",
+            "smallest_action": {
+              "justification": "Repeating the question adds no evidence gap resolution.",
+              "kind": "no_action",
+              "text": "Do not repeat the October measurement question."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Later retests are unknown.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-06",
+        "customer_requirement": "Annual executed production DR test with achieved RTO <=240 minutes and RPO <=60 minutes.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both permit a previous qualifying exercise and reject treating a schedule as execution.",
+            "uncertainty": "Prior execution is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-06 exactly and are correctly attributed; A preserves targets and schedule together.",
+            "uncertainty": "Neither statement supplies achieved results.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A assumes existing records; B immediately asks the vendor. Make the internal check conditional and retain a focused vendor fallback.",
+            "uncertainty": "Internal record availability is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both distinguish targets from achieved performance; A explicitly avoids inferring actual recovery failure.",
+            "uncertainty": "Annual execution remains unproven.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves the December schedule and missing completed date and annual reference period.",
+            "uncertainty": "Production execution is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "Both identify unknown completion and achieved performance; A states these together.",
+            "uncertainty": "No completed report is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both target questions are answered and do not resolve achieved performance; B's wording is assessed separately.",
+            "uncertainty": "Policy targets do not prove execution.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "21eb97a534403290e4b8863dc45ee00d16ba4a0727357614b18b7a91d90b3135",
+          "B": "bf4d19320005f1c48ebefbb45e3bd4eec645731f8061bc8d29fca7080351d0dd"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "A previous qualifying production exercise may exist outside the excerpt; the scheduled exercise does not establish one.",
+          "case_id": "M6-06",
+          "citations": [
+            {
+              "quote": "DR policy targets RTO 120 minutes and RPO 30 minutes. Next exercise is scheduled for December 2026.",
+              "source_id": "M6-06"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Targets and scheduling cannot establish executed production results; internal holdings are unknown.",
+            "kind": "internal_verification",
+            "text": "If relevant internal records are available, locate an executed annual Cedar Billing API production DR report with date and achieved RTO and RPO; otherwise request that specific record from the vendor."
+          },
+          "reasoning": "Criterion: \"Annual executed production DR test with achieved RTO <=240 minutes and RPO <=60 minutes.\" Policy targets are numerically within the limits, but they are not achieved results. The planned exercise does not demonstrate completed production operation. No failure of actual recovery performance is established; this assessment is provisional and AI-only.",
+          "scope_and_freshness": "Cedar Billing API policy and December 2026 exercise schedule; docs/M6_Blind_Reviewer_Packet.md:45. No completed exercise date or annual reference period is supplied.",
+          "uncertainty": "Whether an annual production exercise has already occurred and what it achieved remain unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt already provides targets; achieved results are required.",
+              "text": "What are the DR policy RTO and RPO targets?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "Targets of 120 and 30 minutes are supplied.",
+            "smallest_action": {
+              "justification": "Repeating targets cannot establish achieved performance.",
+              "kind": "no_action",
+              "text": "Do not repeat the policy-target question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Execution results are unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "The completed record would address the gap, but vendor contact depends on whether suitable evidence is already available.",
+            "smallest_action": {
+              "justification": "Seek the missing executed result without assuming internal holdings.",
+              "kind": "internal_verification",
+              "text": "If accessible internal records exist, check the annual production test date and measured results; otherwise request the completed test record."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "No completed record or internal availability is established.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "The policy targets are already explicit.",
+            "smallest_action": {
+              "justification": "The missing facts concern execution and achievement.",
+              "kind": "no_action",
+              "text": "Do not ask for policy targets again."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Actual recovery performance is unknown.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-07",
+        "customer_requirement": "Production DR exercise must be within 365 days of 2026-11-01.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both permit a newer exercise; A explicitly distinguishes report issuance from execution freshness.",
+            "uncertainty": "A newer exercise is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-07 exactly and are correctly attributed; A retains issuance and execution dates together.",
+            "uncertainty": "Recent issuance does not refresh old execution.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "classifications",
+            "rationale": "A records staleness alone; B also explicitly records insufficient evidence for the required current exercise. Both descriptions apply without proving nonexecution.",
+            "uncertainty": "No qualifying subsequent exercise is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A assumes existing records; B immediately requests a vendor record. Use a conditional internal check followed by the same narrow record request if needed.",
+            "uncertainty": "Internal record availability is unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both reject issuance-date substitution; A explicitly avoids importing the RTO value as an unstated threshold.",
+            "uncertainty": "Staleness is an evidence defect, not proof no exercise occurred.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves the explicit reference date, stale exercise date, source location and uncertain production scope.",
+            "uncertainty": "Production scope is not explicit.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "Both identify a potentially omitted newer exercise; A does not infer its existence.",
+            "uncertainty": "No subsequent exercise is established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both issuance-date questions are answered and immaterial to execution freshness; B's wording is separately assessed.",
+            "uncertainty": "Issuance cannot substitute for execution.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "a2b37ad995a066ee0b607b4b9881e1e02c6bc759425b266e1820ba5860826e17",
+          "B": "8dd380f22c8a2efb7d3a109e29d3c734fb7201f511de86a61642cb2d7a6c0677"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "A newer exercise could exist, but a recently issued report about the old exercise does not establish it.",
+          "case_id": "M6-07",
+          "citations": [
+            {
+              "quote": "Recovery report issued 2026-10-18. The measured RTO 180 minutes relates to the exercise completed 2024-04-11.",
+              "source_id": "M6-07"
+            }
+          ],
+          "classifications": [
+            "stale_evidence",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "The supplied execution date is stale; further internal evidence may or may not be available.",
+            "kind": "internal_verification",
+            "text": "If relevant internal records are available, check for a Cedar Billing API production DR exercise within 365 days of 2026-11-01; otherwise request a record showing qualifying execution date and production scope."
+          },
+          "reasoning": "Criterion: \"Production DR exercise must be within 365 days of 2026-11-01.\" The 2024-04-11 exercise is outside that window. The 2026-10-18 report date does not refresh it, and RTO 180 is not a threshold in this criterion. Stale evidence alone does not demonstrate that no qualifying exercise occurred. This is provisional and AI-only.",
+          "scope_and_freshness": "Cedar Billing API recovery report; docs/M6_Blind_Reviewer_Packet.md:51. Exercise date is stale relative to the explicit 2026-11-01 reference; production scope is not explicit.",
+          "uncertainty": "A more recent production exercise may be omitted from the excerpt.",
+          "unnecessary_questions": [
+            {
+              "reason": "The report date is known and does not resolve exercise freshness.",
+              "text": "When was this recovery report issued?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "The issuance date is explicitly 2026-10-18 and is not the exercise date.",
+            "smallest_action": {
+              "justification": "Reasking cannot establish freshness.",
+              "kind": "no_action",
+              "text": "Do not repeat the report-issuance question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "A newer exercise remains unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "A qualifying production exercise record is the relevant missing evidence; immediate vendor contact is conditional.",
+            "smallest_action": {
+              "justification": "Use suitable internal evidence if available without assuming it exists.",
+              "kind": "internal_verification",
+              "text": "If relevant internal records are accessible, check execution date and production scope; otherwise request the qualifying exercise record."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "Internal holdings and subsequent execution are unknown.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "The report issuance date is already supplied and cannot refresh the 2024 exercise.",
+            "smallest_action": {
+              "justification": "The question addresses no remaining evidentiary gap.",
+              "kind": "no_action",
+              "text": "Do not ask for the report issuance date again."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Production scope and later exercises remain unestablished.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-08",
+        "customer_requirement": "Annual production recovery test required for Cedar Billing API.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both allow shared infrastructure coverage but correctly require a Billing API mapping.",
+            "uncertainty": "Shared coverage is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-08 exactly with correct identifiers; A preserves service, date and result together.",
+            "uncertainty": "Warehouse evidence does not establish Billing API coverage.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_B",
+            "field": "classifications",
+            "rationale": "A records out-of-scope evidence alone; B also records insufficiency for the required Billing API test. Both apply.",
+            "uncertainty": "No Billing API production test is established.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A seeks a separate test; B first checks assignment or shared coverage. Prefer the narrower scope check conditionally, then request only missing Billing API evidence.",
+            "uncertainty": "No further internal artifact is established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both reject substituting Warehouse results; A explicitly avoids inferring failure and notes no RTO threshold applies.",
+            "uncertainty": "Wrong-service evidence cannot establish operating effectiveness for Billing API.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves wrong-service scope, absent production scope, date and absent annual reference date.",
+            "uncertainty": "Annual applicability cannot be fully assessed.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "Both identify shared coverage and separate Billing API test uncertainty.",
+            "uncertainty": "Neither alternative is established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "A's value question is answered; B's performance-detail request is irrelevant to the service gap. Both are assessed below.",
+            "uncertainty": "Further Warehouse performance detail cannot establish Billing API coverage.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "59aaf57b4915d8f4df932c3bb9ec3d1cb0689411afdb050956adecb3924d5a75",
+          "B": "5cb27b782675f1e2934b260a4314ac9d1e9ac3a2ca7268a5d952fc97f5715c27"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "The Warehouse exercise might involve shared infrastructure, but no mapping to Cedar Billing API production recovery is supplied.",
+          "case_id": "M6-08",
+          "citations": [
+            {
+              "quote": "Service: Cedar Warehouse. Annual recovery exercise completed 2026-10-18 and achieved RTO 90 minutes.",
+              "source_id": "M6-08"
+            }
+          ],
+          "classifications": [
+            "out_of_scope",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Service coverage is the first unresolved fact; internal supporting artifacts are not established.",
+            "kind": "internal_verification",
+            "text": "If supporting internal scope records are available, check whether this exercise explicitly covers Cedar Billing API production recovery; otherwise request the Billing API annual production test record with service scope and completion date."
+          },
+          "reasoning": "Criterion: \"Annual production recovery test required for Cedar Billing API.\" Cedar Warehouse exercise evidence does not establish a Cedar Billing API production test. RTO 90 minutes supplies no substitute for the required service scope, and this criterion sets no RTO threshold. This provisional AI-only assessment does not demonstrate a failed control.",
+          "scope_and_freshness": "Cedar Warehouse exercise dated 2026-10-18; docs/M6_Blind_Reviewer_Packet.md:57. Wrong service and no explicit production scope; the criterion supplies no annual reference date.",
+          "uncertainty": "Shared recovery coverage and any separate Cedar Billing API test are unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "The value is already supplied and does not resolve the service mismatch.",
+              "text": "What RTO did Cedar Warehouse achieve?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "Warehouse RTO is explicitly 90 minutes and does not resolve Billing API scope.",
+            "smallest_action": {
+              "justification": "The value is answered and no RTO threshold applies here.",
+              "kind": "no_action",
+              "text": "Do not repeat the Warehouse RTO question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Billing API coverage is unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "Details of Warehouse performance do not address the required service and production scope.",
+            "smallest_action": {
+              "justification": "A scope check, not further performance detail, addresses the gap.",
+              "kind": "no_action",
+              "text": "Do not request Warehouse RTO methodology for this requirement."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Shared coverage is not established.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-09",
+        "customer_requirement": "Documented and exercised incident response process for Cedar Billing API.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both permit an existing process outside the package; A explicitly includes documentation and exercise.",
+            "uncertainty": "Neither component is evidenced.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A assumes internal holdings can be checked; B immediately requests vendor artifacts. Make the internal step conditional with a focused vendor fallback.",
+            "uncertainty": "Internal availability is not established.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both correctly treat the shared exact citation as a package-absence marker. A explicitly separates both subrequirements and avoids inferring failure.",
+            "uncertainty": "The identical A/B quotation matches M6-09 exactly and is correctly attributed; it establishes no implementation facts.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A preserves source location and absence of service implementation dates or an imposed recency threshold.",
+            "uncertainty": "No operational evidence is available in the packet.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "uncertainty",
+            "rationale": "A identifies documentation, completion and coverage; B adds implementation and exercise history. Preserve these combined limits.",
+            "uncertainty": "No operational conclusion can be established from the absence marker.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both questions presume failure unsupported by package absence. A's entry is retained and B's is separately assessed.",
+            "uncertainty": "Process existence remains unknown.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "d206d8c2a8f7ceade041b81deac9606bd51931a68d6aa58ee0fda3b5bc4bc804",
+          "B": "0962ed5595ca6196949653c2c6aeed23b15cd6720c906de74dd19e2f17375167"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "A documented and exercised process may exist outside the synthetic package.",
+          "case_id": "M6-09",
+          "citations": [
+            {
+              "quote": "No incident response evidence was provided with the synthetic package.",
+              "source_id": "M6-09"
+            }
+          ],
+          "classifications": [
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "missing",
+          "minimal_action": {
+            "justification": "The absence marker establishes no failure; relevant internal holdings may or may not exist.",
+            "kind": "internal_verification",
+            "text": "If internal evidence holdings are available, check for a Cedar Billing API incident response procedure and completed exercise record; otherwise request those artifacts with service and procedure coverage."
+          },
+          "reasoning": "Criterion: \"Documented and exercised incident response process for Cedar Billing API.\" The quotation is a package absence statement, not evidence that the process is absent or unexercised. Neither subrequirement can be assessed. This conclusion is provisional and AI-only.",
+          "scope_and_freshness": "Package absence marker at docs/M6_Blind_Reviewer_Packet.md:63. No service implementation evidence or dates are supplied; the criterion sets no exercise recency threshold.",
+          "uncertainty": "Documentation, implementation, exercise history and completion, and Cedar Billing API coverage are unknown.",
+          "unnecessary_questions": [
+            {
+              "reason": "Package absence cannot establish nonexistence; request or locate artifacts first.",
+              "text": "Why does Cedar Billing API have no incident response process?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "The question assumes process nonexistence, which the absence marker does not establish.",
+            "smallest_action": {
+              "justification": "No explanation of an unproven failure is justified.",
+              "kind": "no_action",
+              "text": "Do not ask this failure-presuming question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Process existence and exercise history are unknown.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "The requested artifacts address the missing evidence without presuming failure; vendor contact is conditional on evidence availability.",
+            "smallest_action": {
+              "justification": "Locate suitable evidence if available, otherwise request it factually.",
+              "kind": "internal_verification",
+              "text": "If relevant internal holdings exist, check the procedure and completed exercise record; otherwise request them with service and procedure identification."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "Internal holdings and process implementation are not established.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "No evidence establishes implementation failure.",
+            "smallest_action": {
+              "justification": "A missing package artifact does not justify a failure accusation.",
+              "kind": "no_action",
+              "text": "Do not ask why incident response implementation failed."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Implementation is unknown.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      },
+      {
+        "case_id": "M6-10",
+        "customer_requirement": "Incident response procedure must be documented and exercised in the past 12 months.",
+        "field_reconciliations": [
+          {
+            "decision": "prefer_A",
+            "field": "alternative_interpretation",
+            "rationale": "Both allow an exercise without included results; A explicitly avoids interpreting omission as nonexecution.",
+            "uncertainty": "Exercise occurrence remains unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "citations",
+            "rationale": "All quotations match M6-10 exactly and are correctly attributed; A keeps approval and absent results together.",
+            "uncertainty": "Approval is not exercise evidence.",
+            "unresolved": false
+          },
+          {
+            "decision": "synthesize",
+            "field": "minimal_action",
+            "rationale": "A checks records and establishes a cutoff; B immediately asks for an exercise summary. Make the internal check conditional, establish the reference date and seek only missing exercise evidence.",
+            "uncertainty": "Internal availability and applicable reference date are unknown.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "reasoning",
+            "rationale": "Both preserve documentation support and missing exercise evidence; A more precisely limits documentation support to an approved-plan statement without verifying procedure content.",
+            "uncertainty": "Whole-control effectiveness remains unproven.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "scope_and_freshness",
+            "rationale": "A explicitly distinguishes approval from exercise date and preserves the missing 12-month reference date.",
+            "uncertainty": "No assessment cutoff is supplied in the requirement.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "uncertainty",
+            "rationale": "A includes plan contents and reference date as well as exercise occurrence and date; B's coverage uncertainty is addressed in the action.",
+            "uncertainty": "No dated exercise result is supplied.",
+            "unresolved": false
+          },
+          {
+            "decision": "prefer_A",
+            "field": "unnecessary_questions",
+            "rationale": "Both plan-approval questions are answered; A's full entry is retained and B's is separately assessed.",
+            "uncertainty": "Approval does not establish exercise execution.",
+            "unresolved": false
+          }
+        ],
+        "internal_evidence_availability": "not_established_by_supplied_packet",
+        "original_case_sha256": {
+          "A": "8765fe739d460f2094ab7caf9ce96dc140d460c186c654325266682c5261f1fa",
+          "B": "f02fa040aaa08fe4ea7745694375d8415087373acbc11bfc605e1fa26041b902"
+        },
+        "proposed_assessment": {
+          "alternative_interpretation": "An exercise may have occurred with results held elsewhere; omission does not establish nonexecution.",
+          "case_id": "M6-10",
+          "citations": [
+            {
+              "quote": "Incident response plan v4 was approved 2026-08-01. No tabletop or incident exercise results are included.",
+              "source_id": "M6-10"
+            }
+          ],
+          "classifications": [
+            "supported_with_limits",
+            "evidence_insufficient"
+          ],
+          "demonstrated_weakness": false,
+          "evidence_sufficiency": "insufficient",
+          "minimal_action": {
+            "justification": "Plan approval gives limited documentation support; exercise execution, scope and recency remain unproven and internal holdings are unknown.",
+            "kind": "internal_verification",
+            "text": "Establish the applicable reference date for the past-12-month window. If relevant internal records are available, check a completed Billing API exercise record identifying date, service and procedure; otherwise request that specific exercise summary from the vendor."
+          },
+          "reasoning": "Criterion: \"Incident response procedure must be documented and exercised in the past 12 months.\" The approved plan supports the documentation subrequirement at statement level, without demonstrating procedure content or enforcement. The package absence statement does not establish exercise completion or failure. Whole-control support is insufficient; this assessment is provisional and AI-only.",
+          "scope_and_freshness": "Cedar Billing API plan v4 approved 2026-08-01; docs/M6_Blind_Reviewer_Packet.md:69. Approval date is not an exercise date. The criterion supplies a 12-month period without an explicit reference date.",
+          "uncertainty": "Plan contents, exercise occurrence, exercise date, and the applicable reference date remain unverified.",
+          "unnecessary_questions": [
+            {
+              "reason": "The excerpt already states plan approval; the missing operating evidence concerns exercise execution.",
+              "text": "Has an incident response plan been approved?"
+            }
+          ]
+        },
+        "question_assessments": [
+          {
+            "rationale": "Plan v4 approval on 2026-08-01 is explicit.",
+            "smallest_action": {
+              "justification": "Reasking approval does not establish exercised operation.",
+              "kind": "no_action",
+              "text": "Do not repeat the plan-approval question."
+            },
+            "source_id": "A:unnecessary_questions:0",
+            "uncertainty": "Procedure contents and exercise evidence remain unverified.",
+            "verdict": "unnecessary"
+          },
+          {
+            "rationale": "A dated service-specific exercise summary addresses the gap, but the cutoff and possible existing evidence should first be established.",
+            "smallest_action": {
+              "justification": "Do not invent the applicable window or assume internal records exist.",
+              "kind": "internal_verification",
+              "text": "Establish the applicable 12-month reference date; if internal exercise evidence is available, check its date and scope, otherwise request the dated service-specific summary."
+            },
+            "source_id": "B:minimal_action",
+            "uncertainty": "Reference date, exercise occurrence and internal holdings are unknown.",
+            "verdict": "conditional"
+          },
+          {
+            "rationale": "The packet already states that the incident response plan was approved.",
+            "smallest_action": {
+              "justification": "Generic approval confirmation repeats supplied evidence.",
+              "kind": "no_action",
+              "text": "Do not ask for approved-plan confirmation again."
+            },
+            "source_id": "B:unnecessary_questions:0",
+            "uncertainty": "Approval alone does not establish procedure adequacy or exercise.",
+            "verdict": "unnecessary"
+          }
+        ],
+        "unresolved_fields": []
+      }
+    ],
+    "human_validated": false,
+    "input_boundary": {
+      "notes": "Used only the supplied synthetic packet, unchanged A/B reviews, sanitized provenance, local verification statements and instructions/output contract. No tools, external substantive materials or hash recomputation were used. The wrapper reports completed distinct clean runs A 2b5da31c-8ae9-43b1-ae28-a734eea8176f and B 571e4b7e-17c4-427d-b31b-3e0ca16e7bf0, with records at runs/A/record.json and runs/B/record.json and unchanged reports at runs/A/response.json and runs/B/response.json. Supplied local_preflight reports digest/sidecar, response equality, completeness, source-snapshot and Git-anchor checks passed at b3540f53121e85306fcee12f5b53f5f3171aae00; source_integrity identifies source commit 31657b2a9615511ef54ad1c910b1059f3c43e84a. These are supplied local tamper-evidence statements, not personally performed filesystem checks or external authenticity attestations. Independently compared all original reviewer quotation strings and source identifiers against their supplied case evidence: none were missing, misattributed or nonmatching. Proposed citations also match their own cases exactly. This response performs model-based semantic reconciliation in addition to the wrapper's reported automated checks; those checks do not establish semantic correctness, vendor truth or human assurance. Both original reports remain preserved by the wrapper. Each differing field has an explicit proposed disposition; none is represented as original reviewer consensus. Residual factual uncertainties remain in the assessments, although no field-selection disagreement is left unresolved in this proposal. Requested model configuration is not attested serving-model identity. Host/provider isolation, statistical independence, external signatures, physical immutability and signed WORM storage remain unverified; affected real-world and isolation conclusions remain unverified. This JSON is a new versioned AI-only proposal, not human-validated assurance. No application, benchmark, approval or risk state was changed.",
+      "status": "clean"
+    },
+    "proposal_status": "ai_only_proposed_not_human_validated",
+    "schema_version": "m6-ai-coordinator-v1"
+  },
+  "agent_id": "coordinator",
+  "cli_version": "codex-cli 0.163.0",
+  "config_sha256": "bcdb76cf4133d19b1a64beb5138129cd0dc85bcc70acf5df30b75cb891f66380",
+  "event_audit": [
+    {
+      "item_type": null,
+      "type": "thread.started"
+    },
+    {
+      "item_type": null,
+      "type": "turn.started"
+    },
+    {
+      "item_type": "agent_message",
+      "type": "item.completed"
+    },
+    {
+      "item_type": null,
+      "type": "turn.completed"
+    }
+  ],
+  "execution": {
+    "disabled_features": [
+      "shell_tool",
+      "unified_exec",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "browser_use",
+      "computer_use",
+      "view_image",
+      "image_generation"
+    ],
+    "ephemeral": true,
+    "ignore_user_config": true,
+    "project_doc_max_bytes": 0,
+    "timeout_seconds": 600,
+    "web_search": "disabled"
+  },
+  "failure_category": null,
+  "finished_at": "2026-11-17T00:06:44.614621+00:00",
+  "input_sha256": "a83c3844be432acaa106c3f98e08c4fbc8cce05d050231ec003db701597c8017",
+  "isolation": {
+    "context_audit_passed": true,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim. Structural and source-quote checks are local; semantic reconciliation and question necessity remain unvalidated AI judgments. Local hashes are tamper evidence, not external authenticity or signed WORM storage.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": []
+  },
+  "launcher_sha256": "d557ca0bd5690ef281beb9e4a2b280990ab841ac6acd3c28434334c9b402868d",
+  "model_actual": null,
+  "model_actual_note": "CLI does not attest the serving model; requested configuration only",
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "8fccb56a56efb5d59e00ee0f2f72a8f8b5a80d0e1fcaa495cad6ae95e44017a0",
+  "provider_schema_sha256": "2865b41c5eeeb3e4ac312901e3a91033a5b1637162e104a9a6104be669edc66a",
+  "run_id": "e401457e-4829-482c-9094-767bc8a29227",
+  "schema_sha256": "bf6f86a46dc067e18b6d9bb280a730fdb7043268df78429000de61a5a6debb1a",
+  "schema_version": "m6-ai-coordinator-v1",
+  "session_ids": [
+    "01a1e6d0-27f6-77d0-aa20-c574e2068a5a"
+  ],
+  "source_snapshot_sha256": "42378debb9aad12b0fbfb86070d65e1b044817c74bac718f11a4666138414d84",
+  "started_at": "2026-11-17T00:02:43.650071+00:00",
+  "status": "completed"
+}

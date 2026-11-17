@@ -7,6 +7,11 @@ does not replace the deterministic `m6_ai_review.py coordinate` command or
 overwrite its comparison. Model-based reconciliation, structural validation and
 qualified-human adjudication are separate activities.
 
+The [actual version-1 execution report](../benchmarks/executions/m6_ai_adjudication_20261116_v1/EXECUTION_REPORT.md)
+preserves the completed coordinator session, proposed reference, all
+reconciliations and questions, rejected earlier attempt, validation evidence and
+remaining semantic concerns. The reference is AI-only and provisional.
+
 The starting point is PR #40 head
 `7fd7a2406976c1b526b59c16226f892c0644210a` and its
 [completed A/B execution](../benchmarks/executions/m6_live_20261116/EXECUTION_REPORT.md).

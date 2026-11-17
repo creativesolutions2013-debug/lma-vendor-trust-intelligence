@@ -1,0 +1,15 @@
+{
+  "config_sha256": "bcdb76cf4133d19b1a64beb5138129cd0dc85bcc70acf5df30b75cb891f66380",
+  "input_sha256": "a83c3844be432acaa106c3f98e08c4fbc8cce05d050231ec003db701597c8017",
+  "launcher_commit": "87d150b91769d8016cbcbdbbb23ca1f0fec0120e",
+  "launcher_sha256": "d557ca0bd5690ef281beb9e4a2b280990ab841ac6acd3c28434334c9b402868d",
+  "prompt_sha256": "8fccb56a56efb5d59e00ee0f2f72a8f8b5a80d0e1fcaa495cad6ae95e44017a0",
+  "provider_schema_sha256": "2865b41c5eeeb3e4ac312901e3a91033a5b1637162e104a9a6104be669edc66a",
+  "review_launcher_sha256": "519b0155c76979469a4a37dd4e5b464369d1ca2dc74e74fbdf3e3b84ae9f872b",
+  "schema_sha256": "bf6f86a46dc067e18b6d9bb280a730fdb7043268df78429000de61a5a6debb1a",
+  "schema_version": "m6-ai-coordinator-v1",
+  "source_bundle": "/workspace/lma-m6-ai-coordinator/benchmarks/executions/m6_live_20261116",
+  "source_commit": "31657b2a9615511ef54ad1c910b1059f3c43e84a",
+  "source_snapshot_sha256": "42378debb9aad12b0fbfb86070d65e1b044817c74bac718f11a4666138414d84",
+  "synthetic_only": true
+}

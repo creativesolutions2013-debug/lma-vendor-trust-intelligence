@@ -1,0 +1,41 @@
+{
+  "case_count": 10,
+  "citation_count": 10,
+  "cli_version": "codex-cli 0.163.0",
+  "config_sha256": "bcdb76cf4133d19b1a64beb5138129cd0dc85bcc70acf5df30b75cb891f66380",
+  "finished_at": "2026-11-17T00:06:44.614621+00:00",
+  "input_boundary": {
+    "notes": "Used only the supplied synthetic packet, unchanged A/B reviews, sanitized provenance, local verification statements and instructions/output contract. No tools, external substantive materials or hash recomputation were used. The wrapper reports completed distinct clean runs A 2b5da31c-8ae9-43b1-ae28-a734eea8176f and B 571e4b7e-17c4-427d-b31b-3e0ca16e7bf0, with records at runs/A/record.json and runs/B/record.json and unchanged reports at runs/A/response.json and runs/B/response.json. Supplied local_preflight reports digest/sidecar, response equality, completeness, source-snapshot and Git-anchor checks passed at b3540f53121e85306fcee12f5b53f5f3171aae00; source_integrity identifies source commit 31657b2a9615511ef54ad1c910b1059f3c43e84a. These are supplied local tamper-evidence statements, not personally performed filesystem checks or external authenticity attestations. Independently compared all original reviewer quotation strings and source identifiers against their supplied case evidence: none were missing, misattributed or nonmatching. Proposed citations also match their own cases exactly. This response performs model-based semantic reconciliation in addition to the wrapper's reported automated checks; those checks do not establish semantic correctness, vendor truth or human assurance. Both original reports remain preserved by the wrapper. Each differing field has an explicit proposed disposition; none is represented as original reviewer consensus. Residual factual uncertainties remain in the assessments, although no field-selection disagreement is left unresolved in this proposal. Requested model configuration is not attested serving-model identity. Host/provider isolation, statistical independence, external signatures, physical immutability and signed WORM storage remain unverified; affected real-world and isolation conclusions remain unverified. This JSON is a new versioned AI-only proposal, not human-validated assurance. No application, benchmark, approval or risk state was changed.",
+    "status": "clean"
+  },
+  "input_sha256": "a83c3844be432acaa106c3f98e08c4fbc8cce05d050231ec003db701597c8017",
+  "isolation": {
+    "context_audit_passed": true,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim. Structural and source-quote checks are local; semantic reconciliation and question necessity remain unvalidated AI judgments. Local hashes are tamper evidence, not external authenticity or signed WORM storage.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": []
+  },
+  "model_actual": null,
+  "model_requested": "gpt-6.1-sol",
+  "original_artifacts_unchanged": true,
+  "question_count": 27,
+  "question_verdicts": {
+    "conditional": 7,
+    "unnecessary": 20
+  },
+  "reconciliation_count": 72,
+  "record_sha256": "8ea26ee0b5775240b2e91cfb61260deeaaefd39f6440b9dde90ae70ea7d3df63",
+  "reference_id": "m6-ai-reference:e401457e-4829-482c-9094-767bc8a29227",
+  "reference_sha256": "935a8e3170539ff71e6b2e256fb850e962bdffd77ba6e626faa0ea63eb8b073b",
+  "reference_version": "m6-ai-proposed-reference-v1",
+  "response_sha256": "96273290eed2544222219f4e899917e86e35b5dd875e94a2ebbe6dd8c1cefd22",
+  "run_id": "e401457e-4829-482c-9094-767bc8a29227",
+  "session_ids": [
+    "01a1e6d0-27f6-77d0-aa20-c574e2068a5a"
+  ],
+  "started_at": "2026-11-17T00:02:43.650071+00:00",
+  "status": "completed",
+  "unresolved_fields": 0
+}

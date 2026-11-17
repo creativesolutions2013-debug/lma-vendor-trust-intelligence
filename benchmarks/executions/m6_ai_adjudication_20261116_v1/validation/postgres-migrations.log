@@ -1,0 +1,17 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_baseline, Baseline current vendor trust schema.
+INFO  [alembic.runtime.migration] Running upgrade 0001_baseline -> 0002_add_audit_logs, Add audit log table.
+INFO  [alembic.runtime.migration] Running upgrade 0002_add_audit_logs -> 0003_add_approval_decisions, Add approval decision table.
+INFO  [alembic.runtime.migration] Running upgrade 0003_add_approval_decisions -> 0004_add_finding_escalation, Add finding escalation fields.
+INFO  [alembic.runtime.migration] Running upgrade 0004_add_finding_escalation -> 0005_material_change, Add material change decision/action fields.
+INFO  [alembic.runtime.migration] Running upgrade 0005_material_change -> 0006_targeted_scope, Add targeted review scope snapshot fields.
+INFO  [alembic.runtime.migration] Running upgrade 0006_targeted_scope -> 0007_evidence_request, Add evidence request package table.
+INFO  [alembic.runtime.migration] Running upgrade 0007_evidence_request -> 0008_control_dispositions, Add persistent control dispositions.
+INFO  [alembic.runtime.migration] Running upgrade 0008_control_dispositions -> 0009_control_claim_records, Add persistent governed control claims.
+INFO  [alembic.runtime.migration] Running upgrade 0009_control_claim_records -> 0010_residual_risk_activation_records, Add residual risk activation review records.
+INFO  [alembic.runtime.migration] Running upgrade 0010_residual_risk_activation_records -> 0011_residual_risk_activation_executions, Add residual risk activation executions.
+INFO  [alembic.runtime.migration] Running upgrade 0011_residual_risk_activation_executions -> 0012_control_disposition_claim_basis, Add claim-backed control disposition enforcement metadata.
+INFO  [alembic.runtime.migration] Running upgrade 0012_control_disposition_claim_basis -> 0013_revalidation_case_records, Add residual-risk revalidation case records.
+INFO  [alembic.runtime.migration] Running upgrade 0013_revalidation_case_records -> 0014_organization_engagement_authorization, Add explicit organization ownership and service-engagement entitlements.
+INFO  [alembic.runtime.migration] Running upgrade 0014_organization_engagement_authorization -> 0014a_membership_identity_guard, Serialize the issuer/subject membership predicate through metadata issuance.
