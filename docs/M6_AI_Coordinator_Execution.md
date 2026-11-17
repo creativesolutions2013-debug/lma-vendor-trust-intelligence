@@ -20,6 +20,11 @@ configurations, complete own-case quotations, clean context records, completed
 statuses, matching response-versus-record bodies and distinct run/session IDs.
 Snapshot the original artifacts and verify them again after the coordinator runs.
 
+The supplied provenance explicitly records the wrapper's completed local checks.
+This is a local verification record, not a signed external attestation or a
+guarantee that the host owner cannot modify files. The coordinator compares
+quotations and meanings; it does not need tools to recompute the supplied hashes.
+
 The coordinator receives only its existing instructions, the output contract,
 the original synthetic packet, both unchanged reviewer reports and their
 provenance. Case hashes, original field differences and question identifiers
@@ -34,6 +39,13 @@ device-authenticated home is `/workspace/m6-review-login-20261116`;
 inspect, copy or commit credential files. Explicitly select an advertised model;
 the completed A/B runs requested `gpt-6.1-sol`. A requested name is not a verified
 serving-model identity.
+
+`input_boundary` describes the substantive materials the model used. `clean`
+means only the allowed supplied materials were used; `contaminated` means extra
+substantive material was used; `unknown` means the model cannot tell what it used.
+Host/provider, serving-model and external-retention uncertainty is reported
+separately. The runner still rejects unknown or contaminated material boundaries;
+verification metadata must never be used to force a false clean declaration.
 
 ## Reproduction
 

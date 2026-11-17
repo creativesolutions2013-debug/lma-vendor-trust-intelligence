@@ -180,9 +180,81 @@ def test_verified_source_preserves_originals_and_question_identity(source, paylo
         assert row["original_value_sha256"] == review.digest(review.encoded(candidate))
 
 
+def test_local_preflight_reports_executed_local_checks_and_exact_source_hashes(source, payload):
+    preflight = payload["local_preflight"]
+    assert preflight["status"] == "passed"
+    assert preflight["verification_scope"] == "local_wrapper_checks"
+    assert preflight["checks"] == {
+        "sealed_json_sidecar_digests_verified": True,
+        "response_matches_record_review": True,
+        "ten_case_completeness_and_exact_citations_verified": True,
+        "completed_clean_distinct_reviewer_runs_verified": True,
+        "packet_and_profiles_match_git_source_commit": True,
+        "source_artifact_snapshot_recorded": True,
+    }
+    # Synthetic temporary source bundles are not tracked repository artifacts.
+    assert preflight["git_artifact_anchor"] == {
+        "applicable": False, "commit": None, "files_verified": []}
+    expected = {str(path.relative_to(source)): review.digest(path.read_bytes())
+                for path in source.rglob("*") if path.is_file()}
+    assert payload["source_integrity"]["artifact_sha256"] == expected
+    limitations = " ".join(preflight["limitations"]).lower()
+    for concept in ("external signature", "worm", "host", "provider", "model", "statistical", "semantic"):
+        assert concept in limitations
+    for provenance in payload["provenance"].values():
+        assert provenance["model_actual"] is None
+        assert provenance["isolation"]["os_isolation_verified"] is False
+        assert provenance["isolation"]["statistical_independence_established"] is False
+
+
+@pytest.mark.parametrize("mutation", [None, "changed_committed_bytes", "unavailable_committed_bytes"])
+def test_git_artifact_anchor_requires_each_artifact_and_sidecar_to_match_committed_bytes(
+        tmp_path, monkeypatch, mutation):
+    """Exercise the local Git comparison with constructed Git command responses."""
+    source = tmp_path / "synthetic/source"
+    commit = "a" * 40
+    raw = review.encoded({"synthetic_only": True})
+    committed = {"manifest.json": raw,
+                 "manifest.json.sha256": (review.digest(raw) + "\n").encode()}
+    snapshot = {name: review.digest(value) for name, value in committed.items()}
+    calls = []
+
+    def fake_source_tip(command, **kwargs):
+        expected_paths = ["synthetic/source/" + name for name in sorted(snapshot)]
+        assert command == ["git", "log", "-1", "--format=%H", "--", *expected_paths]
+        assert "synthetic/source" not in command[5:]
+        assert "synthetic/source/EXECUTION_REPORT.md" not in command[5:]
+        assert "synthetic/source/validation.json" not in command[5:]
+        assert kwargs["cwd"] == tmp_path
+        return commit + "\n"
+
+    def fake_committed_bytes(requested_commit, path):
+        assert requested_commit == commit and path.startswith("synthetic/source/")
+        name = path.removeprefix("synthetic/source/")
+        calls.append(name)
+        if mutation == "unavailable_committed_bytes":
+            raise ValueError("Synthetic committed artifact unavailable")
+        if mutation == "changed_committed_bytes":
+            return b"Different synthetic committed bytes"
+        return committed[name]
+
+    monkeypatch.setattr(coordinator, "ROOT", tmp_path)
+    monkeypatch.setattr(coordinator.subprocess, "check_output", fake_source_tip)
+    monkeypatch.setattr(coordinator, "_git_bytes", fake_committed_bytes)
+    if mutation is not None:
+        with pytest.raises(ValueError):
+            coordinator._artifact_git_anchor(source, snapshot)
+    else:
+        anchor = coordinator._artifact_git_anchor(source, snapshot)
+        assert anchor == {"applicable": True, "commit": commit,
+                          "files_verified": sorted(committed)}
+        assert calls == sorted(committed)
+
+
 @pytest.mark.parametrize("mutation", ["missing_record", "tampered_seal", "response_mismatch",
     "shared_session", "shared_run", "failed_status", "unclean_context", "blank_model",
-    "unsupported_os_claim", "unsupported_independence_claim", "started_response"])
+    "unsupported_os_claim", "unsupported_independence_claim", "started_response",
+    "invalid_original_citation", "incomplete_original_review"])
 def test_source_requires_sealed_matching_completed_distinct_reviews(source, mutation):
     path = source / "runs/B/record.json"
     record = review.load_sealed(path)
@@ -196,6 +268,16 @@ def test_source_requires_sealed_matching_completed_distinct_reviews(source, muta
         value = review.load_sealed(response_path)
         value["cases"][0]["reasoning"] += " Synthetic mismatch."
         reseal(response_path, value)
+    elif mutation in {"invalid_original_citation", "incomplete_original_review"}:
+        response_path = source / "runs/B/response.json"
+        value = review.load_sealed(response_path)
+        if mutation == "invalid_original_citation":
+            value["cases"][0]["citations"][0]["quote"] = "Fabricated original-review operating evidence."
+        else:
+            value["cases"].pop()
+        record["review"] = deepcopy(value)
+        reseal(response_path, value)
+        reseal(path, record)
     else:
         a = review.load_sealed(source / "runs/A/record.json")
         if mutation == "shared_session":
@@ -453,6 +535,60 @@ def test_coordinator_prompt_has_only_explicit_C_instructions_and_verified_source
         assert forbidden not in prompt
 
 
+def test_prompt_defines_truthful_input_use_boundary_separately_from_external_assurance(payload):
+    prompt = coordinator.coordinator_prompt(payload, "Synthetic coordinator instructions.")
+    normalized = " ".join(prompt.split())
+    for clause in (
+        "input_boundary is your self-report about substantive materials actually used",
+        "clean means you used only the supplied allowed materials",
+        "contaminated means you used additional substantive materials",
+        "unknown means you cannot tell which substantive materials you used",
+        "Report the status truthfully",
+        "does not by itself establish input contamination",
+        "Unknown and contaminated declarations will still be rejected",
+        "without claiming you personally inspected the filesystem or recomputed SHA values",
+        "Do not run tools or recompute hashes",
+    ):
+        assert clause in normalized
+
+
+def test_prepared_manifest_binds_local_preflight_to_input_prompt_and_schema_audits(bundle, payload):
+    prepared = review.load_sealed(bundle / "inputs/payload.json")
+    manifest = review.load_sealed(bundle / "manifest.json")
+    instructions = review.load_sealed(bundle / "inputs/coordinator.agent.json")["instructions"]
+    schema = review.load_sealed(bundle / "inputs/coordinator.schema.json")
+    provider = review.load_sealed(bundle / "inputs/provider.schema.json")
+    assert prepared == payload and prepared["local_preflight"]["status"] == "passed"
+    prompt = coordinator.coordinator_prompt(prepared, instructions)
+    assert '"local_preflight"' in prompt
+    assert prompt.endswith(json.dumps(prepared, indent=2, sort_keys=True))
+    assert manifest["input_sha256"] == review.digest(review.encoded(prepared))
+    assert manifest["prompt_sha256"] == review.digest(prompt.encode())
+    assert manifest["source_snapshot_sha256"] == review.digest(review.encoded(prepared["source_integrity"]))
+    assert schema == coordinator.coordinator_schema()
+    assert manifest["schema_sha256"] == review.digest(review.encoded(schema))
+    assert provider == coordinator.provider_schema()
+    assert manifest["provider_schema_sha256"] == review.digest(review.encoded(provider))
+    assert "local_preflight" not in schema["properties"]
+
+
+def test_self_consistently_resealed_preflight_claim_cannot_replace_verified_provenance(bundle, monkeypatch):
+    path = bundle / "inputs/payload.json"
+    value = review.load_sealed(path)
+    value["local_preflight"]["checks"]["response_matches_record_review"] = False
+    reseal(path, value)
+    manifest_path = bundle / "manifest.json"
+    manifest = review.load_sealed(manifest_path)
+    instructions = review.load_sealed(bundle / "inputs/coordinator.agent.json")["instructions"]
+    manifest["input_sha256"] = review.digest(review.encoded(value))
+    manifest["prompt_sha256"] = review.digest(coordinator.coordinator_prompt(value, instructions).encode())
+    reseal(manifest_path, manifest)
+    monkeypatch.setattr(coordinator.shutil, "which", lambda name: pytest.fail("Must reject before C launch"))
+    with pytest.raises(ValueError):
+        coordinator.run(bundle, "configured-synthetic-model")
+    assert not (bundle / "proposed_reference.json").exists()
+
+
 def test_provider_projection_is_actual_exec_schema_while_canonical_uniqueness_remains(
         bundle, payload, response, monkeypatch):
     canonical = coordinator.coordinator_schema()
@@ -501,6 +637,7 @@ def test_fresh_C_exec_drops_inherited_thread_and_github_tokens(bundle, source, r
     proposal = review.load_sealed(bundle / "proposed_reference.json")
     assert proposal["adjudication"] == response
     assert proposal["original_reviews"] == coordinator.verify_source(source)["reviews"]
+    assert proposal["local_preflight"] == coordinator.verify_source(source)["local_preflight"]
 
 
 @pytest.mark.parametrize("mutation", ["tool", "unknown_event", "malformed_item", "malformed_item_type", "primitive", "raw_non_json",
