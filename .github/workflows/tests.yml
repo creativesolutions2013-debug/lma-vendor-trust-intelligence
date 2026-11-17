@@ -12,6 +12,7 @@ on:
       - feature/m6-analyst-quality-baseline
       - feature/m6-independent-ai-review
       - feature/m6-ai-coordinator-20261116
+      - feature/m6-owner-quality-corrections
 
 jobs:
   test:
