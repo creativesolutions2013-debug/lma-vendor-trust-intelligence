@@ -1,0 +1,32 @@
+{
+  "checks": {
+    "existing_coordinator_profile_unchanged": true,
+    "no_helper_or_prior_comparison_conclusions": true,
+    "no_provisional_gold_or_scoring_answers": true,
+    "only_allowlisted_materials": true,
+    "original_packet_and_reviews_unchanged": true,
+    "prior_C_output_not_supplied": true,
+    "source_files_match_pr40_Git_anchor": true,
+    "truthful_local_preflight_supplied": true
+  },
+  "config_sha256": "bcdb76cf4133d19b1a64beb5138129cd0dc85bcc70acf5df30b75cb891f66380",
+  "input_keys": [
+    "cases",
+    "local_preflight",
+    "packet",
+    "provenance",
+    "reviews",
+    "schema_version",
+    "source_integrity",
+    "synthetic_only"
+  ],
+  "input_sha256": "a83c3844be432acaa106c3f98e08c4fbc8cce05d050231ec003db701597c8017",
+  "launcher_commit": "87d150b91769d8016cbcbdbbb23ca1f0fec0120e",
+  "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim. Structural and source-quote checks are local; semantic reconciliation and question necessity remain unvalidated AI judgments. Local hashes are tamper evidence, not external authenticity or signed WORM storage.",
+  "original_differences": 72,
+  "pr40_head": "7fd7a2406976c1b526b59c16226f892c0644210a",
+  "prompt_sha256": "8fccb56a56efb5d59e00ee0f2f72a8f8b5a80d0e1fcaa495cad6ae95e44017a0",
+  "provider_schema_sha256": "2865b41c5eeeb3e4ac312901e3a91033a5b1637162e104a9a6104be669edc66a",
+  "question_candidates": 27,
+  "schema_sha256": "bf6f86a46dc067e18b6d9bb280a730fdb7043268df78429000de61a5a6debb1a"
+}

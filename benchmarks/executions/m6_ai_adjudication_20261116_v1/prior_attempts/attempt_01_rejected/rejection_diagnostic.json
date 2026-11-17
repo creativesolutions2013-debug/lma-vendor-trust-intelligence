@@ -1,0 +1,14 @@
+{
+  "failure_category": "invalid_response_or_event_stream",
+  "input_boundary": {
+    "notes": "Version m6-ai-coordinator-v1: model-based comparison proposal using only the supplied synthetic packet, unchanged A/B review text, sanitized provenance and output instructions. No tools were used, hashes computed, artifacts overwritten or application state changed. Supplied records report two completed executions: A run_id 2b5da31c-8ae9-43b1-ae28-a734eea8176f, session 01a1e5f5-1a5a-72f2-97a1-166b4cea299f; B run_id 571e4b7e-17c4-427d-b31b-3e0ca16e7bf0, session 01a1e5f5-1a8b-7d21-9e3f-43650afdcdf0. Provenance references are provenance.A, provenance.B, runs/A/record.json, runs/A/response.json, runs/B/record.json and runs/B/response.json in supplied source_integrity.artifact_sha256. Both input_sha256 values equal the supplied inputs/packet.json digest 76f3293e7a5c2fd2ecd0bf89bd3648f7aab7c17fab80187ff50e9ac2597fa3e0; the packet separately supplies packet_sha256 3cf63d64a0cf0d7de5c36186588f2e93745fcb792052edc9c2c6d9d41e15698b. These are supplied identifiers, not newly verified hashes. Blocker to treating this as a verified sealed-review reference: the supplied digest inventory does not itself attest successful integrity verification or immutable sealing, and this no-tool comparison cannot independently establish either. Accordingly all selections are conditional proposals; verified reference acceptance remains blocked. The completed execution records exceed configuration-only evidence, but execution is reported rather than independently attested here. Context audits report fresh contexts and no observed tool events; host filesystem/provider isolation, serving model identity and statistical independence are not established. Input boundary therefore remains unknown, without an affirmative contamination finding. Every supplied reviewer citation was compared with its own case evidence and found to be an exact substring with the correct source identifier; no missing, misattributed or nonmatching citations were identified. This textual comparison does not establish semantic correctness, vendor truth, operating effectiveness or human assurance. Field selections resolve proposed wording only; underlying factual uncertainties remain explicit. Both original reports and their differing alternatives remain in the wrapper, with supplied case digests copied unchanged. No automated structural-validation execution or independent human validation is claimed. No authoritative approval or whole-control approval is issued.",
+    "status": "unknown"
+  },
+  "precise_validation_blocker": "input_boundary.status was unknown; clean-materials declaration required",
+  "proposed_reference_published": false,
+  "response_modified": false,
+  "response_sha256": "1944b751b31e1f9e0d7ddbb3dfc9b344a9a74baf78eeac4e00cc1bf4b5af0b1e",
+  "retained_as_actual_rejected_execution": true,
+  "run_id": "7ba5b270-e18a-4b69-b369-5637de9b0934",
+  "status": "rejected"
+}

@@ -1,0 +1,47 @@
+{
+  "adjudication": null,
+  "agent_id": "coordinator",
+  "config_sha256": "bcdb76cf4133d19b1a64beb5138129cd0dc85bcc70acf5df30b75cb891f66380",
+  "execution": {
+    "disabled_features": [
+      "shell_tool",
+      "unified_exec",
+      "apps",
+      "plugins",
+      "multi_agent",
+      "browser_use",
+      "computer_use",
+      "view_image",
+      "image_generation"
+    ],
+    "ephemeral": true,
+    "ignore_user_config": true,
+    "project_doc_max_bytes": 0,
+    "timeout_seconds": 600,
+    "web_search": "disabled"
+  },
+  "failure_category": null,
+  "finished_at": null,
+  "input_sha256": "a83c3844be432acaa106c3f98e08c4fbc8cce05d050231ec003db701597c8017",
+  "isolation": {
+    "context_audit_passed": false,
+    "fresh_context": true,
+    "limitations": "Fresh ephemeral contexts and audited no-tool events only; host filesystem and provider isolation are not verified. No statistical independence claim. Structural and source-quote checks are local; semantic reconciliation and question necessity remain unvalidated AI judgments. Local hashes are tamper evidence, not external authenticity or signed WORM storage.",
+    "os_isolation_verified": false,
+    "statistical_independence_established": false,
+    "tool_events_observed": null
+  },
+  "launcher_sha256": "d557ca0bd5690ef281beb9e4a2b280990ab841ac6acd3c28434334c9b402868d",
+  "model_actual": null,
+  "model_actual_note": "CLI does not attest the serving model; requested configuration only",
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "8fccb56a56efb5d59e00ee0f2f72a8f8b5a80d0e1fcaa495cad6ae95e44017a0",
+  "provider_schema_sha256": "2865b41c5eeeb3e4ac312901e3a91033a5b1637162e104a9a6104be669edc66a",
+  "run_id": "e401457e-4829-482c-9094-767bc8a29227",
+  "schema_sha256": "bf6f86a46dc067e18b6d9bb280a730fdb7043268df78429000de61a5a6debb1a",
+  "schema_version": "m6-ai-coordinator-v1",
+  "session_ids": [],
+  "source_snapshot_sha256": "42378debb9aad12b0fbfb86070d65e1b044817c74bac718f11a4666138414d84",
+  "started_at": "2026-11-17T00:02:43.650071+00:00",
+  "status": "started"
+}
