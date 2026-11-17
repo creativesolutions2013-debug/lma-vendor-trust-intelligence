@@ -11,6 +11,7 @@ on:
       - feature/m4c2b-tenant-read-boundary
       - feature/m6-analyst-quality-baseline
       - feature/m6-independent-ai-review
+      - feature/m6-ai-coordinator-20261116
 
 jobs:
   test:
@@ -33,7 +34,7 @@ jobs:
           pip install pytest
 
       - name: Compile application and benchmark modules before tests
-        run: python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py benchmarks/m6_ai_coordinator.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py tests/test_m6_ai_coordinator.py
+        run: python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py benchmarks/m6_ai_coordinator.py benchmarks/m6_owner_quality_v2.py tests/test_m6_owner_quality_v2.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py tests/test_m6_ai_coordinator.py
 
       - name: Run tests
         env:
@@ -91,7 +92,7 @@ jobs:
           pip install pytest
 
       - name: Compile application and benchmark modules before PostgreSQL tests
-        run: python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py benchmarks/m6_ai_coordinator.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py tests/test_m6_ai_coordinator.py
+        run: python -m py_compile app.py src/upload_evaluation.py benchmarks/m6_analyst_quality.py benchmarks/m6_ai_review.py benchmarks/m6_ai_coordinator.py benchmarks/m6_owner_quality_v2.py tests/test_m6_owner_quality_v2.py tests/test_m6_analyst_quality.py tests/test_m6_ai_review.py tests/test_m6_ai_coordinator.py
 
       - name: Apply Alembic migrations to PostgreSQL
         run: alembic upgrade head
