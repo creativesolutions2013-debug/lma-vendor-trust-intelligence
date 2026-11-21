@@ -179,7 +179,7 @@ def _uploads(intake):
     st.write('No vendor files are preloaded. Upload nonconfidential synthetic PDF, DOCX or UTF-8 TXT files. Files stay in this browser session on the development server; they are not sent to an AI provider or saved to the legacy database.')
     st.caption('Limits: 10 files, 2 MB each, 10 MB total. Scans without readable text need local OCR before upload. This is not secure production document custody or malware scanning.')
     retained = st.session_state.get(PREFIX + 'uploads', ())
-    st.caption('Attached files are retained for this assessment. New selections add files; use Clear this assessment to remove all session data.')
+    st.caption('New selections are staged until you evaluate. Use Discard new file selections to remove staged files; Clear this assessment resets the entire session. Leaving this step does not discard selections.')
     widget_key = PREFIX + 'files:' + str(st.session_state.get(PREFIX + 'upload_epoch', 0))
     st.file_uploader('Choose synthetic evidence', type=['pdf', 'docx', 'txt'], accept_multiple_files=True,
                      key=widget_key, max_upload_size=2, on_change=_capture_files, args=(widget_key,))
