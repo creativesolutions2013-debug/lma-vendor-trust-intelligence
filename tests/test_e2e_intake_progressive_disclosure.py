@@ -16,7 +16,7 @@ def _advanced(at):
 
 def test_short_intake_keeps_unknown_scale_inputs_unknown_and_review_provisional(no_live_effects):
     at = start()
-    assert not _advanced(at).expanded
+    assert _advanced(at).label == LABEL  # Open/closed is not exposed on AppTest's Expander.
     assert "optional details below can affect the assessed risk tier" in "\n".join(
         c.value for c in at.caption
     )
@@ -49,7 +49,7 @@ def test_short_intake_keeps_unknown_scale_inputs_unknown_and_review_provisional(
 
 def test_optional_inputs_preserve_existing_policy_scoring_and_validation(no_live_effects):
     at = start()
-    assert not _advanced(at).expanded
+    assert _advanced(at).label == LABEL  # Open/closed is not exposed on AppTest's Expander.
     fill(at)  # Reuse the established organization-methodology acceptance case.
     assert widget(at.number_input, "Active or expected client users").value == 1000
     assert widget(at.number_input, "Defined workforce population").value == 2000
