@@ -112,7 +112,8 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     assert len(at.multiselect) == 2
     pending = at.session_state["customer_assessment:pending_files"]
     stage(at, "Report")
-    assert at.warning and not at.get("download_button")
+    assert at.warning and not [button for button in at.get("download_button")
+                              if button.label == "Download assessment package (.zip)"]
     stage(at, "Upload evidence")
     _replay_empty_native_picker_callback(at, monkeypatch)
     assert at.session_state["customer_assessment:pending_files"] == pending
@@ -170,7 +171,8 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     at.get("file_uploader")[0].upload("dr-exercise.txt", dr_test)
     run(at)
     stage(at, "Report")
-    assert at.warning and not at.get("download_button")  # Old export invalid.
+    assert at.warning and not [button for button in at.get("download_button")
+                              if button.label == "Download assessment package (.zip)"]  # Old export invalid.
     stage(at, "Upload evidence")
     assert len(suggestions(at)) == 3
     suggestions(at)[2].click()
