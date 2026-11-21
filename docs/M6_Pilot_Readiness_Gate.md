@@ -2,7 +2,7 @@
 
 **Status:** Proposed pilot execution gate only. No independent human adjudication, observed efficiency results or verified production control decisions are represented here. This document is intentionally small and **does not** replace the M6 research materials or create another benchmark.
 
-**Baseline:** protected `main` at `53e584454ec04e0b2600ef0a61b02d807290f705` after merged [PR #48](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/pull/48). The integrated synthetic analyst journey supports intake, uploads, provisional source-linked review, draft follow-up/finding and ZIP export. Production authentication, vendor custody, and real vendor delivery remain outside this pilot.
+**Verified technical baseline:** protected `main` at `a47ba7e8f1861272b5781cc08a62e3c777c52ba7` following merged [PR #48](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/pull/48) and [PR #50](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/pull/50). [Post-merge Actions run #44849960880](https://github.com/creativesolutions2013-debug/lma-vendor-trust-intelligence/actions/runs/44849960880) completed successfully in both Unit tests and PostgreSQL compatibility jobs. This CI result supports the synthetic implementation, not independent human or production assurance. The integrated synthetic analyst journey supports intake, uploads, provisional source-linked review, draft follow-up/finding and ZIP export. Production authentication, vendor custody, and real vendor delivery remain outside this pilot.
 
 ## Reuse rather than rebuild
 
@@ -15,7 +15,7 @@ Stacked drafts [#40](https://github.com/creativesolutions2013-debug/lma-vendor-t
 
 ## Smallest pilot execution sequence
 
-1. **Technical entry gate:** verify the GitHub Actions **push to main** following #48 finishes green (unit and PostgreSQL); review actual-app intake/upload/report behavior using only the synthetic test package. Record exact commit and test run ID. A green PR run alone is not the post-merge gate.
+1. **Technical entry gate:** confirm GitHub Actions **push to main** following #50 remains green (unit and PostgreSQL); review actual-app intake/upload/report behavior using only the synthetic test package. Record exact commit and test run ID. A green PR run alone is not the post-merge gate.
 2. **Reference adjudication, before scoring:** independently give two qualified TPRM reviewers only PR #39's ten-case **blind packet**, with separate copies of its blank worksheet. Do not expose provisional labels, scoring code, AI outputs or each other's notes. A third human adjudicator records disagreements, rationale and any unresolved cases. Store signed/dated or pseudonymous reviewer records privately, never in this public repo.
 3. **Classify the evidence, not the presumed vendor:** for each case distinguish `demonstrated_exception`, `evidence_insufficient`, `out_of_scope`, `stale_evidence`, `supported_with_limits` and `unresolved_ambiguity`; record source phrase (or 'none'), customer threshold, scope/date, materiality justified by the available evidence, and smallest action: `internal_verification`, `analyst_review`, `vendor_question`, or `no_action`. Never translate missing evidence into technical failure. The no-evidence IR case must receive an explicit Evidence Missing judgment.
 4. **Preserve reference integrity:** document reviewer agreement, dissent and limits. If gold labels or necessary-action definitions change, version a **new** adjudicated reference and evaluation contract. Do not overwrite PR #39's original provisional scenario labels or the frozen M5C benchmark. Until this step, combined concern recall/precision **must not** be presented as material-risk detection accuracy.
@@ -26,7 +26,7 @@ Stacked drafts [#40](https://github.com/creativesolutions2013-debug/lma-vendor-t
 
 | Gate | Acceptance evidence | Current state |
 | --- | --- | --- |
-| Merge and post-merge health | #48 merged; exact main push CI completes with both jobs green | **Pending final push CI result when this document was written** |
+| Merge and post-merge health | #48 and #50 merged; exact main push CI completes with both jobs green | **Passed** — main `a47ba7e8f1861272b5781cc08a62e3c777c52ba7`; Actions run `44849960880` unit and PostgreSQL success |
 | Source/decision reference | Two independent blind human worksheets plus separately reconciled reference; unanswered disagreements disclosed | **Not performed / no human gold** |
 | Interpretation reliability | Adjudicated exception vs gap vs scope/freshness classification; exact source provenance; errors disclosed | **Not measured against human reference** |
 | Effort and question value | Direct observed manual/LMA timings and necessary vendor-question counts, same cases/counterbalanced | **Not observed** |
