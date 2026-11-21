@@ -77,12 +77,14 @@ def _source_metadata(bound, intake, key, kind, observed):
 
 
 def _capture_files(widget_key):
-    _invalidate_uploads()
     files = st.session_state.get(widget_key, [])
     if not files:
-        st.session_state[PREFIX + 'pending_files'] = ()
+        # An unmounted native picker may replay an empty callback on navigation.
+        # Empty is not an explicit discard or a new evidence revision: preserve
+        # pending originals and the last evaluated/completed assessment.
         st.session_state.pop(PREFIX + 'file_error', None)
         return
+    _invalidate_uploads()
     if len(files) > MAX_FILES or sum(f.size for f in files) > MAX_TOTAL_BYTES or any(f.size > MAX_UPLOAD_BYTES for f in files):
         st.session_state[PREFIX + 'file_error'] = 'Select at most 10 files, 2 MB each and 10 MB total.'
         return
