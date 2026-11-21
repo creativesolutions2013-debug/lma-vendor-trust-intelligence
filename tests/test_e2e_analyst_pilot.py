@@ -207,6 +207,22 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     assert evidence == originals
     assert any(a["requirement_id"] == "BCP-01" and a["status"] == "Stale context"
                for a in latest["analyst_actions"])
+    tls_action = next(a for a in latest["analyst_actions"] if a["requirement_id"] == "ENC-01")
+    assert tls_action["status"] == "Current"
+    assert tls_action["citations"] == next(a for a in report["analyst_actions"]
+                                           if a["requirement_id"] == "ENC-01")["citations"]
+    assert next(f for f in latest["findings"] if f["requirement_id"] == "ENC-01")["context_status"] == "Current"
+    # DR-only follow-up must not let an unchanged TLS finding be duplicated.
+    stage(at, "Review gaps")
+    widget(at.selectbox, "Review requirement").set_value("ENC-01")
+    run(at)
+    widget(at.radio, "Draft action").set_value("Create Finding")
+    widget(at.text_area, "Rationale").set_value(tls_action["rationale"])
+    run(at)
+    widget(at.button, "Record draft review").click()
+    run(at)
+    assert any("identical draft finding" in e.value for e in at.error)
+    assert len(at.session_state["customer_assessment:actions"]) == 2
     assert all(not f["confirmed"]
                for e in latest["assessment_context"]["evaluations"] for f in e["facts"])
     assert latest["risk"]["residual_score"] is None

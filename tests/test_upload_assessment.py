@@ -10,6 +10,7 @@ from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 
 from src.upload_assessment import Intake, build_assessment, read_upload, suggested_requirements, MAX_UPLOAD_BYTES, MAX_TOTAL_BYTES
+from src.organization_methodology import OrganizationMethodology, default_definition
 from src.guided_assessment_demo import (
     active_actions, complete_review, completion_is_current, package_bytes, record_action, report_payload, source_role, SourceRole,
 )
@@ -122,6 +123,83 @@ def test_added_evidence_preserves_history_and_invalidates_affected_review_and_co
     assert not active_actions(changed_vendor, history)
     assert completion.snapshot['assessment_context']['vendor'] == intake.vendor
     with pytest.raises(ValueError, match='identical'): record_action(model, history, 'ENC-01','Create Finding', history[0].rationale)
+
+
+@pytest.mark.parametrize('captured_methodology', [False, True])
+@pytest.mark.parametrize('changed_requirement', ['ENC-01', 'BCP-01'])
+def test_followup_preserves_other_requirement_review_and_finding_deduplication(
+        intake, captured_methodology, changed_requirement):
+    if captured_methodology:
+        policy = OrganizationMethodology.from_dict(default_definition())
+        intake = replace(intake, organization_id=policy.definition['organization_id'], methodology=policy)
+    tls = read_upload(intake, 'tls.txt', b'Primary listener 443: TLS 1.0 is enabled.',
+                      ('ENC-01',), kind='configuration', observed_on=intake.as_of)
+    dr = read_upload(intake, 'dr.txt', b'Recovery exercise completed. Achieved RTO 300 minutes.',
+                     ('BCP-01',), kind='test', observed_on=intake.as_of)
+    original = build_assessment(intake, (tls, dr))
+    history = ()
+    for requirement in ('ENC-01', 'BCP-01'):
+        history = record_action(original, history, requirement, 'Create Finding',
+                                'Validate the cited ' + requirement + ' concern.')
+    completed = complete_review(original, history)
+    unchanged = 'BCP-01' if changed_requirement == 'ENC-01' else 'ENC-01'
+    followup = read_upload(intake, 'followup.txt',
+        b'Primary listener 443: TLS 1.2 is enabled.' if changed_requirement == 'ENC-01'
+        else b'Recovery exercise completed. Achieved RTO 180 minutes.',
+        (changed_requirement,), kind='test', observed_on=intake.as_of)
+    revised = build_assessment(intake, (tls, dr, followup))
+    assert next(r for r in original.worklist.rows if r.requirement_id == unchanged) == next(
+        r for r in revised.worklist.rows if r.requirement_id == unchanged)
+    retained = next(a for a in history if a.requirement_id == unchanged)
+    assert active_actions(revised, history) == (retained,)
+    with pytest.raises(ValueError, match='identical'):
+        record_action(revised, history, unchanged, retained.action, retained.rationale)
+    assert not completion_is_current(revised, history, completed)
+    with pytest.raises(ValueError, match='context changed'):
+        package_bytes(revised, history, completed)
+    with ZipFile(BytesIO(package_bytes(revised, history, complete_review(revised, history)))) as archive:
+        report = json.loads(archive.read('report.json'))
+        actions = {a['requirement_id']: a for a in report['analyst_actions']}
+        findings = {f['requirement_id']: f for f in report['findings']}
+        assert actions[unchanged]['status'] == findings[unchanged]['context_status'] == 'Current'
+        assert actions[changed_requirement]['status'] == 'Stale context'
+        assert findings[changed_requirement]['context_status'].startswith('Stale context')
+        assert all(not f['resolved'] for f in findings.values())
+        assert actions[unchanged]['citations'] == completed.snapshot['analyst_actions'][
+            0 if unchanged == 'ENC-01' else 1]['citations']
+        assert report['risk']['residual_score'] is None
+        assert report['review_completion']['vendor_approved'] is False
+        assert all(r['outcome'] not in ('Met', 'Risk Identified') for r in report['requirements'])
+        assert all(not f['confirmed'] for e in report['assessment_context']['evaluations'] for f in e['facts'])
+
+
+@pytest.mark.parametrize('change', ['bytes', 'date', 'service', 'environment', 'kind', 'routing', 'threshold', 'vendor', 'policy'])
+def test_requirement_review_still_invalidates_when_its_evidence_or_shared_context_changes(intake, change):
+    policy = default_definition()
+    intake = replace(intake, organization_id=policy['organization_id'],
+                     methodology=OrganizationMethodology.from_dict(policy))
+    content = b'Primary listener 443: TLS 1.0 is enabled.'
+    metadata = dict(kind='configuration', observed_on=intake.as_of,
+                    service=intake.service, environment=intake.environment)
+    source = read_upload(intake, 'tls.txt', content, ('ENC-01',), **metadata)
+    original = build_assessment(intake, (source,))
+    history = record_action(original, (), 'ENC-01', 'Challenge', 'Verify the source meaning and scope.')
+    targets = ('ENC-01',)
+    if change == 'bytes': content = b'Primary listener 443: TLS 1.2 is enabled.'
+    elif change == 'date': metadata['observed_on'] -= timedelta(days=1)
+    elif change == 'service': metadata['service'] = 'Another service'
+    elif change == 'environment': metadata['environment'] = 'test'
+    elif change == 'kind': metadata['kind'] = 'policy'
+    elif change == 'routing': targets = ('BCP-01',)
+    elif change == 'vendor': intake = replace(intake, vendor='Another synthetic vendor')
+    else:
+        if change == 'threshold': policy['assurance']['tls_minimum_version'] = 13
+        else: policy['version'] = 'new-version'
+        intake = replace(intake, methodology=OrganizationMethodology.from_dict(policy))
+    revised_source = read_upload(intake, 'tls.txt', content, targets, **metadata)
+    revised = build_assessment(intake, (revised_source,))
+    assert not active_actions(revised, history)
+    assert report_payload(revised, history)['analyst_actions'][0]['status'] == 'Stale context'
 
 
 @pytest.mark.parametrize('filename,content', [('empty.txt',b''), ('bad.pdf',b'not pdf'), ('bad.docx',b'not zip'), ('binary.txt',b'\xff'), ('code.html',b'<script>'), ('huge.txt',b'x'*(MAX_UPLOAD_BYTES+1))])

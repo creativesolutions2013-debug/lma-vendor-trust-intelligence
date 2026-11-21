@@ -202,6 +202,16 @@ def row_fingerprint(model: DemoAssessment, row: WorklistRow):
     mapping = next((mapping for mapping in model.scenario.requirements
                     if mapping.control_id == row.control_id
                     and mapping.requirement.requirement_id == row.requirement_id), None)
+    customer_context = getattr(model, "customer_context", None)
+    if customer_context is not None:
+        # Keep shared intake/policy context, but bind source-derived previews to
+        # this requirement. Unrelated follow-up must not stale an unchanged review
+        # or bypass finding deduplication. Completion still hashes the full report.
+        customer_context = dict(customer_context)
+        for field in ("evaluations", "screening"):
+            if field in customer_context:
+                customer_context[field] = [entry for entry in customer_context[field]
+                                           if entry["requirement_id"] == row.requirement_id]
     return _digest({
         "scope": asdict(model.worklist.scope), "risk_profile": model.risk_profile,
         "inherent_score": model.inherent_score, "risk_drivers": model.risk_drivers,
@@ -210,7 +220,7 @@ def row_fingerprint(model: DemoAssessment, row: WorklistRow):
         "bundle": row.review.bundle_fingerprint if row.review else None,
         "needs": [asdict(need) for need in mapping.needs] if mapping else [],
         "need_matches": [asdict(match) for match in row.need_matches],
-        "customer_context": getattr(model, "customer_context", None),
+        "customer_context": customer_context,
     })
 
 
