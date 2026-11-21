@@ -40,22 +40,32 @@ def _review(at, requirement, action, reason):
 
 
 def _replay_empty_native_picker_callback(at, monkeypatch):
-    """Replay the actual callback with an empty remounted widget state.
+    """Replay the real callback on a snapshot of the observed AppTest state.
 
-    AppTest.set_value([]) on an already-empty widget is a no-op and would leave
-    the original destructive handler untested. Invoke its registered function
-    with the real AppTest session proxy, after navigating away and back.
-    Reinstating the old pending-files wipe makes the pending test fail; its
-    old unconditional invalidation makes the completion test fail.
+    AppTest.set_value([]) on an already-empty picker is a no-op, while
+    AppTest's session proxy lacks the runtime mapping's .pop method. A plain
+    mapping snapshot faithfully exposes callback mutations without changing
+    the AppTest's live objects. Restoring the old handler fails this assertion:
+    it clears pending originals, dirties the snapshot and loses completion.
     """
     import src.upload_assessment_ui as upload_ui
 
+    state = {
+        "customer_assessment:pending_files":
+            at.session_state.get("customer_assessment:pending_files"),
+        "customer_assessment:completion":
+            at.session_state.get("customer_assessment:completion"),
+        "customer_assessment:uploads_dirty":
+            at.session_state.get("customer_assessment:uploads_dirty", False),
+    }
+    expected = dict(state)
     key = "customer_assessment:files:" + str(
         at.session_state.get("customer_assessment:upload_epoch", 0)
     )
     with monkeypatch.context() as patch:
-        patch.setattr(upload_ui.st, "session_state", at.session_state)
+        patch.setattr(upload_ui.st, "session_state", state)
         upload_ui._capture_files(key)
+    assert state == expected, "Empty native picker callback mutated retained state."
 
 
 def test_browser_empty_picker_replay_does_not_invalidate_completed_review(no_live_effects, packages, monkeypatch):
