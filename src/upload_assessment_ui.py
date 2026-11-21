@@ -77,12 +77,14 @@ def _source_metadata(bound, intake, key, kind, observed):
 
 
 def _capture_files(widget_key):
-    _invalidate_uploads()
     files = st.session_state.get(widget_key, [])
     if not files:
-        st.session_state[PREFIX + 'pending_files'] = ()
+        # An unmounted native picker may replay an empty callback on navigation.
+        # Empty is not an explicit discard or a new evidence revision: preserve
+        # pending originals and the last evaluated/completed assessment.
         st.session_state.pop(PREFIX + 'file_error', None)
         return
+    _invalidate_uploads()
     if len(files) > MAX_FILES or sum(f.size for f in files) > MAX_TOTAL_BYTES or any(f.size > MAX_UPLOAD_BYTES for f in files):
         st.session_state[PREFIX + 'file_error'] = 'Select at most 10 files, 2 MB each and 10 MB total.'
         return
@@ -109,6 +111,7 @@ def _about(methodology):
     definition=methodology.definition
     st.subheader('Start a synthetic vendor assessment')
     st.caption('Pilot organization: '+definition['organization_id']+' · methodology '+definition['version']+' · '+definition['strategy'])
+    st.caption('Start with the relationship and exposure you know. Unknown scope stays provisional; the optional details below can affect the assessed risk tier.')
     vendor = st.text_input('Synthetic vendor name', key=PREFIX + 'vendor', max_chars=200)
     service = st.text_input('Service being assessed', key=PREFIX + 'service', max_chars=200)
     purpose = st.text_area('Business use case', key=PREFIX + 'purpose', max_chars=500)
@@ -133,20 +136,22 @@ def _about(methodology):
                              key=PREFIX + 'data_volume_records', help='Approximate maximum records the vendor will access, process or store for this use case. Count records, not GB or unique people. Leave blank if unknown; 0 explicitly means no records.')
     dependency = st.selectbox('Dependency on this service', tuple(SERVICE_DEPENDENCY_POINTS), index=4,
                               key=PREFIX + 'service_dependency', help='What happens if this service is unavailable? Consider operational disruption and whether a viable workaround exists; this is not fourth-party dependency.')
-    users=st.number_input('Active or expected client users',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'client_users',help='Client employees using this vendor product, not vendor administrator accounts or people represented in records.')
-    workforce=st.number_input('Defined workforce population',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'workforce',help='Use the consistently defined organization/workforce scope for the assessed use case. A small department must not be described as enterprise-wide adoption.')
-    user_basis=st.selectbox('User-count basis',('Expected at rollout','Observed active users'),key=PREFIX+'user_basis')
-    a=definition['adoption'];v=definition['volume']
-    st.caption(f"Organization adoption bands: High at {a['high_count']} users or {a['high_percent']}% of the defined workforce. Observed counts use {a['window_days']} days; rollout counts are estimates. High record volume is over {v['moderate_max']} records. Storage size is not used.")
-    overlap_choice=st.selectbox('Is scale already included in the baseline assessment?',('Unknown','No','Yes'),key=PREFIX+'overlap',help='Avoid adding the same adoption/record-scale exposure twice.')
-    overlap_reason=st.text_input('Where is scale already represented?',max_chars=1000,key=PREFIX+'overlap_reason') if overlap_choice=='Yes' else ''
-    critical_choice='Unknown';critical_reason=''
-    if definition['uplift']['critical_override'] or definition['uplift']['critical_condition_required']:
-        critical_choice=st.selectbox('Critical consequence under organization methodology',('Unknown','Not identified','Identified'),key=PREFIX+'critical_consequence',help='Under the default methodology, counts alone do not establish criticality. This is a requester declaration of a defined critical consequence, not risk acceptance or vendor approval.')
-        critical_reason=st.text_input('Explain the critical consequence',max_chars=1000,key=PREFIX+'critical_reason') if critical_choice=='Identified' else ''
-    else:
-        st.caption('This organization methodology does not use a separate critical-consequence declaration.')
-    st.caption('Scale-uplift method: no additive volume points and at most one scale uplift. Weighted method: highest eligible user/record contribution only; no scale uplift. ' + ('Tier 1 requires baseline criticality or an explicit critical-consequence condition. ' if definition['uplift']['critical_condition_required'] else 'This organization explicitly permits scale-derived criticality under its configured method. ') + 'All results remain illustrative and subject to review.')
+    with st.expander('Optional: adoption, scale and critical consequences', expanded=False):
+        st.caption('Add these details when available. Leaving values unknown does not assert zero adoption, no overlap or no critical consequence; the risk tier remains provisional where inputs are incomplete.')
+        users=st.number_input('Active or expected client users',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'client_users',help='Client employees using this vendor product, not vendor administrator accounts or people represented in records.')
+        workforce=st.number_input('Defined workforce population',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'workforce',help='Use the consistently defined organization/workforce scope for the assessed use case. A small department must not be described as enterprise-wide adoption.')
+        user_basis=st.selectbox('User-count basis',('Expected at rollout','Observed active users'),key=PREFIX+'user_basis')
+        a=definition['adoption'];v=definition['volume']
+        st.caption(f"Organization adoption bands: High at {a['high_count']} users or {a['high_percent']}% of the defined workforce. Observed counts use {a['window_days']} days; rollout counts are estimates. High record volume is over {v['moderate_max']} records. Storage size is not used.")
+        overlap_choice=st.selectbox('Is scale already included in the baseline assessment?',('Unknown','No','Yes'),key=PREFIX+'overlap',help='Avoid adding the same adoption/record-scale exposure twice.')
+        overlap_reason=st.text_input('Where is scale already represented?',max_chars=1000,key=PREFIX+'overlap_reason') if overlap_choice=='Yes' else ''
+        critical_choice='Unknown';critical_reason=''
+        if definition['uplift']['critical_override'] or definition['uplift']['critical_condition_required']:
+            critical_choice=st.selectbox('Critical consequence under organization methodology',('Unknown','Not identified','Identified'),key=PREFIX+'critical_consequence',help='Under the default methodology, counts alone do not establish criticality. This is a requester declaration of a defined critical consequence, not risk acceptance or vendor approval.')
+            critical_reason=st.text_input('Explain the critical consequence',max_chars=1000,key=PREFIX+'critical_reason') if critical_choice=='Identified' else ''
+        else:
+            st.caption('This organization methodology does not use a separate critical-consequence declaration.')
+        st.caption('Scale-uplift method: no additive volume points and at most one scale uplift. Weighted method: highest eligible user/record contribution only; no scale uplift. ' + ('Tier 1 requires baseline criticality or an explicit critical-consequence condition. ' if definition['uplift']['critical_condition_required'] else 'This organization explicitly permits scale-derived criticality under its configured method. ') + 'All results remain illustrative and subject to review.')
     if (access == 'Unknown' or (access != 'None' and system_data_criticality == 'Unknown')
             or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown'):
         st.warning('Complete or clarify unknown exposure inputs. The score is only a known-input subtotal and the tier remains provisional.')
@@ -177,7 +182,7 @@ def _uploads(intake):
     st.write('No vendor files are preloaded. Upload nonconfidential synthetic PDF, DOCX or UTF-8 TXT files. Files stay in this browser session on the development server; they are not sent to an AI provider or saved to the legacy database.')
     st.caption('Limits: 10 files, 2 MB each, 10 MB total. Scans without readable text need local OCR before upload. This is not secure production document custody or malware scanning.')
     retained = st.session_state.get(PREFIX + 'uploads', ())
-    st.caption('Attached files are retained for this assessment. New selections add files; use Clear this assessment to remove all session data.')
+    st.caption('New selections are staged until you evaluate. Use Discard new file selections to remove staged files; Clear this assessment resets the entire session. Leaving this step does not discard selections.')
     widget_key = PREFIX + 'files:' + str(st.session_state.get(PREFIX + 'upload_epoch', 0))
     st.file_uploader('Choose synthetic evidence', type=['pdf', 'docx', 'txt'], accept_multiple_files=True,
                      key=widget_key, max_upload_size=2, on_change=_capture_files, args=(widget_key,))
