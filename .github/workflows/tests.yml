@@ -31,7 +31,10 @@ jobs:
           pip install pytest
 
       - name: Compile application and M5D evaluator before tests
-        run: python -m py_compile app.py src/upload_evaluation.py
+        run: python -m py_compile app.py src/upload_evaluation.py src/upload_assessment_ui.py tests/test_e2e_intake_progressive_disclosure.py
+
+      - name: Verify concise intake and scoring safeguards first
+        run: pytest -q tests/test_e2e_intake_progressive_disclosure.py
 
       - name: Run tests
         run: pytest -q
@@ -87,7 +90,7 @@ jobs:
           pip install pytest
 
       - name: Compile application and M5D evaluator before PostgreSQL tests
-        run: python -m py_compile app.py src/upload_evaluation.py
+        run: python -m py_compile app.py src/upload_evaluation.py src/upload_assessment_ui.py tests/test_e2e_intake_progressive_disclosure.py
 
       - name: Apply Alembic migrations to PostgreSQL
         run: alembic upgrade head
@@ -121,6 +124,9 @@ jobs:
               ", ".join(sorted(actual)),
           )
           PY
+
+      - name: Verify concise intake and scoring safeguards first
+        run: pytest -q tests/test_e2e_intake_progressive_disclosure.py
 
       - name: Run test suite with PostgreSQL configuration
         run: pytest -q
