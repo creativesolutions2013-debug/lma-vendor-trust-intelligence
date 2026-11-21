@@ -39,7 +39,26 @@ def _review(at, requirement, action, reason):
     assert not at.error
 
 
-def test_browser_empty_picker_replay_does_not_invalidate_completed_review(no_live_effects, packages):
+def _replay_empty_native_picker_callback(at, monkeypatch):
+    """Replay the actual callback with an empty remounted widget state.
+
+    AppTest.set_value([]) on an already-empty widget is a no-op and would leave
+    the original destructive handler untested. Invoke its registered function
+    with the real AppTest session proxy, after navigating away and back.
+    Reinstating the old pending-files wipe makes the pending test fail; its
+    old unconditional invalidation makes the completion test fail.
+    """
+    import src.upload_assessment_ui as upload_ui
+
+    key = "customer_assessment:files:" + str(
+        at.session_state.get("customer_assessment:upload_epoch", 0)
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(upload_ui.st, "session_state", at.session_state)
+        upload_ui._capture_files(key)
+
+
+def test_browser_empty_picker_replay_does_not_invalidate_completed_review(no_live_effects, packages, monkeypatch):
     at = start()
     at.get("file_uploader")[0].upload(
         "context.txt", b"Synthetic metadata for a test; no control approval."
@@ -58,8 +77,7 @@ def test_browser_empty_picker_replay_does_not_invalidate_completed_review(no_liv
     stage(at, "Upload evidence")
     # A normal native picker remount can yield an empty value even though the
     # evidence is already retained: neither completion nor exports are dirty.
-    at.get("file_uploader")[0].set_value([])
-    run(at)
+    _replay_empty_native_picker_callback(at, monkeypatch)
     assert at.session_state["customer_assessment:completion"] == completion
     assert not at.session_state.get("customer_assessment:uploads_dirty", False)
     stage(at, "Report")
@@ -67,7 +85,7 @@ def test_browser_empty_picker_replay_does_not_invalidate_completed_review(no_liv
             if b.label == "Download assessment package (.zip)"]
 
 
-def test_evidence_first_question_followup_and_reassessment_journey(no_live_effects, packages):
+def test_evidence_first_question_followup_and_reassessment_journey(no_live_effects, packages, monkeypatch):
     at = start()
     intake = at.session_state["customer_assessment:intake"]
     observed = intake.as_of - timedelta(days=7)
@@ -96,8 +114,7 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     stage(at, "Report")
     assert at.warning and not at.get("download_button")
     stage(at, "Upload evidence")
-    at.get("file_uploader")[0].set_value([])
-    run(at)
+    _replay_empty_native_picker_callback(at, monkeypatch)
     assert at.session_state["customer_assessment:pending_files"] == pending
 
     # Use source-stated fields by direct analyst action; not verified facts.
