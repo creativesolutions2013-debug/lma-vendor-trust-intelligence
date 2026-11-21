@@ -109,6 +109,7 @@ def _about(methodology):
     definition=methodology.definition
     st.subheader('Start a synthetic vendor assessment')
     st.caption('Pilot organization: '+definition['organization_id']+' · methodology '+definition['version']+' · '+definition['strategy'])
+    st.caption('Start with the relationship and exposure you know. Unknown scope stays provisional; the optional details below can affect the assessed risk tier.')
     vendor = st.text_input('Synthetic vendor name', key=PREFIX + 'vendor', max_chars=200)
     service = st.text_input('Service being assessed', key=PREFIX + 'service', max_chars=200)
     purpose = st.text_area('Business use case', key=PREFIX + 'purpose', max_chars=500)
@@ -133,20 +134,22 @@ def _about(methodology):
                              key=PREFIX + 'data_volume_records', help='Approximate maximum records the vendor will access, process or store for this use case. Count records, not GB or unique people. Leave blank if unknown; 0 explicitly means no records.')
     dependency = st.selectbox('Dependency on this service', tuple(SERVICE_DEPENDENCY_POINTS), index=4,
                               key=PREFIX + 'service_dependency', help='What happens if this service is unavailable? Consider operational disruption and whether a viable workaround exists; this is not fourth-party dependency.')
-    users=st.number_input('Active or expected client users',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'client_users',help='Client employees using this vendor product, not vendor administrator accounts or people represented in records.')
-    workforce=st.number_input('Defined workforce population',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'workforce',help='Use the consistently defined organization/workforce scope for the assessed use case. A small department must not be described as enterprise-wide adoption.')
-    user_basis=st.selectbox('User-count basis',('Expected at rollout','Observed active users'),key=PREFIX+'user_basis')
-    a=definition['adoption'];v=definition['volume']
-    st.caption(f"Organization adoption bands: High at {a['high_count']} users or {a['high_percent']}% of the defined workforce. Observed counts use {a['window_days']} days; rollout counts are estimates. High record volume is over {v['moderate_max']} records. Storage size is not used.")
-    overlap_choice=st.selectbox('Is scale already included in the baseline assessment?',('Unknown','No','Yes'),key=PREFIX+'overlap',help='Avoid adding the same adoption/record-scale exposure twice.')
-    overlap_reason=st.text_input('Where is scale already represented?',max_chars=1000,key=PREFIX+'overlap_reason') if overlap_choice=='Yes' else ''
-    critical_choice='Unknown';critical_reason=''
-    if definition['uplift']['critical_override'] or definition['uplift']['critical_condition_required']:
-        critical_choice=st.selectbox('Critical consequence under organization methodology',('Unknown','Not identified','Identified'),key=PREFIX+'critical_consequence',help='Under the default methodology, counts alone do not establish criticality. This is a requester declaration of a defined critical consequence, not risk acceptance or vendor approval.')
-        critical_reason=st.text_input('Explain the critical consequence',max_chars=1000,key=PREFIX+'critical_reason') if critical_choice=='Identified' else ''
-    else:
-        st.caption('This organization methodology does not use a separate critical-consequence declaration.')
-    st.caption('Scale-uplift method: no additive volume points and at most one scale uplift. Weighted method: highest eligible user/record contribution only; no scale uplift. ' + ('Tier 1 requires baseline criticality or an explicit critical-consequence condition. ' if definition['uplift']['critical_condition_required'] else 'This organization explicitly permits scale-derived criticality under its configured method. ') + 'All results remain illustrative and subject to review.')
+    with st.expander('Optional: adoption, scale and critical consequences', expanded=False):
+        st.caption('Add these details when available. Leaving values unknown does not assert zero adoption, no overlap or no critical consequence; the risk tier remains provisional where inputs are incomplete.')
+        users=st.number_input('Active or expected client users',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'client_users',help='Client employees using this vendor product, not vendor administrator accounts or people represented in records.')
+        workforce=st.number_input('Defined workforce population',min_value=0,max_value=MAX_VOLUME_RECORDS,value=None,step=1,key=PREFIX+'workforce',help='Use the consistently defined organization/workforce scope for the assessed use case. A small department must not be described as enterprise-wide adoption.')
+        user_basis=st.selectbox('User-count basis',('Expected at rollout','Observed active users'),key=PREFIX+'user_basis')
+        a=definition['adoption'];v=definition['volume']
+        st.caption(f"Organization adoption bands: High at {a['high_count']} users or {a['high_percent']}% of the defined workforce. Observed counts use {a['window_days']} days; rollout counts are estimates. High record volume is over {v['moderate_max']} records. Storage size is not used.")
+        overlap_choice=st.selectbox('Is scale already included in the baseline assessment?',('Unknown','No','Yes'),key=PREFIX+'overlap',help='Avoid adding the same adoption/record-scale exposure twice.')
+        overlap_reason=st.text_input('Where is scale already represented?',max_chars=1000,key=PREFIX+'overlap_reason') if overlap_choice=='Yes' else ''
+        critical_choice='Unknown';critical_reason=''
+        if definition['uplift']['critical_override'] or definition['uplift']['critical_condition_required']:
+            critical_choice=st.selectbox('Critical consequence under organization methodology',('Unknown','Not identified','Identified'),key=PREFIX+'critical_consequence',help='Under the default methodology, counts alone do not establish criticality. This is a requester declaration of a defined critical consequence, not risk acceptance or vendor approval.')
+            critical_reason=st.text_input('Explain the critical consequence',max_chars=1000,key=PREFIX+'critical_reason') if critical_choice=='Identified' else ''
+        else:
+            st.caption('This organization methodology does not use a separate critical-consequence declaration.')
+        st.caption('Scale-uplift method: no additive volume points and at most one scale uplift. Weighted method: highest eligible user/record contribution only; no scale uplift. ' + ('Tier 1 requires baseline criticality or an explicit critical-consequence condition. ' if definition['uplift']['critical_condition_required'] else 'This organization explicitly permits scale-derived criticality under its configured method. ') + 'All results remain illustrative and subject to review.')
     if (access == 'Unknown' or (access != 'None' and system_data_criticality == 'Unknown')
             or network == 'Unknown' or criticality == 'Unknown' or volume is None or dependency == 'Unknown'):
         st.warning('Complete or clarify unknown exposure inputs. The score is only a known-input subtotal and the tier remains provisional.')
