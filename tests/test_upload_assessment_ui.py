@@ -128,6 +128,37 @@ def test_pending_bytes_remain_in_memory_across_navigation_and_clear(no_live_effe
     assert not at.session_state.get('customer_assessment:pending_files')
 
 
+
+def test_discard_without_staged_files_preserves_completed_export(no_live_effects, packages):
+    at = start()
+    at.get('file_uploader')[0].upload('validated.txt', b'TLS 1.2 is enabled.')
+    run(at)
+    widget(at.button, 'Evaluate attached evidence').click()
+    run(at)
+    stage(at, 'Report')
+    widget(at.button, 'Finish assessment review').click()
+    run(at)
+    completed = at.session_state['customer_assessment:completion']
+    original_package = packages[-1]
+    stage(at, 'Upload evidence')
+    assert not at.session_state.get('customer_assessment:pending_files')
+    widget(at.button, 'Discard new file selections').click()
+    run(at)
+    assert at.session_state['customer_assessment:completion'] == completed
+    assert not at.session_state.get('customer_assessment:uploads_dirty', False)
+    stage(at, 'Report')
+    warning_messages = {warning.value for warning in at.warning}
+    assert not any('current upload selections' in message or 'Upload selections may have changed' in message
+                   for message in warning_messages)
+    # A completed synthetic review still discloses unresolved intake uncertainty.
+    assert any('Data types are not fully classified' in message for message in warning_messages)
+    assert any('Unknown exposure inputs:' in message for message in warning_messages)
+    assert any('Unassessed methodology input:' in message for message in warning_messages)
+    assert 'Provisional: methodology inputs or exposure remain unassessed.' in warning_messages
+    assert not widget(at.get('download_button'), 'Download assessment package (.zip)').disabled
+    assert packages[-1] == original_package
+
+
 def test_unsaved_metadata_survives_every_stage_and_cannot_restore_old_export(no_live_effects, packages):
     at = start()
     at.get('file_uploader')[0].upload('retained.txt', b'TLS 1.2 is enabled.')
