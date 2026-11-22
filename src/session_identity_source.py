@@ -4,6 +4,8 @@ No browser organization selector is accepted. This bounded slice denies accounts
 with multiple current memberships pending a separately reviewed server selection
 flow. The database evidence authority still supplies effective roles and grants.
 """
+from contextlib import contextmanager
+
 from sqlalchemy import select
 
 from src.assessment_evidence_access import AuthenticatedIdentity, _current, _positive_id
@@ -18,6 +20,36 @@ class SessionIdentitySource:
     def __init__(self, sessions: SessionManager, handle: str, session_factory, *, clock=utc_now):
         self._sessions, self._handle = sessions, handle
         self._database_sessions, self._clock = session_factory, clock
+
+    @contextmanager
+    def session_operation(self):
+        """Lease the actual server session; release no identity or tenant authority."""
+        try:
+            sessions, handle = self._sessions, self._handle
+            database_sessions, clock = self._database_sessions, self._clock
+        except Exception:
+            raise PermissionError("Session identity operation is unavailable.") from None
+
+        def pinned():
+            if (type(sessions) is not SessionManager or self._sessions is not sessions
+                    or type(handle) is not str or type(self._handle) is not str or self._handle != handle
+                    or self._database_sessions is not database_sessions
+                    or self._clock is not clock or not callable(database_sessions)
+                    or not callable(clock)):
+                raise PermissionError
+
+        try:
+            pinned()
+            with sessions.operation_lease(handle) as session:
+                pinned()
+                if type(session) is not ServerSession:
+                    raise PermissionError
+                yield None
+                pinned()
+            # Include manager/store cleanup in the dependency-pinned interval.
+            pinned()
+        except Exception:
+            raise PermissionError("Session identity operation is unavailable.") from None
 
     def authenticated_identity(self):
         try:

@@ -4,12 +4,14 @@ Only the trusted code-flow service may issue sessions after cryptographic token
 validation. DTO creation is not authentication. No cookie, Streamlit state,
 production store, login route, role claim or organization selector is used here.
 """
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from math import isfinite
 import re
 from secrets import token_urlsafe
-from threading import RLock
+from threading import RLock, get_ident
 from typing import Protocol
 
 
@@ -71,18 +73,64 @@ class SessionStore(Protocol):
     def revoke(self, key) -> bool: ...
     def rotate(self, key, new_key, session_id, now, idle_seconds, absolute_seconds) -> _SessionRecord | None: ...
 
+    @contextmanager
+    def operation_lease(self, key_digest):
+        """Optional coordination contract; ordinary atomic operations are insufficient."""
+        raise PermissionError("Server session operation is unavailable.")
+        yield  # pragma: no cover - make denial a context-manager entry failure.
+
 
 class InMemorySessionStore:
     """Isolated, thread-safe synthetic proof; not persistent or multi-worker safe."""
-    def __init__(self, *, capacity=1000):
-        if type(capacity) is not int or capacity < 1:
+    def __init__(self, *, capacity=1000, operation_timeout_seconds=3):
+        if (type(capacity) is not int or capacity < 1
+                or type(operation_timeout_seconds) not in (int, float)
+                or not isfinite(operation_timeout_seconds)
+                or not 0 < operation_timeout_seconds <= 3):
             raise ValueError("Invalid synthetic session-store configuration.")
         self._records = {}
         self._lock = RLock()
         self._capacity = capacity
+        self._operation_timeout = operation_timeout_seconds
+        self._leased_keys = {}
+
+    @contextmanager
+    def _locked(self):
+        lock = self._lock
+        timeout = self._operation_timeout
+        if (type(timeout) not in (int, float) or not isfinite(timeout)
+                or not 0 < timeout <= 3 or not lock.acquire(timeout=timeout)):
+            raise PermissionError("Server session operation is unavailable.")
+        try:
+            yield
+        finally:
+            lock.release()
+
+    @contextmanager
+    def operation_lease(self, key_digest):
+        """Serialize this synthetic operation against authentication and mutation.
+
+        The store-wide lock is intentionally conservative. It is not a durable or
+        distributed lease. Reentrant mutation of the protected key must fail,
+        rather than falsely report a successful logout or handle rotation.
+        """
+        try:
+            if (type(key_digest) is not str
+                    or re.fullmatch(r"[a-f0-9]{64}", key_digest) is None):
+                raise PermissionError
+            with self._locked():
+                if get_ident() in self._leased_keys.values():
+                    raise PermissionError
+                self._leased_keys[key_digest] = get_ident()
+                try:
+                    yield
+                finally:
+                    self._leased_keys.pop(key_digest, None)
+        except Exception:
+            raise PermissionError("Server session operation is unavailable.") from None
 
     def create(self, key, record, now):
-        with self._lock:
+        with self._locked():
             # Bounded synthetic memory. Never evict a current session to admit
             # another one; absolute expiry is sufficient for safe cleanup.
             for digest, old in list(self._records.items()):
@@ -95,7 +143,7 @@ class InMemorySessionStore:
             return True
 
     def authenticate(self, key, now, idle_seconds, absolute_seconds):
-        with self._lock:
+        with self._locked():
             record = self._records.get(key)
             if not _valid(record, key, now, idle_seconds, absolute_seconds):
                 self._records.pop(key, None)
@@ -105,11 +153,15 @@ class InMemorySessionStore:
             return record
 
     def revoke(self, key):
-        with self._lock:
+        with self._locked():
+            if key in self._leased_keys:
+                return False
             return self._records.pop(key, None) is not None
 
     def rotate(self, key, new_key, session_id, now, idle_seconds, absolute_seconds):
-        with self._lock:
+        with self._locked():
+            if key in self._leased_keys or new_key in self._leased_keys:
+                return None
             record = self._records.get(key)
             if not _valid(record, key, now, idle_seconds, absolute_seconds):
                 self._records.pop(key, None)
@@ -175,6 +227,63 @@ class SessionManager:
             return record.session
         except Exception:
             return None
+
+    @contextmanager
+    def operation_lease(self, handle):
+        """Hold fresh server-session authority through one internal operation.
+
+        The yielded immutable record is internal context, never a reusable tenant
+        capability. Supporting stores must coordinate their authenticate, revoke
+        and rotate operations until lease cleanup completes.
+        """
+        try:
+            store, clock = self._store, self._clock
+            idle, absolute = self._idle, self._absolute
+        except Exception:
+            raise PermissionError("Server session operation is unavailable.") from None
+
+        def pinned():
+            if (self._store is not store or self._clock is not clock
+                    or type(self._idle) is not int or self._idle != idle
+                    or type(self._absolute) is not int or self._absolute != absolute
+                    or type(idle) is not int or type(absolute) is not int
+                    or not 1 <= idle <= absolute <= 86400 or not callable(clock)):
+                raise PermissionError
+
+        def current():
+            pinned()
+            now = clock()
+            pinned()
+            record = store.authenticate(key, now, idle, absolute)
+            pinned()
+            observed = clock()
+            pinned()
+            if not _valid(record, key, observed, idle, absolute):
+                raise PermissionError
+            return record.session
+
+        try:
+            pinned()
+            key = self._key(handle)
+            lease = getattr(store, 'operation_lease', None)
+            if key is None or not callable(lease):
+                raise PermissionError
+            completed = False
+            with lease(key):
+                pinned()
+                session = current()
+                yield session
+                pinned()
+                if current() != session:
+                    raise PermissionError
+                pinned()
+                completed = True
+            # A store context's cleanup can itself change server dependencies.
+            pinned()
+            if not completed:
+                raise PermissionError
+        except Exception:
+            raise PermissionError("Server session operation is unavailable.") from None
 
     def revoke(self, handle) -> bool:
         try:

@@ -280,19 +280,27 @@ class TenantReadService:
             raise PermissionError("Scoped access denied.")
         # SQL reads can block too. Re-evaluate the cached locked windows after
         # all I/O, immediately before issuance; no identity/SQL call follows.
+        self._finish_cached_windows(final, permission)
+        self._check_dependencies(scope.identity_source, scope.session_factory)
+
+    def _finish_cached_windows(self, scope, permission):
+        """Deadline freshness only; the supplied scope is internal, never authority.
+
+        Call only after the locked transaction proves current authority equality.
+        No SQL or remote lookup: callers may repeat after blocking completion.
+        """
         now = _utc_now()
-        if not self._valid_identity(last, now):
+        if not self._valid_identity(scope.identity, now):
             raise PermissionError("Scoped access denied.")
-        members, grants = final.authority
+        members, grants = scope.authority
         active = [row for row in members if row[3] == "active"
                   and _current(_db_time(row[4]), _db_time(row[5]), now)]
         current_grants = frozenset(row[1] for row in grants if row[2] == "active"
                                   and _current(_db_time(row[3]), _db_time(row[4]), now))
-        if (len(active) != 1 or active[0][1] != last.organization_id
-                or not self._permitted(last, active[0][2], permission)
+        if (len(active) != 1 or active[0][1] != scope.identity.organization_id
+                or not self._permitted(scope.identity, active[0][2], permission)
                 or current_grants != scope.engagement_ids):
             raise PermissionError("Scoped access denied.")
-        self._check_dependencies(scope.identity_source, scope.session_factory)
 
     def _project(self, kind, scope, *, session=None, item_id=None, parent_id=None,
                  limit=100, after_id=0, count=False):
