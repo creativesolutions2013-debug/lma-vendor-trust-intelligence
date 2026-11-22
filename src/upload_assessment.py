@@ -1,5 +1,5 @@
 """Development-only upload adapter, not a document-understanding or decision engine."""
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
 from hashlib import sha256
 from io import BytesIO
@@ -9,12 +9,15 @@ from lzma import LZMAError
 from zipfile import ZipFile, BadZipFile, ZIP_BZIP2
 
 from src.applicability import ApplicabilityDecision, VendorRiskContext, evaluate_applicability
-from src.assessment_worklist import AssessmentScope, AssuranceLink, EvidenceNeed, RequirementMapping, build_assessment_worklist
+from src.assessment_worklist import (
+    AssessmentScope, AssuranceLink, EvidenceNeed, NeedReview, RequirementMapping,
+    build_assessment_worklist, need_review_is_current, record_need_review,
+)
 from src.assessment_worklist_pilot import WorklistScenario
 from src.control_assurance import ControlCase, CustomerThreshold, EvidenceExpectation, RequirementContext, bind_relevance
 from src.evidence_intelligence_mvp import evaluate_pilot_requirements
-from src.evidence_source_validation import bind_evidence, reuse_evidence_bindings
-from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole
+from src.evidence_source_validation import _digest, bind_evidence, reuse_evidence_bindings
+from src.guided_assessment_demo import DemoAssessment, RoleEvidenceInput, SourceRole, record_action
 from src.scoring import DATA_SENSITIVITY_POINTS, InherentRiskInput, calculate_inherent_risk, rating_from_score, tier_from_score
 from src.tiering import CONTROL_LIBRARY, ControlRequirement, get_tier_profile, get_tier_profile_for_tier
 from src.organization_methodology import OrganizationMethodology, scale_decision, weighted_scale_points, volume_band
@@ -314,7 +317,11 @@ def suggested_requirements(document, applicable):
     return tuple(r for r in candidates if r in applicable)
 
 
-def build_assessment(intake, uploads=(), *, tls_threshold=None, dr_threshold=None):
+def build_assessment(intake, uploads=(), *, tls_threshold=None, dr_threshold=None, need_reviews=()):
+    if (not isinstance(need_reviews, (tuple, list))
+            or any(type(review) is not NeedReview or review.decision != 'insufficient' for review in need_reviews)
+            or len({review.need_id for review in need_reviews}) != len(need_reviews)):
+        raise ValueError('Supply at most one recorded insufficiency review per evidence need.')
     # Relevance and worklist services rebind sources. Supply the already bounded
     # bindings for this build so neither path reparses untrusted original bytes.
     with reuse_evidence_bindings(u.evidence for u in uploads):
@@ -324,10 +331,10 @@ def build_assessment(intake, uploads=(), *, tls_threshold=None, dr_threshold=Non
                 raise ValueError('Edit organization methodology thresholds rather than overriding its captured snapshot.')
             tls_threshold=TlsThreshold(a['tls_minimum_version'])
             dr_threshold=DrThreshold(a['dr_max_test_age_days'],a['rto_minutes'],a['rpo_minutes'])
-        return _build_assessment(intake, uploads, tls_threshold or TlsThreshold(12), dr_threshold or DrThreshold(365, 240, 60))
+        return _build_assessment(intake, uploads, tls_threshold or TlsThreshold(12), dr_threshold or DrThreshold(365, 240, 60), tuple(need_reviews))
 
 
-def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
+def _build_assessment(intake, uploads, tls_threshold, dr_threshold, need_reviews=()):
     if len(uploads) > MAX_FILES or sum(len(u.evidence.source.content) for u in uploads) > MAX_TOTAL_BYTES:
         raise ValueError('Keep at most 10 files and 10 MB total in this local assessment.')
     if len({u.evidence.source.document_id for u in uploads}) != len(uploads):
@@ -339,7 +346,8 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     if any(r not in allowed for u in uploads for r in u.requirements):
         raise ValueError('Upload routing differs from current applicable requirements; review the file selections.')
     scope_label = f'{intake.service} / {intake.environment} (uploader-declared scope)'
-    scope = AssessmentScope(intake.assessment_id, intake.service, intake.environment, intake.as_of)
+    scope = AssessmentScope(intake.assessment_id, intake.service, intake.environment, intake.as_of,
+                            context_fingerprint=_digest(asdict(intake)))
     mappings, links, evaluations = [], [], []
     for control in applicable.controls:
         rule=next((r for r in intake.methodology.definition['requirements'] if r['id']==control.control_id),None) if intake.methodology else None
@@ -373,9 +381,10 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
             f'Provide current {intake.service} evidence for {control.requirement}. {criteria}',
             kinds, max_age_days=requirement.max_age_days)
         mappings.append(RequirementMapping(control.control_id, requirement, threshold, (need,)))
-        links.append(AssuranceLink(intake.assessment_id, control.control_id, case))
+        links.append(AssuranceLink(intake.assessment_id, control.control_id, case,
+            need_reviews=tuple(review for review in need_reviews if review.need_id == need.need_id)))
     scenario = WorklistScenario(intake.assessment_id, intake.vendor, scope, applicable, tuple(mappings), tuple(links))
-    worklist = build_assessment_worklist(scope, applicable, tuple(mappings), tuple(links))
+    worklist = _reviewed_followups(scenario, build_assessment_worklist(scope, applicable, tuple(mappings), tuple(links)))
     # Existing deterministic text screening adds unverified TLS concerns with exact quotes;
     # no specialist factual interpretations or FactReviews are invented from free text.
     screening = evaluate_pilot_requirements(tuple(u.evidence.document for u in uploads),
@@ -434,3 +443,84 @@ def _build_assessment(intake, uploads, tls_threshold, dr_threshold):
     return UploadAssessment(intake.assessment_id, bool(uploads), f'{intake.data} / {intake.access} / {intake.criticality}',
         scenario, worklist, score, rating, tier, drivers,
         tuple(u.evidence for u in uploads if u.requirements), tuple(u.evidence for u in uploads if not u.requirements), context)
+
+
+def _reviewed_followups(scenario, worklist):
+    """Use the analyst's focused wording only for a current insufficiency review.
+
+    Keep the original need, acceptable evidence and customer threshold intact.
+    This adapts draft presentation; it supplies no new technical/policy rules.
+    """
+    focused = {}
+    for row in worklist.rows:
+        mapping = next((item for item in scenario.requirements if item.control_id == row.control_id
+                        and item.requirement.requirement_id == row.requirement_id), None)
+        link = next((item for item in scenario.assurance_links if item.control_id == row.control_id
+                     and item.case.requirement.requirement_id == row.requirement_id), None)
+        if mapping is None or link is None:
+            continue
+        for review in link.need_reviews:
+            need = next((item for item in mapping.needs if item.need_id == review.need_id), None)
+            if (need and row.review and review.decision == 'insufficient'
+                    and need_review_is_current(scenario.scope, mapping, row.review, link.state, need, review)):
+                for request in worklist.requests:
+                    if (request.request_id in row.request_ids and request.missing_fact == need.missing_fact
+                            and request.acceptable_evidence == need.acceptable_evidence):
+                        focused[request.request_id] = review.rationale.strip()
+    requests = tuple(replace(request, question=focused[request.request_id])
+                     if request.request_id in focused else request for request in worklist.requests)
+    rows = []
+    for row in worklist.rows:
+        question = next((focused[key] for key in row.request_ids if key in focused), None)
+        if question and row.intent == 'Request one missing item':
+            row = replace(row, next_action=question,
+                          presentation=replace(row.presentation, next_action=question) if row.presentation else None)
+        rows.append(row)
+    return replace(worklist, rows=tuple(rows), requests=requests)
+
+
+def record_upload_review(model, actions, requirement_id, action, rationale, *, confirms_insufficiency=False):
+    """Apply an explicit upload-session gap judgment and annotation atomically.
+
+    Request Evidence may establish only that current candidate evidence is
+    insufficient. It never confirms facts, supports a need or approves a control.
+    All other actions retain their existing annotation-only behavior.
+    """
+    if type(model) is not UploadAssessment:
+        raise ValueError('Use the current uploaded assessment for this review.')
+    if action != 'Request Evidence':
+        return model, record_action(model, actions, requirement_id, action, rationale)
+    if confirms_insufficiency is not True:
+        raise ValueError('Explicitly confirm that the current evidence is insufficient before requesting more.')
+    rows = [row for row in model.worklist.rows if row.requirement_id == requirement_id]
+    mappings = [mapping for mapping in model.scenario.requirements
+                if mapping.requirement.requirement_id == requirement_id]
+    links = [link for link in model.scenario.assurance_links
+             if link.case.requirement.requirement_id == requirement_id]
+    if len(rows) != 1 or len(mappings) != 1 or len(links) != 1:
+        raise ValueError('Select a uniquely linked current requirement for this review.')
+    row, mapping, link = rows[0], mappings[0], links[0]
+    reviews = {review.need_id: review for review in link.need_reviews}
+    # Both review validation and worklist rebuilding inspect the original bundle.
+    # Reuse its bounded bindings; never reparse retained untrusted PDFs/DOCX.
+    with reuse_evidence_bindings(model.documents + model.context_documents):
+        for need, match in zip(mapping.needs, row.need_matches):
+            if match.source_fingerprints:
+                reviews[need.need_id] = record_need_review(
+                    model.worklist.scope, mapping, link.case, link.state, need,
+                    decision='insufficient', source_fingerprints=match.source_fingerprints,
+                    analyst='Synthetic session analyst (not authenticated)', reviewed_on=model.worklist.scope.as_of,
+                    rationale=rationale, confirms=True,
+                )
+            # With no current usable candidates the worklist already requests
+            # evidence. Do not fabricate a source-bound review of absent evidence.
+        revised_link = replace(link, need_reviews=tuple(reviews.values()))
+        revised_links = tuple(revised_link if candidate is link else candidate
+                              for candidate in model.scenario.assurance_links)
+        scenario = replace(model.scenario, assurance_links=revised_links)
+        worklist = _reviewed_followups(scenario, build_assessment_worklist(
+            scenario.scope, scenario.applicability, scenario.requirements, scenario.assurance_links))
+    revised = replace(model, scenario=scenario, worklist=worklist)
+    # Validate/append last. Any failure leaves the original frozen model/history
+    # untouched, so the UI can commit both returned values in one success branch.
+    return revised, record_action(revised, actions, requirement_id, action, rationale)

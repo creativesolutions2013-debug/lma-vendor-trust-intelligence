@@ -8,12 +8,12 @@ import streamlit as st
 
 from src.guided_assessment_demo import (
     ACTIONS, active_actions, complete_review, completion_is_current, package_bytes,
-    record_action, report_payload, source_role,
+    report_payload, source_role,
 )
 from src.upload_assessment import (
     DATA_TYPES, SYSTEM_ACCESS_POINTS, SYSTEM_DATA_CRITICALITY, NETWORK_ACCESS_POINTS, CRITICALITY_POINTS,
     SERVICE_DEPENDENCY_POINTS, MAX_VOLUME_RECORDS, Intake, LIMITATION, MAX_FILES, MAX_TOTAL_BYTES, MAX_UPLOAD_BYTES,
-    build_assessment, read_upload, risk_and_applicability, suggested_requirements,
+    build_assessment, read_upload, record_upload_review, risk_and_applicability, suggested_requirements,
 )
 
 PREFIX = 'customer_assessment:'
@@ -232,10 +232,11 @@ def _uploads(intake):
     st.session_state[PREFIX + 'uploads_dirty'] = bool(errors) or tuple(proposed) != tuple(retained) or st.session_state.get(PREFIX + 'metadata_confirmation_pending', False)
     if st.session_state[PREFIX + 'uploads_dirty']: st.session_state.pop(PREFIX + 'completion', None)
     if st.button('Evaluate attached evidence', type='primary', disabled=bool(errors)):
-        try: model = build_assessment(intake, tuple(proposed))
+        previous = st.session_state[PREFIX + 'model']
+        reviews = tuple(review for link in previous.scenario.assurance_links for review in link.need_reviews)
+        try: model = build_assessment(intake, tuple(proposed), need_reviews=reviews)
         except ValueError as error: st.error(str(error))
         else:
-            previous = st.session_state[PREFIX + 'model']
             changed = report_payload(previous, st.session_state[PREFIX + 'actions']) != report_payload(model, st.session_state[PREFIX + 'actions'])
             st.session_state[PREFIX + 'model'] = model
             st.session_state[PREFIX + 'uploads'] = tuple(proposed)
@@ -317,7 +318,7 @@ def _evaluate(model):
 
 def _review(model):
     st.subheader('Review gaps and record draft findings')
-    st.caption('Exceptions are ordered first. Review actions are annotations, never factual confirmations or control/vendor approvals.')
+    st.caption('Exceptions are ordered first. Request Evidence records only an evidence gap; other actions remain annotations. No action here confirms technical facts or approves a control/vendor.')
     actions = st.session_state[PREFIX + 'actions']
     selected = st.selectbox('Review requirement', [r.requirement_id for r in model.worklist.rows], key=PREFIX + 'review',
                             on_change=lambda: st.session_state.pop(PREFIX + 'reason', None))
@@ -325,15 +326,23 @@ def _review(model):
     st.write(f'Finding/review for {row.requirement_id} · {row.title}')
     _details(row)
     action = st.radio('Draft action', ACTIONS, format_func=lambda a: f'Create finding for {selected}' if a == 'Create Finding' else 'Accept draft for discussion only' if a == 'Accept' else a, key=PREFIX + 'action')
+    if action == 'Request Evidence':
+        if any(match.source_fingerprints for match in row.need_matches):
+            st.caption('Inspect all current source candidates above. Recording this action confirms they are insufficient for this requirement. Use the rationale as focused request text: state the missing fact and acceptable evidence. It becomes a draft follow-up, never sent automatically.')
+        else:
+            st.caption('No current usable source candidates are available. The existing evidence request remains a draft; recording adds your rationale without inventing a source review or a failed control. Nothing is sent automatically.')
     rationale = st.text_area('Rationale', max_chars=1200, key=PREFIX + 'reason')
     if st.button('Record draft review', disabled=not rationale.strip()):
-        try: actions = record_action(model, actions, selected, action, rationale)
+        try:
+            model, actions = record_upload_review(model, actions, selected, action, rationale,
+                                                  confirms_insufficiency=action == 'Request Evidence')
         except ValueError as error: st.error(str(error))
         else:
+            st.session_state[PREFIX + 'model'] = model
             st.session_state[PREFIX + 'actions'] = actions
             st.session_state.pop(PREFIX + 'completion', None)
             st.success('Recorded ' + action + ' for ' + selected + '. No approval or risk acceptance was created.')
-    st.markdown('**Remaining requests**')
+    st.markdown('**Remaining requests — drafts, not sent**')
     for request in model.worklist.requests: st.text(request.question)
     if actions:
         payload = report_payload(model, actions)

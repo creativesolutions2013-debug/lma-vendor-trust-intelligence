@@ -150,11 +150,16 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     assert not any(f["eligible_for_preview"] and f["direction"] == "adverse"
                    for f in cases["BCP-01"]["facts"])
     assert all(r.outcome not in ("Met", "Risk Identified") for r in initial.worklist.rows)
+    assert not any("BCP-01" in request.requirement_ids for request in initial.worklist.requests)
 
     # A missing executed DR test warrants an evidence request, not an invented
     # failed control. Weak TLS is a separate provisional draft finding.
     _review(at, "BCP-01", "Request Evidence",
             "Check existing records for a completed production recovery test with achieved objectives and dependency scope; request only the missing proof.")
+    reviewed = at.session_state["customer_assessment:model"]
+    bcp_request, = [request for request in reviewed.worklist.requests if "BCP-01" in request.requirement_ids]
+    assert bcp_request.question == at.session_state["customer_assessment:actions"][-1].rationale
+    assert any(bcp_request.question == text.value for text in at.text)
     _review(at, "ENC-01", "Create Finding",
             "Validate the cited TLS 1.0 alternate production listener and its current remediation status.")
     stage(at, "Report")
@@ -164,6 +169,11 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     assert evidence == originals
     assert len(report["findings"]) == 1
     assert {a["action"] for a in report["analyst_actions"]} == {"Request Evidence", "Create Finding"}
+    gap_review, = report["evidence_gap_reviews"]
+    assert gap_review["status"] == "Current" and gap_review["decision"] == "insufficient"
+    assert gap_review["semantic_confirmation"] is False
+    assert any("BCP-01" in request["requirement_ids"] and request["question"] == bcp_request.question
+               for request in report["targeted_requests"])
     assert report["risk"]["residual_score"] is None
     assert report["review_completion"]["vendor_approved"] is False
 
@@ -207,6 +217,8 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
     assert evidence == originals
     assert any(a["requirement_id"] == "BCP-01" and a["status"] == "Stale context"
                for a in latest["analyst_actions"])
+    assert latest["evidence_gap_reviews"][0]["status"] == "Stale context"
+    assert not any("BCP-01" in request["requirement_ids"] for request in latest["targeted_requests"])
     tls_action = next(a for a in latest["analyst_actions"] if a["requirement_id"] == "ENC-01")
     assert tls_action["status"] == "Current"
     assert tls_action["citations"] == next(a for a in report["analyst_actions"]
@@ -227,3 +239,20 @@ def test_evidence_first_question_followup_and_reassessment_journey(no_live_effec
                for e in latest["assessment_context"]["evaluations"] for f in e["facts"])
     assert latest["risk"]["residual_score"] is None
     assert latest["review_completion"]["vendor_approved"] is False
+
+    # Read the added source, then explicitly request only the remaining scope proof.
+    # The old request is retained in history; it is not silently reused or closed.
+    focused_question = "Provide current exercise evidence for the excluded identity provider and its recovery dependency scope."
+    _review(at, "BCP-01", "Request Evidence", focused_question)
+    stage(at, "Report")
+    widget(at.button, "Finish assessment review").click()
+    run(at)
+    final, evidence = _export(packages)
+    assert evidence == originals
+    final_request, = [request for request in final["targeted_requests"] if "BCP-01" in request["requirement_ids"]]
+    assert final_request["question"] == focused_question
+    assert final["evidence_gap_reviews"][0]["status"] == "Current"
+    bcp_actions = [action for action in final["analyst_actions"] if action["requirement_id"] == "BCP-01"]
+    assert [action["status"] for action in bcp_actions] == ["Stale context", "Current"]
+    assert final["risk"]["residual_score"] is None
+    assert final["review_completion"]["vendor_approved"] is False

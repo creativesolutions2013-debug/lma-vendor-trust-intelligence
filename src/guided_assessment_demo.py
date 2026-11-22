@@ -11,7 +11,9 @@ from enum import Enum
 from hashlib import sha256
 import json
 
-from src.assessment_worklist import AssessmentWorklist, WorklistRow, build_assessment_worklist
+from src.assessment_worklist import (
+    AssessmentWorklist, WorklistRow, build_assessment_worklist, need_review_is_current,
+)
 from src.assessment_worklist_pilot import WorklistScenario, worklist_scenarios
 from src.control_assurance_presentation import CitedInterpretation
 from src.evidence_source_validation import BoundEvidence, EvidenceInput, _digest, bind_evidence
@@ -295,6 +297,22 @@ def _assessment_payload(model, actions):
     active = active_actions(model, history)
     by_requirement = {row.requirement_id: row for row in model.worklist.rows}
     matches = [match for row in model.worklist.rows for match in row.need_matches]
+    gap_reviews = []
+    for link in model.scenario.assurance_links:
+        requirement_id = link.case.requirement.requirement_id
+        mapping = next((item for item in model.scenario.requirements
+                        if item.control_id == link.control_id
+                        and item.requirement.requirement_id == requirement_id), None)
+        row = by_requirement.get(requirement_id)
+        for review in link.need_reviews:
+            need = next((item for item in mapping.needs if item.need_id == review.need_id), None) if mapping else None
+            current = bool(need and row and row.review and need_review_is_current(
+                model.worklist.scope, mapping, row.review, link.state, need, review))
+            gap_reviews.append({
+                **asdict(review), 'reviewed_on': _date(review.reviewed_on),
+                'requirement_id': requirement_id, 'status': 'Current' if current else 'Stale context',
+                'semantic_confirmation': False, 'governed_decision': False,
+            })
     payload = {
         "title": "SYNTHETIC DEMO — Provisional vendor assessment report",
         "synthetic": True, "provisional": True, "authoritative": False,
@@ -330,6 +348,7 @@ def _assessment_payload(model, actions):
             "limitations": list(row.limitations),
         } for row in model.worklist.rows],
         "targeted_requests": [asdict(request) for request in model.worklist.requests],
+        "evidence_gap_reviews": gap_reviews,
         "question_metrics": {
             "ask_everything_baseline": model.worklist.baseline_questions,
             "baseline_unit": "One broad question per applicable customer requirement",
