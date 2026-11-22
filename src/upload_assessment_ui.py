@@ -101,6 +101,9 @@ def _capture_files(widget_key):
 
 
 def _discard_pending():
+    if not st.session_state.get(PREFIX + 'pending_files') and not st.session_state.get(PREFIX + 'file_error'):
+        # No staged selection to discard: keep the completed review and its export.
+        return
     st.session_state.pop(PREFIX + 'pending_files', None)
     st.session_state.pop(PREFIX + 'file_error', None)
     st.session_state[PREFIX + 'upload_epoch'] = st.session_state.get(PREFIX + 'upload_epoch', 0) + 1
