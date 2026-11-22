@@ -260,7 +260,7 @@ class SessionManager:
             pinned()
             if not _valid(record, key, observed, idle, absolute):
                 raise PermissionError
-            return record.session
+            return record
 
         try:
             pinned()
@@ -271,16 +271,24 @@ class SessionManager:
             completed = False
             with lease(key):
                 pinned()
-                session = current()
+                session = current().session
                 yield session
                 pinned()
-                if current() != session:
+                final_record = current()
+                if final_record.session != session:
                     raise PermissionError
                 pinned()
                 completed = True
             # A store context's cleanup can itself change server dependencies.
             pinned()
             if not completed:
+                raise PermissionError
+            # Store cleanup can block after the last authenticated record was
+            # sampled. Check its idle/absolute bounds and clock ordering again
+            # before returning, without another store operation after release.
+            observed = clock()
+            pinned()
+            if not _valid(final_record, key, observed, idle, absolute):
                 raise PermissionError
         except Exception:
             raise PermissionError("Server session operation is unavailable.") from None

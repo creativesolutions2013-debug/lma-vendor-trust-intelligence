@@ -325,3 +325,28 @@ def test_store_cannot_suppress_failed_operation_and_claim_success(context, monke
         with manager.operation_lease(handle):
             raise RuntimeError('Synthetic failure')
     assert not store._leased_keys
+
+
+@pytest.mark.parametrize('cleanup_phase', ['under-lease', 'after-lease'])
+@pytest.mark.parametrize('expiry', ['idle', 'absolute', 'rollback'])
+def test_store_cleanup_cannot_issue_session_after_expiry_or_clock_rollback(
+        context, monkeypatch, cleanup_phase, expiry):
+    clock, store, manager, handle = context
+    lease = store.operation_lease
+    offset = {'idle': 30, 'absolute': 90, 'rollback': -1}[expiry]
+
+    @contextmanager
+    def delayed_cleanup(key):
+        with lease(key):
+            yield
+            if cleanup_phase == 'under-lease':
+                clock[0] = NOW + timedelta(seconds=offset)
+        if cleanup_phase == 'after-lease':
+            clock[0] = NOW + timedelta(seconds=offset)
+
+    monkeypatch.setattr(store, 'operation_lease', delayed_cleanup)
+    with pytest.raises(PermissionError, match=MANAGER_ERROR):
+        with manager.operation_lease(handle) as session:
+            assert session == manager.authenticate(handle)
+    assert not store._leased_keys
+    assert manager.authenticate(handle) is None

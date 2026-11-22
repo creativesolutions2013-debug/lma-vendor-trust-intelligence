@@ -88,7 +88,12 @@ check. Extract the existing cached deadline check into one shared helper and
 invoke it after successful SQL completion and lease cleanup, immediately before
 return. This rejects expiry during commit or final session-store work without
 new SQL, a new identity framework or any persistence. It checks deadline
-freshness, not SQL revocations committed after the protected SQL boundary. This is a
+freshness, not SQL revocations committed after the protected SQL boundary.
+Independent exact-head review also reproduced idle expiry during slow store
+cleanup. Validate the last protected session record's cached idle/absolute
+deadlines again after cleanup, without a new unleased store lookup or idle
+refresh. Both session and SQL windows must remain current before returning.
+This is a
 **point-in-time issuance** contract: revocation after issuance cannot retract
 returned metadata; time is checked at defined authorization points, not magically
 atomically with SQL/network delivery. It does not provide instant cancellation,

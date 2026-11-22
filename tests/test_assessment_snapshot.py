@@ -458,6 +458,28 @@ def test_membership_or_grant_expiry_during_lease_cleanup_releases_no_metadata(
     assert ctx.sessions.authenticate(ctx.handle) is not None
 
 
+def test_idle_session_expiry_during_store_cleanup_releases_no_metadata(snapshot_ctx, monkeypatch):
+    ctx = snapshot_ctx
+    store = ctx.sessions._store
+    original = store.operation_lease
+    cleaned_up = []
+
+    @contextmanager
+    def delayed_cleanup(key):
+        with original(key):
+            yield
+            # The last protected authenticate succeeded, but cleanup takes an
+            # entire idle window before returning. Absolute/grant windows remain
+            # current, so their cached checks cannot substitute for idle expiry.
+            ctx.clock[0] += timedelta(seconds=30)
+            cleaned_up.append(True)
+
+    monkeypatch.setattr(store, "operation_lease", delayed_cleanup)
+    assert ctx.service.capture(1001) is None
+    assert cleaned_up == [True]
+    assert ctx.sessions.authenticate(ctx.handle) is None
+
+
 @pytest.mark.parametrize("stage", ["initial_identity", "commit"])
 @pytest.mark.parametrize("dependency", [
     "service_source", "service_factory", "source_manager", "source_factory",
