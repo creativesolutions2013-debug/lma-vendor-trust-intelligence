@@ -77,8 +77,18 @@ operations must reauthenticate and deny the old handle. Same-thread mutation
 attempts return failure, never a false successful logout. Lock timeout denies;
 this synthetic global store lock favors a small proof over multi-user throughput.
 
-SQL locks remain held through transaction completion. Fresh checks reject observed
-membership/grant/ownership changes and expiry during blocking work. This is a
+Acquire SQL authority before the session lease, matching existing tenant reads'
+SQL→session order. Complete successful SQL inside the lease; rollback after a
+denied lease cannot issue metadata. This avoids a store→SQL / SQL→store wait
+cycle with existing reads. SQL locks remain held through transaction completion.
+Fresh checks reject observed
+membership/grant/ownership changes. A synthetic blocked-commit regression also
+reproduced grant-only and membership-only expiry after the existing final SQL
+check. Extract the existing cached deadline check into one shared helper and
+invoke it after successful SQL completion and lease cleanup, immediately before
+return. This rejects expiry during commit or final session-store work without
+new SQL, a new identity framework or any persistence. It checks deadline
+freshness, not SQL revocations committed after the protected SQL boundary. This is a
 **point-in-time issuance** contract: revocation after issuance cannot retract
 returned metadata; time is checked at defined authorization points, not magically
 atomically with SQL/network delivery. It does not provide instant cancellation,
@@ -107,9 +117,10 @@ authority. Production authentication remains disabled.
   prerequisite, not production save/resume or a control outcome.
 - Compile app.py and touched modules before focused/full pytest. Run full
   isolated SQLite and PostgreSQL Actions, inspect complete diff and require an
-  independent exact-head security/code review. Draft PR, no owner-approved merge.
+  independent exact-head security/code review. Draft PR; no merge without explicit owner approval.
 
-Intended files: existing server-session and identity-source lease extension;
+Intended files: existing server-session and identity-source lease extension; shared cached-window
+validation extracted from `tenant_read_scope.py`;
 new metadata contract/service; synthetic lease, metadata and real-DB concurrency
 tests; compile/focused CI steps; this document. Existing auth startup, DB models,
 migrations, app.py/customer UI, storage, evaluators and governed services excluded.
