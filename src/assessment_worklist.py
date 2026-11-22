@@ -23,6 +23,9 @@ class AssessmentScope:
     service: str
     environment: str
     as_of: date
+    # Optional caller-supplied binding for the captured relationship/intake inputs.
+    # This is context consistency, never an identity or authorization token.
+    context_fingerprint: str = ""
 
 
 @dataclass(frozen=True)
@@ -252,6 +255,17 @@ def record_need_review(scope, mapping, case, state, need, *, decision,
     if not _need_review_valid(review, scope, mapping, view, state, need, _need_sources(mapping, view, need)):
         raise ValueError("Need review requires current source context, an explicit rationale, and confirmed facts for every supported dimension.")
     return review
+
+
+def need_review_is_current(scope, mapping, view, state, need, review):
+    """Inspect a recorded need judgment using the same source/context gates.
+
+    This is presentation validity, not fact confirmation or a control approval.
+    The caller supplies the current linked review, without reparsing originals.
+    """
+    return (type(review) is NeedReview and need in mapping.needs
+            and _need_review_valid(review, scope, mapping, view, state, need,
+                                   _need_sources(mapping, view, need)))
 
 
 def _match_need(scope, mapping, link, view, need):

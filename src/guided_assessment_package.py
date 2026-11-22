@@ -95,6 +95,11 @@ def summary_html(report):
     parts.append('<h2>Remaining questions</h2>')
     for request in report['targeted_requests']:
         parts.append(f'<p>{e(request["question"])}</p>')
+    if report.get('evidence_gap_reviews'):
+        parts.append('<h2>Evidence-gap review records (not technical confirmations or approvals)</h2>')
+        for review in report['evidence_gap_reviews']:
+            parts.append(f'<p>{e(review["requirement_id"])} · {e(review["status"])} · '
+                         f'{e(review["reviewed_on"])}: {e(review["rationale"])}</p>')
     parts.append('<h2>Simulated annotation history (no confirmations or approvals)</h2>')
     for action in report['analyst_actions']:
         parts.append(f'<p>{e(action["requirement_id"])} · {e(action["action"])} · {e(action["status"])} · {e(action["recorded_at"])}: {e(action["rationale"])}</p>')

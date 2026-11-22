@@ -68,7 +68,9 @@ actions never call the already-implemented `record_need_review` service.
 
 Connect the existing action/rationale to an explicit **insufficient** need review
 covering every current candidate, then rebuild the same worklist and export the
-source-bound gap-review record. Reuse the current action controls; no new form,
+source-bound gap-review record. Use the analyst's explicit rationale as the focused
+draft request text, retaining the original customer threshold and acceptable
+evidence definition. Reuse the current action controls; no new form,
 dashboard, AI workflow, policy/risk engine or external message. Do not offer
 “supported” need reviews or semantic fact confirmation in this slice.
 
@@ -115,3 +117,29 @@ Actual application diffs were checked in addition to their descriptions:
 
 Older PR checks do not prove integration against today’s main. No existing PR is
 merged, rebased or overwritten by this work.
+
+## Branch implementation and remaining limits
+
+The existing Request Evidence controls now call the existing insufficient-only
+need-review service and rebuild the worklist from retained bounded bindings. A
+current explicit review supplies the analyst’s focused draft wording in Review
+gaps, JSON and HTML; the captured customer threshold and acceptable evidence
+remain intact. Gap-review records disclose current/stale context, sources and
+rationale. Historical source-cited annotations remain separate. With no usable
+candidates, retain the existing missing-evidence request without inventing a
+source review. The review binds to a captured relationship/intake fingerprint as
+well as the requirement and sources; that fingerprint is consistency, not identity
+or authorization. A changed bundle/context invalidates the old judgment and completion.
+
+Synthetic unit tests cover all-current-candidate binding, explicit confirmation,
+atomic rejection, source/requirement changes, unrelated-control preservation,
+HTML escaping and no unbounded reparsing. The real `app.py` regression proves a
+policy-only gap, explicit request, new original response, stale review, explicit
+re-review and immutable source-traceable report. This was a reproducible failure
+before the correction; it is not evidence of professional validation or ROI.
+
+Remaining E2E work includes authenticated custody and persistence, source-safe
+semantic review with dimension-specific needs, governed requirement/risk decisions
+and remediation handoff. M7 is **not complete**. Production mode stays disabled;
+no confidential evidence, external AI/provider, DB/migration/authentication,
+normative standard rules, authoritative risk or vendor-delivery changes occur.

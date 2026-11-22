@@ -98,7 +98,20 @@ def no_live_effects(monkeypatch):
     monkeypatch.setattr(ai, "extract_soc2_metadata", forbidden)
     monkeypatch.setattr(ai_requirements, "evaluate_ai_requirements", forbidden)
     monkeypatch.setattr(assurance, "record_control_review", forbidden)
+    # The uploaded journey now permits an explicit insufficient-only need review.
+    # Keep inspection/guided paths forbidden and reject any technical support or
+    # implicit confirmation through the new adapter's separate service binding.
+    import src.upload_assessment as uploaded
+    original_gap_review = uploaded.record_need_review
     monkeypatch.setattr(worklist, "record_need_review", forbidden)
+
+    def explicit_gap_review(*args, **kwargs):
+        assert kwargs.get("decision") == "insufficient"
+        assert kwargs.get("confirms") is True
+        assert not kwargs.get("fact_fingerprints")
+        return original_gap_review(*args, **kwargs)
+
+    monkeypatch.setattr(uploaded, "record_need_review", explicit_gap_review)
     monkeypatch.setattr(scoring, "calculate_residual_risk", forbidden)
     monkeypatch.setattr(scoring, "evaluate_residual_risk", forbidden)
 
