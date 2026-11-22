@@ -147,9 +147,15 @@ def test_discard_without_staged_files_preserves_completed_export(no_live_effects
     assert at.session_state['customer_assessment:completion'] == completed
     assert not at.session_state.get('customer_assessment:uploads_dirty', False)
     stage(at, 'Report')
-    assert not at.warning
-    assert [b for b in at.get('download_button')
-            if b.label == 'Download assessment package (.zip)']
+    warning_messages = {warning.value for warning in at.warning}
+    assert not any('current upload selections' in message or 'Upload selections may have changed' in message
+                   for message in warning_messages)
+    # A completed synthetic review still discloses unresolved intake uncertainty.
+    assert any('Data types are not fully classified' in message for message in warning_messages)
+    assert any('Unknown exposure inputs:' in message for message in warning_messages)
+    assert any('Unassessed methodology input:' in message for message in warning_messages)
+    assert 'Provisional: methodology inputs or exposure remain unassessed.' in warning_messages
+    assert not widget(at.get('download_button'), 'Download assessment package (.zip)').disabled
     assert packages[-1] == original_package
 
 
