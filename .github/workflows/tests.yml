@@ -14,6 +14,8 @@ jobs:
   test:
     name: Unit tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite:///:memory:"
 
     steps:
       - name: Check out repository
@@ -32,6 +34,12 @@ jobs:
 
       - name: Compile application and M5D evaluator before tests
         run: python -m py_compile app.py src/assessment_worklist.py src/upload_assessment.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_demo.py src/guided_assessment_package.py tests/test_upload_assessment.py tests/test_upload_assessment_ui.py tests/test_guided_assessment_demo_ui.py tests/test_upload_followup.py tests/test_e2e_intake_progressive_disclosure.py tests/test_e2e_analyst_pilot.py
+
+      - name: Compile unwired M7 session lease and metadata prerequisite
+        run: python -m py_compile app.py src/server_sessions.py src/session_identity_source.py src/tenant_read_scope.py src/assessment_snapshot.py tests/test_session_operation_lease.py tests/test_assessment_snapshot.py
+
+      - name: Verify synthetic M7 session and assessment authorization
+        run: pytest -q tests/test_session_operation_lease.py tests/test_assessment_snapshot.py
 
       - name: Verify source-bound reviewed gaps and draft follow-up
         run: pytest -q tests/test_upload_followup.py
@@ -97,6 +105,12 @@ jobs:
 
       - name: Compile application and M5D evaluator before PostgreSQL tests
         run: python -m py_compile app.py src/assessment_worklist.py src/upload_assessment.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_demo.py src/guided_assessment_package.py tests/test_upload_assessment.py tests/test_upload_assessment_ui.py tests/test_guided_assessment_demo_ui.py tests/test_upload_followup.py tests/test_e2e_intake_progressive_disclosure.py tests/test_e2e_analyst_pilot.py
+
+      - name: Compile unwired M7 session lease and metadata prerequisite
+        run: python -m py_compile app.py src/server_sessions.py src/session_identity_source.py src/tenant_read_scope.py src/assessment_snapshot.py tests/test_session_operation_lease.py tests/test_assessment_snapshot.py
+
+      - name: Verify synthetic M7 session and assessment authorization
+        run: pytest -q tests/test_session_operation_lease.py tests/test_assessment_snapshot.py
 
       - name: Verify source-bound reviewed gaps and draft follow-up
         run: pytest -q tests/test_upload_followup.py
