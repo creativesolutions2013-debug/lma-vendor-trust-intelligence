@@ -85,6 +85,18 @@ def require_synthetic_revision_guards(connection, table):
     if dialect == "sqlite":
         quote = connection.dialect.identifier_preparer.quote
         prefix = quote(schema) + "." if schema else ""
+        # Trigger names alone also match the older rowid-table prototype. Its
+        # hidden rowid allowed REPLACE to erase a different composite-PK row
+        # with recursive triggers off. table_list is available from SQLite 3.37;
+        # unsupported/empty results deny rather than assume a protected shape.
+        tables = connection.exec_driver_sql(
+            f"PRAGMA {quote(schema or 'main')}.table_list"
+        ).all()
+        retained = [row for row in tables if len(row) >= 5
+                    and row[0] == (schema or "main") and row[1] == TABLE_NAME
+                    and row[2] == "table" and row[4] == 1]
+        if len(retained) != 1:
+            raise PermissionError("Synthetic assessment revision guards are unavailable.")
         rows = connection.exec_driver_sql(
             f"SELECT name FROM {prefix}sqlite_master WHERE type='trigger' "
             "AND tbl_name='synthetic_assessment_revisions'"

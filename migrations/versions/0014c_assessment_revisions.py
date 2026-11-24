@@ -38,6 +38,7 @@ def upgrade():
         sa.CheckConstraint("length(state_sha256) = 64", name="ck_synthetic_revision_hash_shape"),
         sa.CheckConstraint("length(trim(issuer)) BETWEEN 1 AND 500 AND length(trim(subject)) BETWEEN 1 AND 255 AND length(trim(session_id)) BETWEEN 1 AND 80", name="ck_synthetic_revision_provenance"),
         sa.CheckConstraint("effective_role IN ('Admin', 'Risk Manager', 'Analyst', 'Viewer')", name="ck_synthetic_revision_role"),
+        sqlite_with_rowid=False,
     )
     if context.is_offline_mode():
         for statement in synthetic_revision_guard_statements(op.get_bind().dialect):

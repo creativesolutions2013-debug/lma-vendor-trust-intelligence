@@ -5,6 +5,7 @@ from hashlib import sha256
 from io import StringIO
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 from uuid import uuid4
 import os
 
@@ -18,7 +19,9 @@ from src.db import (
     Assessment, Base, Engagement, Evidence, Organization, SyntheticAssessmentRevision,
     SyntheticEvidenceObject, Vendor,
 )
-from src.synthetic_revision_guards import require_synthetic_revision_guards
+from src.synthetic_revision_guards import (
+    install_synthetic_revision_guards, require_synthetic_revision_guards,
+)
 from test_synthetic_custody_migration import object_values, seed
 
 
@@ -121,6 +124,12 @@ def test_revision_schema_has_compound_primary_key_and_retained_anchor(migrated):
     assert any(fk["constrained_columns"] == ["anchor_evidence_id"] and fk["referred_table"] == "synthetic_evidence_objects"
                and fk["referred_columns"] == ["evidence_id"] for fk in fks)
     assert not any(fk["constrained_columns"] == ["membership_id"] for fk in fks)
+    if migrated["engine"].dialect.name == "sqlite":
+        with migrated["engine"].connect() as connection:
+            ddl = connection.exec_driver_sql("SELECT sql FROM sqlite_master WHERE name='synthetic_assessment_revisions'").scalar_one()
+            assert "WITHOUT ROWID" in ddl.upper()
+            assert next(row for row in connection.exec_driver_sql("PRAGMA main.table_list")
+                        if row[1] == "synthetic_assessment_revisions")[4] == 1
 
 
 def test_contiguous_append_retains_original_revisions(guarded):
@@ -188,6 +197,88 @@ def test_sqlite_replace_cannot_erase_a_revision_with_recursive_triggers_off(guar
         pytest.skip("REPLACE is a SQLite concept")
     with pytest.raises(DBAPIError), guarded.begin_nested():
         guarded.execute(SyntheticAssessmentRevision.__table__.insert().prefix_with("OR REPLACE"), revision_values(state_payload=b"replacement"))
+
+
+@pytest.mark.parametrize("alias", ["rowid", "oid", "_rowid_"])
+@pytest.mark.parametrize("operation", ["insert_replace", "update", "update_replace"])
+def test_sqlite_hidden_rowid_operations_cannot_erase_or_reidentify_history(guarded, alias, operation):
+    if guarded.dialect.name != "sqlite":
+        pytest.skip("hidden rowids are a SQLite concept")
+    assert guarded.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 0
+    assert guarded.exec_driver_sql("PRAGMA recursive_triggers").scalar_one() == 0
+    table = SyntheticAssessmentRevision.__table__
+    before = guarded.execute(sa.select(table)).all()
+    if operation == "insert_replace":
+        columns = list(revision_values())
+        selection = ",".join("2" if column == "revision" else column for column in columns)
+        # Everything except the hidden-rowid selector is a valid next revision.
+        # The old prototype silently replaced revision 1 through rowid=1.
+        sql = (f"INSERT OR REPLACE INTO synthetic_assessment_revisions ({alias}," + ",".join(columns)
+               + ") SELECT 1," + selection + " FROM synthetic_assessment_revisions WHERE revision=1")
+    else:
+        sql = ("UPDATE " + ("OR REPLACE " if operation == "update_replace" else "")
+               + f"synthetic_assessment_revisions SET {alias}=99 WHERE revision=1")
+    with pytest.raises(DBAPIError), guarded.begin_nested():
+        guarded.exec_driver_sql(sql)
+    assert guarded.execute(sa.select(table)).all() == before
+    guarded.execute(table.insert(), revision_values(revision=2))
+    assert guarded.execute(sa.select(table).where(table.c.revision == 1)).one() == before[0]
+
+
+def test_revision_health_rejects_rowid_prototype_with_identical_guard_names():
+    engine = sa.create_engine("sqlite:///:memory:")
+    try:
+        with engine.begin() as connection:
+            Base.metadata.create_all(connection)
+            table = SyntheticAssessmentRevision.__table__
+            connection.exec_driver_sql("DROP TABLE synthetic_assessment_revisions")
+            ddl = str(sa.schema.CreateTable(table).compile(dialect=connection.dialect))
+            assert "WITHOUT ROWID" in ddl
+            connection.exec_driver_sql(ddl.replace("WITHOUT ROWID", ""))
+            install_synthetic_revision_guards(table, connection)
+            assert {row[0] for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE tbl_name='synthetic_assessment_revisions' AND type='trigger'")} == {
+                    "m7_revision_insert", "m7_revision_no_update", "m7_revision_no_delete"}
+            assert next(row for row in connection.exec_driver_sql("PRAGMA main.table_list")
+                        if row[1] == table.name)[4] == 0
+            with pytest.raises(PermissionError):
+                require_synthetic_revision_guards(connection, table)
+    finally:
+        engine.dispose()
+
+
+def test_revision_health_denies_unavailable_table_list(guarded, monkeypatch):
+    if guarded.dialect.name != "sqlite":
+        pytest.skip("table_list is a SQLite pragma")
+    original = guarded.exec_driver_sql
+    observed = []
+
+    def unavailable(statement, *args, **kwargs):
+        if statement.startswith("PRAGMA ") and statement.endswith(".table_list"):
+            observed.append(statement)
+            return SimpleNamespace(all=lambda: [])
+        return original(statement, *args, **kwargs)
+
+    monkeypatch.setattr(guarded, "exec_driver_sql", unavailable)
+    with pytest.raises(PermissionError):
+        require_synthetic_revision_guards(guarded, SyntheticAssessmentRevision.__table__)
+    assert observed == ["PRAGMA main.table_list"]
+
+
+def test_sqlite_revision_shape_check_uses_the_quoted_attached_schema():
+    engine = sa.create_engine("sqlite:///:memory:")
+    schema = 'synthetic "revision scope"'
+    try:
+        with engine.begin() as connection:
+            quoted = connection.dialect.identifier_preparer.quote(schema)
+            connection.exec_driver_sql("ATTACH DATABASE ':memory:' AS " + quoted)
+            mapped = connection.execution_options(schema_translate_map={None: schema})
+            Base.metadata.create_all(mapped)
+            require_synthetic_revision_guards(mapped, SyntheticAssessmentRevision.__table__)
+            assert next(row for row in mapped.exec_driver_sql(f"PRAGMA {quoted}.table_list")
+                        if row[1] == "synthetic_assessment_revisions")[4] == 1
+    finally:
+        engine.dispose()
 
 
 def test_sqlite_text_is_not_an_acceptable_binary_payload(guarded):

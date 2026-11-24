@@ -78,6 +78,10 @@ retain the assessment and all parents against deletion/replacement/ID reuse.
 No duplicate parent-retention framework is needed. New table guards validate
 anchor ownership, contiguous revision sequence, immutable rows and replacement
 protection, including SQLite with foreign keys/recursive triggers off.
+SQLite uses a `WITHOUT ROWID` composite-key table so hidden `rowid`/`oid`/
+`_rowid_` aliases cannot bypass replacement protection and erase old revisions.
+Runtime health requires the `table_list` WITHOUT ROWID flag (SQLite 3.37+);
+unsupported runtimes and older ROWID prototypes deny without rewriting data.
 
 Require expected_revision for every mutation. The existing locked assessment row
 serializes writers; a unique assessment/revision and guarded contiguous append

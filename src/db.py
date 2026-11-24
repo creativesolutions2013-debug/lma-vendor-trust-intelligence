@@ -657,6 +657,9 @@ class SyntheticAssessmentRevision(Base):
         CheckConstraint("length(state_sha256) = 64", name="ck_synthetic_revision_hash_shape"),
         CheckConstraint("length(trim(issuer)) BETWEEN 1 AND 500 AND length(trim(subject)) BETWEEN 1 AND 255 AND length(trim(session_id)) BETWEEN 1 AND 80", name="ck_synthetic_revision_provenance"),
         CheckConstraint("effective_role IN ('Admin', 'Risk Manager', 'Analyst', 'Viewer')", name="ck_synthetic_revision_role"),
+        # A composite PK otherwise leaves an independent hidden SQLite rowid.
+        # REPLACE through that rowid can delete history without DELETE triggers.
+        {"sqlite_with_rowid": False},
     )
     assessment_id = Column(Integer, ForeignKey("assessments.id", ondelete="RESTRICT"), primary_key=True)
     revision = Column(Integer, primary_key=True)
