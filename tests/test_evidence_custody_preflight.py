@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import event, insert, select, update
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, DataError
 from sqlalchemy.orm import sessionmaker
 
 import src.authz as authz
@@ -124,6 +124,17 @@ def test_current_exact_chain_must_be_reproved_for_every_call(custody_ctx, model,
     "vendors/11/evidence/" + "a" * 256])
 def test_legacy_locations_unsafe_keys_and_vendor_mismatch_deny_without_relink(custody_ctx, key):
     ctx = custody_ctx
+    if ctx.engine.dialect.name == "postgresql" and key is not None and "\x00" in key:
+        # PostgreSQL cannot represent a NUL-bearing text value. Assert rejection
+        # at that earlier boundary, rather than pretend such a row was stored.
+        with pytest.raises(DataError):
+            change(ctx, Evidence, 9001, storage_path=key)
+        with pytest.raises(ValueError):
+            storage.validate_evidence_key(key, vendor_id=11)
+        with ctx.factory() as database:
+            assert database.execute(select(Evidence.storage_path).where(Evidence.id == 9001)).scalar_one() == KEY
+        assert ctx.service.preflight(REQUEST) is True  # Original linkage survived.
+        return
     change(ctx, Evidence, 9001, storage_path=key)
     assert ctx.service.preflight(REQUEST) is False
     with ctx.factory() as database:
