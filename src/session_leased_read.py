@@ -1,4 +1,4 @@
-"""Private shared orchestration for the two unwired synthetic read proofs.
+"""Private shared orchestration for unwired synthetic authorized operations.
 
 This preserves M7 Phase 2's SQL-before-session-lease order, dependency pinning,
 commit-inside-lease and final cached deadline checks. It is not an endpoint,
@@ -12,7 +12,11 @@ from src.session_identity_source import SessionIdentitySource
 
 
 class _SessionLeasedRead:
-    """Server-internal base; only fixed read-only subclasses provide a reader."""
+    """Server-internal base; only fixed server subclasses provide a reader.
+
+    The custody subclass captures fresh bytes in this same transaction. There is
+    no caller-selected callback, storage backend or generic mutation interface.
+    """
 
     def __init__(self, session_factory=None, *, identity_source=None):
         self._sessions = session_factory
@@ -23,6 +27,9 @@ class _SessionLeasedRead:
                 or self._identity_source is not source or self._sessions is not factory
                 or source._database_sessions is not factory):
             raise PermissionError("Leased read unavailable.")
+
+    def _materialize(self, reader, session, scope):
+        return scope.relationships[1]
 
     def _leased_read(self, target, permission, *, expected=None):
         try:
@@ -56,7 +63,7 @@ class _SessionLeasedRead:
                 pinned()
                 with source.session_operation():
                     pinned()
-                    packet = scope.relationships[1]
+                    packet = self._materialize(reader, session, scope)
                     if expected is not None and expected != packet:
                         raise PermissionError("Leased read unavailable.")
                     reader._finish_authorized(session, scope, permission)
