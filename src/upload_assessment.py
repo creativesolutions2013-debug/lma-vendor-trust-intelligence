@@ -479,7 +479,8 @@ def _reviewed_followups(scenario, worklist):
     return replace(worklist, rows=tuple(rows), requests=requests)
 
 
-def record_upload_review(model, actions, requirement_id, action, rationale, *, confirms_insufficiency=False):
+def record_upload_review(model, actions, requirement_id, action, rationale, *, confirms_insufficiency=False,
+                         analyst='Synthetic session analyst (not authenticated)'):
     """Apply an explicit upload-session gap judgment and annotation atomically.
 
     Request Evidence may establish only that current candidate evidence is
@@ -509,7 +510,7 @@ def record_upload_review(model, actions, requirement_id, action, rationale, *, c
                 reviews[need.need_id] = record_need_review(
                     model.worklist.scope, mapping, link.case, link.state, need,
                     decision='insufficient', source_fingerprints=match.source_fingerprints,
-                    analyst='Synthetic session analyst (not authenticated)', reviewed_on=model.worklist.scope.as_of,
+                    analyst=analyst, reviewed_on=model.worklist.scope.as_of,
                     rationale=rationale, confirms=True,
                 )
             # With no current usable candidates the worklist already requests

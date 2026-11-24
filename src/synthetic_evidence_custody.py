@@ -155,15 +155,7 @@ class _CustodyReader(scoped.TenantReadService):
     def materialize(self, session, scope):
         target = self._target
         if target.request is not None:
-            receipt = scope.relationships[1]
-            o = SyntheticEvidenceObject
-            payload = session.execute(select(func.substr(o.payload, 1, MAX_SYNTHETIC_EVIDENCE_BYTES + 1))
-                .where(o.evidence_id == receipt.evidence_id, o.generation == receipt.generation)).scalar_one()
-            if (type(payload) is not bytes or len(payload) != receipt.byte_length
-                    or len(payload) > MAX_SYNTHETIC_EVIDENCE_BYTES
-                    or not compare_digest(sha256(payload).hexdigest(), receipt.sha256)):
-                raise PermissionError("Synthetic custody unavailable.")
-            return SyntheticEvidenceResult(receipt, payload)
+            return self._read_payload(session, scope.relationships[1])
 
         org, vendor, engagement, assessment = scope.relationships[1]
         generation = uuid4().hex
@@ -192,6 +184,31 @@ class _CustodyReader(scoped.TenantReadService):
         request = EvidenceReadRequest(org, engagement, vendor, assessment, evidence_id)
         self._saved = self._load_receipt(session, scope, request, generation)
         return self._saved
+
+    @staticmethod
+    def _read_payload(session, receipt):
+        o = SyntheticEvidenceObject
+        payload = session.execute(select(func.substr(o.payload, 1, MAX_SYNTHETIC_EVIDENCE_BYTES + 1))
+            .where(o.evidence_id == receipt.evidence_id, o.generation == receipt.generation)).scalar_one()
+        if (type(payload) is not bytes or len(payload) != receipt.byte_length
+                or len(payload) > MAX_SYNTHETIC_EVIDENCE_BYTES
+                or not compare_digest(sha256(payload).hexdigest(), receipt.sha256)):
+            raise PermissionError("Synthetic custody unavailable.")
+        return SyntheticEvidenceResult(receipt, payload)
+
+
+def _retrieve_in_authorized_transaction(session, scope, request, generation):
+    """Reuse custody inside the revision service's held SQL/session authority.
+
+    Private server composition only: the caller must own the existing authorized
+    transaction and session lease. A scope DTO is not a public byte capability.
+    This performs the same exact metadata/key/length/hash checks as retrieve,
+    without a nested lease, new SQL transaction or subsequent independent I/O.
+    """
+    reader = _CustodyReader(scope.session_factory, scope.identity_source,
+                           _Operation(request.assessment_id, request=request, generation=generation))
+    receipt = reader._binding(session, scope)
+    return reader._read_payload(session, receipt)
 
 
 class SyntheticEvidenceCustodyService(_SessionLeasedRead):
