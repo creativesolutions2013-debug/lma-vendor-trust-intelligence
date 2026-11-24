@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -23,6 +24,9 @@ from sqlalchemy.orm import (
 )
 
 from src.membership_identity_guard import install_membership_identity_guard
+from src.synthetic_custody_guards import (
+    MAX_SYNTHETIC_EVIDENCE_BYTES, install_synthetic_custody_guards,
+)
 
 
 DATA_DIR = (
@@ -604,6 +608,41 @@ class Evidence(Base):
         "Finding",
         back_populates="evidence",
     )
+
+
+class SyntheticEvidenceObject(Base):
+    """Write-once small synthetic bytes; no legacy evidence custody is inferred."""
+    __tablename__ = "synthetic_evidence_objects"
+    __table_args__ = (
+        UniqueConstraint("generation", name="uq_synthetic_custody_generation"),
+        UniqueConstraint("storage_key", name="uq_synthetic_custody_key"),
+        CheckConstraint("evidence_id > 0 AND organization_id > 0 AND vendor_id > 0 AND engagement_id > 0 AND assessment_id > 0 AND membership_id > 0", name="ck_synthetic_custody_positive_ids"),
+        CheckConstraint(f"byte_length BETWEEN 1 AND {MAX_SYNTHETIC_EVIDENCE_BYTES} AND length(payload) = byte_length", name="ck_synthetic_custody_bytes"),
+        CheckConstraint("length(generation) = 32 AND length(sha256) = 64", name="ck_synthetic_custody_hash_shape"),
+        CheckConstraint("length(storage_key) BETWEEN 1 AND 500 AND length(document_name) BETWEEN 1 AND 255", name="ck_synthetic_custody_names"),
+        CheckConstraint("length(trim(issuer)) BETWEEN 1 AND 500 AND length(trim(subject)) BETWEEN 1 AND 255 AND length(trim(session_id)) BETWEEN 1 AND 80", name="ck_synthetic_custody_provenance"),
+        CheckConstraint("effective_role IN ('Admin', 'Risk Manager', 'Analyst', 'Viewer')", name="ck_synthetic_custody_role"),
+    )
+    evidence_id = Column(Integer, ForeignKey("evidence.id", ondelete="RESTRICT"), primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False)
+    engagement_id = Column(Integer, ForeignKey("engagements.id", ondelete="RESTRICT"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id", ondelete="RESTRICT"), nullable=False)
+    generation = Column(String(32), nullable=False)
+    storage_key = Column(String(500), nullable=False)
+    byte_length = Column(Integer, nullable=False)
+    payload = Column(LargeBinary, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    document_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    issuer = Column(String(500), nullable=False)
+    subject = Column(String(255), nullable=False)
+    session_id = Column(String(80), nullable=False)
+    effective_role = Column(String(80), nullable=False)
+    membership_id = Column(Integer, nullable=False)
+
+
+event.listen(SyntheticEvidenceObject.__table__, "after_create", install_synthetic_custody_guards)
 
 
 class EvidenceRequestPackage(Base):

@@ -38,6 +38,12 @@ jobs:
       - name: Compile unwired M7 session lease and metadata prerequisite
         run: python -m py_compile app.py src/server_sessions.py src/session_identity_source.py src/tenant_read_scope.py src/session_leased_read.py src/assessment_snapshot.py src/evidence_custody_preflight.py tests/test_session_operation_lease.py tests/test_assessment_snapshot.py tests/test_evidence_custody_preflight.py
 
+      - name: Compile synthetic immutable evidence custody before tests
+        run: python -m py_compile app.py src/db.py src/session_leased_read.py src/synthetic_custody_guards.py src/synthetic_evidence_custody.py migrations/versions/0014b_synthetic_custody.py tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
+
+      - name: Verify synthetic immutable evidence byte custody and migration
+        run: pytest -q tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
+
       - name: Verify synthetic M7 session and assessment authorization
         run: pytest -q tests/test_session_operation_lease.py tests/test_assessment_snapshot.py tests/test_evidence_custody_preflight.py
 
@@ -109,6 +115,12 @@ jobs:
       - name: Compile unwired M7 session lease and metadata prerequisite
         run: python -m py_compile app.py src/server_sessions.py src/session_identity_source.py src/tenant_read_scope.py src/session_leased_read.py src/assessment_snapshot.py src/evidence_custody_preflight.py tests/test_session_operation_lease.py tests/test_assessment_snapshot.py tests/test_evidence_custody_preflight.py
 
+      - name: Compile synthetic immutable evidence custody before tests
+        run: python -m py_compile app.py src/db.py src/session_leased_read.py src/synthetic_custody_guards.py src/synthetic_evidence_custody.py migrations/versions/0014b_synthetic_custody.py tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
+
+      - name: Verify synthetic immutable evidence byte custody and migration
+        run: pytest -q tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
+
       - name: Verify synthetic M7 session and assessment authorization
         run: pytest -q tests/test_session_operation_lease.py tests/test_assessment_snapshot.py tests/test_evidence_custody_preflight.py
 
@@ -131,6 +143,7 @@ jobs:
               "evidence",
               "findings",
               "monitoring_events",
+              "synthetic_evidence_objects",
               "vendors",
           }
 
