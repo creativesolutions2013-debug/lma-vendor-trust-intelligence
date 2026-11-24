@@ -67,9 +67,11 @@ fixtures here, not a production large-file storage selection.
   Save excludes only its own newly inserted Evidence row from the prior inventory
   comparison; validate that new row/object independently. No public callback/CRUD
   or new identity framework. Existing read/snapshot behavior must remain intact.
-- Failed object INSERT/SQL commit rolls back the new Evidence and bytes together:
-  no external file to clean up. A commit can succeed before acknowledgement fails
-  during session cleanup/deadline checks. Release no receipt or bytes then, but
+- Object INSERT and pre-commit failures roll back the new Evidence and bytes
+  together: no external file to clean up. A lost SQL commit acknowledgement can
+  leave the transaction outcome indeterminate; a confirmed commit can also be
+  followed by failed session cleanup/deadline checks. Release no receipt or bytes,
+  but
   do not claim rollback: an immutable unacknowledged record may remain. No blind
   automatic retry, destructive compensating delete or false successful logout.
   Reconciliation of unacknowledged writes remains a later workflow; any recovered
