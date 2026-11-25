@@ -30,7 +30,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest playwright==1.65.2
 
       - name: Compile application and M5D evaluator before tests
         run: python -m py_compile app.py src/assessment_worklist.py src/upload_assessment.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_demo.py src/guided_assessment_package.py tests/test_upload_assessment.py tests/test_upload_assessment_ui.py tests/test_guided_assessment_demo_ui.py tests/test_upload_followup.py tests/test_e2e_intake_progressive_disclosure.py tests/test_e2e_analyst_pilot.py
@@ -43,6 +43,14 @@ jobs:
 
       - name: Compile resumable synthetic analyst assessment before tests
         run: python -m py_compile app.py src/db.py src/upload_assessment.py src/synthetic_evidence_custody.py src/resumable_assessment.py src/resumable_assessment_state.py src/synthetic_revision_guards.py migrations/versions/0014c_assessment_revisions.py tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Compile authenticated synthetic pilot before tests
+        run: python -m py_compile app.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
+
+      - name: Verify actual HTTPS authenticated analyst journey
+        env:
+          LMA_REQUIRE_BROWSER_TESTS: "1"
+        run: pytest -q tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
 
       - name: Verify durable synthetic save resume review and report
         run: pytest -q tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
@@ -113,7 +121,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest playwright==1.65.2
 
       - name: Compile application and M5D evaluator before PostgreSQL tests
         run: python -m py_compile app.py src/assessment_worklist.py src/upload_assessment.py src/upload_evaluation.py src/upload_assessment_ui.py src/guided_assessment_demo.py src/guided_assessment_package.py tests/test_upload_assessment.py tests/test_upload_assessment_ui.py tests/test_guided_assessment_demo_ui.py tests/test_upload_followup.py tests/test_e2e_intake_progressive_disclosure.py tests/test_e2e_analyst_pilot.py
@@ -126,6 +134,14 @@ jobs:
 
       - name: Compile resumable synthetic analyst assessment before tests
         run: python -m py_compile app.py src/db.py src/upload_assessment.py src/synthetic_evidence_custody.py src/resumable_assessment.py src/resumable_assessment_state.py src/synthetic_revision_guards.py migrations/versions/0014c_assessment_revisions.py tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Compile authenticated synthetic pilot before tests
+        run: python -m py_compile app.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
+
+      - name: Verify actual HTTPS authenticated analyst journey
+        env:
+          LMA_REQUIRE_BROWSER_TESTS: "1"
+        run: pytest -q tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
 
       - name: Verify durable synthetic save resume review and report
         run: pytest -q tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py

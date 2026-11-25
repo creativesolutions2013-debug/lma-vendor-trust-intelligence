@@ -12,6 +12,12 @@ The existing application provides a working foundation for vendor risk managemen
 
 ## Try an assessment with your own synthetic files
 
+For the authenticated, durable synthetic analyst pilot, see
+[M7 Phase 6](docs/M7_Phase6_Authenticated_Synthetic_Analyst.md). It runs separately
+on loopback HTTPS and reuses authorized evidence custody, save/resume and report
+services. Its small-fixture limits and synthetic login differ from the
+memory-only Streamlit demonstration below. Production access remains disabled.
+
 Run `AUTH_MODE=development streamlit run app.py`. **New Assessment** opens by default:
 About vendor → Upload evidence → Evaluate → Review gaps → Report. Enter your own
 synthetic vendor/service context, attach local synthetic PDF/DOCX/TXT documents,
