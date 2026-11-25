@@ -62,11 +62,24 @@ class ProviderConfig:
     clock_skew_seconds: int = 30
     max_token_age_seconds: int = 600
     max_auth_age_seconds: int | None = None
+    # Explicit opt-in for the separate synthetic TLS pilot only. Normal
+    # provider configuration retains its HTTPS/443 contract unchanged.
+    synthetic_loopback_port: int | None = None
 
     def __post_init__(self):
         try:
-            valid = (all(_https(x) for x in (self.issuer, self.authorization_endpoint,
-                     self.token_endpoint, self.jwks_uri, self.redirect_uri))
+            urls = (self.issuer, self.authorization_endpoint, self.token_endpoint,
+                    self.jwks_uri, self.redirect_uri)
+            if self.synthetic_loopback_port is None:
+                valid_urls = all(_https(value) for value in urls)
+            else:
+                port = self.synthetic_loopback_port
+                origin = f"https://127.0.0.1:{port}"
+                valid_urls = (type(port) is int and 1024 <= port <= 65535 and urls == (
+                    origin + "/synthetic-idp", origin + "/synthetic-idp/authorize",
+                    origin + "/synthetic-idp/token", origin + "/synthetic-idp/jwks",
+                    origin + "/oidc/callback"))
+            valid = (valid_urls
                      and _text(self.client_id, 255)
                      and type(self.algorithms) is tuple and bool(self.algorithms)
                      and len(set(self.algorithms)) == len(self.algorithms)

@@ -1,0 +1,7 @@
+SYNTHETIC FIXTURE - Recovery policy, not operating evidence
+Service: Synthetic Analytics
+Environment: production
+Observation date: 2026-11-24
+Target RTO 120 minutes and RPO 30 minutes.
+A recovery exercise is planned. No completed test result or measured recovery time is supplied.
+This fictional document does not establish that the customer requirement is met or that the control failed.
