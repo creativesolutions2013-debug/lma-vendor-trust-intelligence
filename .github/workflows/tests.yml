@@ -41,7 +41,13 @@ jobs:
       - name: Compile synthetic immutable evidence custody before tests
         run: python -m py_compile app.py src/db.py src/session_leased_read.py src/synthetic_custody_guards.py src/synthetic_evidence_custody.py migrations/versions/0014b_synthetic_custody.py tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
 
-      - name: Verify synthetic immutable evidence byte custody and migration
+      - name: Compile resumable synthetic analyst assessment before tests
+        run: python -m py_compile app.py src/db.py src/upload_assessment.py src/synthetic_evidence_custody.py src/resumable_assessment.py src/resumable_assessment_state.py src/synthetic_revision_guards.py migrations/versions/0014c_assessment_revisions.py tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Verify durable synthetic save resume review and report
+        run: pytest -q tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Verify synthetic immutable evidence byte custody regression
         run: pytest -q tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
 
       - name: Verify synthetic M7 session and assessment authorization
@@ -118,7 +124,13 @@ jobs:
       - name: Compile synthetic immutable evidence custody before tests
         run: python -m py_compile app.py src/db.py src/session_leased_read.py src/synthetic_custody_guards.py src/synthetic_evidence_custody.py migrations/versions/0014b_synthetic_custody.py tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
 
-      - name: Verify synthetic immutable evidence byte custody and migration
+      - name: Compile resumable synthetic analyst assessment before tests
+        run: python -m py_compile app.py src/db.py src/upload_assessment.py src/synthetic_evidence_custody.py src/resumable_assessment.py src/resumable_assessment_state.py src/synthetic_revision_guards.py migrations/versions/0014c_assessment_revisions.py tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Verify durable synthetic save resume review and report
+        run: pytest -q tests/test_resumable_assessment.py tests/test_resumable_assessment_state.py tests/test_synthetic_revision_migration.py
+
+      - name: Verify synthetic immutable evidence byte custody regression
         run: pytest -q tests/test_synthetic_evidence_custody.py tests/test_synthetic_custody_migration.py
 
       - name: Verify synthetic M7 session and assessment authorization
@@ -144,6 +156,7 @@ jobs:
               "findings",
               "monitoring_events",
               "synthetic_evidence_objects",
+              "synthetic_assessment_revisions",
               "vendors",
           }
 
