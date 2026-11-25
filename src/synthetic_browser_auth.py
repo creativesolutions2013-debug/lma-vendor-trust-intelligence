@@ -1,6 +1,6 @@
-"""Fixed, in-process signed IdP for the isolated HTTPS loopback analyst pilot.
+"""Fixed, in-process signed IdPs for the isolated HTTPS loopback pilot.
 
-This is one synthetic account, never a production provider or browser-selected
+Each instance owns one synthetic account, never a production provider or browser-selected
 identity/role. The HTTP surface owns TLS, exact Host/Origin, cookies, bounded
 parsing and response headers. No password, signing key, code or session is
 persisted or logged here. Restart discards authentication, not assessment SQL.
@@ -76,14 +76,16 @@ class SyntheticPilotIdentity:
     The entry point must additionally require explicit development mode and TLS
     bound to 127.0.0.1. CSRF values are never identity or tenant authority.
     """
-    def __init__(self, port, password, *, clock=utc_now):
+    def __init__(self, port, password, *, vendor=False, clock=utc_now):
         try:
             encoded = password.encode("utf-8") if type(password) is str else b""
-            if (type(port) is not int or not 1024 <= port <= 65535 or not callable(clock)
+            if (type(port) is not int or not 1024 <= port <= 65535 or type(vendor) is not bool or not callable(clock)
                     or not 16 <= len(encoded) <= 256 or not password.strip()
                     or any(ord(char) < 32 or ord(char) == 127 for char in password)):
                 raise ValueError
             self._origin = f"https://127.0.0.1:{port}"
+            prefix = "/vendor" if vendor else ""
+            self._subject = "synthetic-vendor" if vendor else "synthetic-analyst"
             self._clock = clock
             self._lock = RLock()
             self._last_checked = self._now()
@@ -94,11 +96,11 @@ class SyntheticPilotIdentity:
             self._codes = {}
             self._attempts = []
             self._config = ProviderConfig(
-                issuer=self._origin + "/synthetic-idp", client_id="lma-synthetic-analyst",
-                authorization_endpoint=self._origin + "/synthetic-idp/authorize",
-                token_endpoint=self._origin + "/synthetic-idp/token",
-                jwks_uri=self._origin + "/synthetic-idp/jwks",
-                redirect_uri=self._origin + "/oidc/callback", synthetic_loopback_port=port,
+                issuer=self._origin + prefix + "/synthetic-idp", client_id="lma-" + self._subject,
+                authorization_endpoint=self._origin + prefix + "/synthetic-idp/authorize",
+                token_endpoint=self._origin + prefix + "/synthetic-idp/token",
+                jwks_uri=self._origin + prefix + "/synthetic-idp/jwks",
+                redirect_uri=self._origin + prefix + "/oidc/callback", synthetic_loopback_port=port,
                 clock_skew_seconds=0, max_token_age_seconds=120,
             )
             self._key = RSAKey.generate_key(2048, {"kid": "synthetic-pilot-key", "alg": "RS256", "use": "sig"})
@@ -116,6 +118,11 @@ class SyntheticPilotIdentity:
     @property
     def config(self):
         return self._config
+
+    @property
+    def subject(self):
+        """Fixed server-owned account; a subject/role is never accepted from forms."""
+        return self._subject
 
     @property
     def sessions(self):
@@ -275,7 +282,7 @@ class SyntheticPilotIdentity:
                 raise LoginRejected()
             stamp = int(now.timestamp())
             token = jwt.encode({"alg": "RS256", "kid": "synthetic-pilot-key"}, {
-                "iss": self._config.issuer, "sub": "synthetic-analyst", "aud": self._config.client_id,
+                "iss": self._config.issuer, "sub": self._subject, "aud": self._config.client_id,
                 "iat": stamp, "exp": stamp + _CODE_SECONDS, "nonce": recorded.nonce,
             }, self._key)
             return {"id_token": token}

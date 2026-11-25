@@ -75,10 +75,13 @@ class ProviderConfig:
             else:
                 port = self.synthetic_loopback_port
                 origin = f"https://127.0.0.1:{port}"
-                valid_urls = (type(port) is int and 1024 <= port <= 65535 and urls == (
-                    origin + "/synthetic-idp", origin + "/synthetic-idp/authorize",
-                    origin + "/synthetic-idp/token", origin + "/synthetic-idp/jwks",
-                    origin + "/oidc/callback"))
+                # Accept only a complete fixed profile: mixing vendor and
+                # analyst callback/provider paths cannot cross the boundary.
+                profiles = tuple((
+                    origin + prefix + "/synthetic-idp", origin + prefix + "/synthetic-idp/authorize",
+                    origin + prefix + "/synthetic-idp/token", origin + prefix + "/synthetic-idp/jwks",
+                    origin + prefix + "/oidc/callback") for prefix in ("", "/vendor"))
+                valid_urls = type(port) is int and 1024 <= port <= 65535 and urls in profiles
             valid = (valid_urls
                      and _text(self.client_id, 255)
                      and type(self.algorithms) is tuple and bool(self.algorithms)

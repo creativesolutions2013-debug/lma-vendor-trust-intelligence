@@ -12,6 +12,11 @@ The existing application provides a working foundation for vendor risk managemen
 
 ## Try an assessment with your own synthetic files
 
+For the local, separately authenticated vendor → analyst handoff, see
+[M7 Phase 7](docs/M7_Phase7_Scoped_Synthetic_Vendor_Submission.md). Vendor delivery
+is pending in memory until an analyst explicitly captures and appends it to the
+assessment; production access and real invitations remain disabled.
+
 For the authenticated, durable synthetic analyst pilot, see
 [M7 Phase 6](docs/M7_Phase6_Authenticated_Synthetic_Analyst.md). It runs separately
 on loopback HTTPS and reuses authorized evidence custody, save/resume and report

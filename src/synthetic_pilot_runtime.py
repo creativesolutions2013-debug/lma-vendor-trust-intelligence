@@ -22,6 +22,7 @@ class SyntheticPilotRuntime:
     certfile: str
     keyfile: str
     engine: object
+    vendor_submissions: bool = False
 
     def close(self):
         self.engine.dispose()
@@ -89,7 +90,7 @@ def _tls(directory, now, *, create):
     return str(certfile), str(keyfile)
 
 
-def prepare_runtime(directory, port, issuer, subject):
+def prepare_runtime(directory, port, issuer, subject, *, vendor_submissions=False):
     """Create a dedicated synthetic database, or reopen its marked private path.
 
     Existing runtimes receive no schema writes, seeding, grant renewal or role
@@ -99,7 +100,8 @@ def prepare_runtime(directory, port, issuer, subject):
     # This gate precedes src.db imports, filesystem creation and TLS generation.
     if os.getenv("AUTH_MODE") != "development" or os.getenv("DATABASE_URL"):
         raise ValueError("Use AUTH_MODE=development and unset DATABASE_URL for this isolated synthetic pilot.")
-    if (type(port) is not int or not 1024 <= port <= 65535
+    if (type(vendor_submissions) is not bool
+            or type(port) is not int or not 1024 <= port <= 65535
             or issuer != f"https://127.0.0.1:{port}/synthetic-idp"
             or subject != "synthetic-analyst"):
         raise ValueError("Use the fixed localhost synthetic analyst identity.")
@@ -108,8 +110,12 @@ def prepare_runtime(directory, port, issuer, subject):
         raise ValueError("Use a dedicated private synthetic pilot directory.")
     now = datetime.now(timezone.utc)
     create = _directory(path)
-    expected = dict(format="lma-synthetic-analyst-runtime-v1", origin=f"https://127.0.0.1:{port}",
+    expected = dict(format=("lma-synthetic-vendor-runtime-v2" if vendor_submissions
+                            else "lma-synthetic-analyst-runtime-v1"), origin=f"https://127.0.0.1:{port}",
                     issuer=issuer, subject=subject)
+    if vendor_submissions:
+        expected.update(vendor_issuer=f"https://127.0.0.1:{port}/vendor/synthetic-idp",
+                        vendor_subject="synthetic-vendor")
     marker = dict(expected, captured_on=now.date().isoformat())
     if not create:
         raw = (path / "runtime.json").read_bytes()
@@ -129,11 +135,12 @@ def prepare_runtime(directory, port, issuer, subject):
     from sqlalchemy import create_engine, event, inspect, select
     from sqlalchemy.orm import sessionmaker
     from src.db import (Assessment, Base, Engagement, EngagementAccessGrant,
-                        Organization, OrganizationMembership, SyntheticAssessmentRevision,
+                        Organization, OrganizationMembership, SyntheticAssessmentRevision, SyntheticVendorHandoff,
                         SyntheticEvidenceObject, Vendor)
     from src.organization_methodology import OrganizationMethodology, default_definition
     from src.synthetic_custody_guards import require_synthetic_custody_guards
     from src.synthetic_revision_guards import require_synthetic_revision_guards
+    from src.synthetic_handoff_provenance import require_synthetic_handoff_guards
     from src.upload_assessment import Intake
 
     database = path / "pilot.sqlite"
@@ -165,6 +172,7 @@ def prepare_runtime(directory, port, issuer, subject):
                 raise ValueError("The synthetic runtime schema is incomplete or unknown.")
             require_synthetic_custody_guards(connection, SyntheticEvidenceObject.__table__)
             require_synthetic_revision_guards(connection, SyntheticAssessmentRevision.__table__)
+            require_synthetic_handoff_guards(connection, SyntheticVendorHandoff.__table__)
         with factory() as session:
             row = session.execute(select(Organization.external_key, Vendor.display_name, Engagement.service_name,
                 OrganizationMembership.issuer, OrganizationMembership.subject)
@@ -177,12 +185,21 @@ def prepare_runtime(directory, port, issuer, subject):
                        Engagement.vendor_id == Vendor.id, EngagementAccessGrant.engagement_id == Engagement.id)).one_or_none()
             if row is None or tuple(row) != ("synthetic-pilot", "Synthetic Vendor", "Synthetic Analytics", issuer, subject):
                 raise ValueError("The synthetic runtime fixture ownership differs.")
+            if vendor_submissions:
+                # The independently authenticated vendor receives no SQL
+                # membership or grant. Existing analyst/read/custody services
+                # therefore confer no tenant authority to that identity.
+                vendor_member = session.execute(select(OrganizationMembership.id).where(
+                    OrganizationMembership.issuer == expected["vendor_issuer"],
+                    OrganizationMembership.subject == expected["vendor_subject"])).first()
+                if vendor_member is not None:
+                    raise ValueError("The synthetic vendor must have no SQL membership.")
         if create:
             _private_write(path / "runtime.json", json.dumps(marker, sort_keys=True, separators=(",", ":")).encode("ascii"))
         intake = Intake("1001", "Synthetic Vendor", "Synthetic Analytics", "Synthetic analytics assessment",
             as_of=date.fromisoformat(marker["captured_on"]), organization_id="synthetic-pilot",
             methodology=OrganizationMethodology.from_dict(default_definition("synthetic-pilot")))
-        return SyntheticPilotRuntime(factory, intake, certfile, keyfile, engine)
+        return SyntheticPilotRuntime(factory, intake, certfile, keyfile, engine, vendor_submissions)
     except Exception:
         engine.dispose()
         raise
