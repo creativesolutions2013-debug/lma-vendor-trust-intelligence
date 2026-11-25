@@ -19,7 +19,7 @@ from src.authz import PERMISSION_ASSESSMENT_MANAGE, PERMISSION_EVIDENCE_READ
 from src.db import Base, SyntheticEvidenceObject, SyntheticVendorHandoff
 from src.synthetic_handoff_provenance import (
     encode_handoff_metadata, handoff_in_transaction, record_handoff_in_transaction,
-    require_synthetic_handoff_guards,
+    require_synthetic_handoff_guards, synthetic_handoff_guard_statements,
 )
 from src.tenant_read_scope import TenantReadService
 from test_resumable_assessment import assessment_ctx, _source
@@ -114,7 +114,11 @@ def test_additive_upgrade_keeps_original_rows_and_sqlite_root_pages(migrated_han
     dict(metadata_sha256="A" * 64), dict(metadata_sha256="g" * 64)])
 def test_raw_insert_cannot_rebind_source_or_exceed_contract(migrated_handoff, changes):
     with migrated_handoff["engine"].connect() as connection, connection.begin():
-        with pytest.raises((DBAPIError, sa.exc.StatementError)), connection.begin_nested():
+        # psycopg rejects a Python str for bytea before SQL reaches the server.
+        # Keep that adaptation failure separate from database guard failures.
+        postgres_text = connection.dialect.name == "postgresql" and isinstance(changes.get("metadata_payload"), str)
+        expected = TypeError if postgres_text else (DBAPIError, sa.exc.StatementError)
+        with pytest.raises(expected, match="bytes or buffer expected" if postgres_text else None), connection.begin_nested():
             connection.execute(SyntheticVendorHandoff.__table__.insert(), handoff_values(**changes))
         assert connection.execute(sa.select(sa.func.count()).select_from(SyntheticVendorHandoff)).scalar_one() == 0
 
@@ -243,10 +247,17 @@ def test_stored_metadata_tampering_is_withheld(assessment_ctx, attack):
     # A privileged schema owner can bypass guards; consumers still reject
     # malformed or inconsistent metadata instead of publishing it as history.
     with ctx.factory.begin() as database:
-        if database.get_bind().dialect.name == "sqlite":
-            database.connection().exec_driver_sql("DROP TRIGGER m7_handoff_no_update")
+        connection = database.connection()
+        if connection.dialect.name == "sqlite":
+            connection.exec_driver_sql("DROP TRIGGER m7_handoff_no_update")
         else:
-            database.connection().exec_driver_sql("ALTER TABLE synthetic_vendor_handoffs DISABLE TRIGGER m7_handoff_no_mutation")
+            # ORM SQL uses schema_translate_map, whereas raw SQL does not.
+            # Target this test's UUID-owned schema, not the migration fixture's
+            # current search_path (which may point to another handoff table).
+            assert ctx.schema is not None
+            quote = connection.dialect.identifier_preparer.quote
+            handoffs = quote(ctx.schema) + "." + quote(SyntheticVendorHandoff.__tablename__)
+            connection.exec_driver_sql(f"ALTER TABLE {handoffs} DISABLE TRIGGER m7_handoff_no_mutation")
         payload = encode_handoff_metadata(data)
         if attack == "duplicate":
             payload = payload[:-1] + b',"schema_version":1}'
@@ -259,10 +270,12 @@ def test_stored_metadata_tampering_is_withheld(assessment_ctx, attack):
         digest = "b" * 64 if attack == "hash" else sha256(payload).hexdigest()
         database.execute(sa.update(SyntheticVendorHandoff).values(metadata_payload=payload, metadata_sha256=digest))
         # Restore health so this test exercises payload verification as well.
-        if database.get_bind().dialect.name == "sqlite":
-            database.connection().exec_driver_sql("CREATE TRIGGER m7_handoff_no_update BEFORE UPDATE ON synthetic_vendor_handoffs BEGIN SELECT RAISE(ABORT,'immutable'); END")
+        if connection.dialect.name == "sqlite":
+            statement = next(statement for statement in synthetic_handoff_guard_statements(connection.dialect)
+                             if "m7_handoff_no_update" in statement)
+            connection.exec_driver_sql(statement)
         else:
-            database.connection().exec_driver_sql("ALTER TABLE synthetic_vendor_handoffs ENABLE ALWAYS TRIGGER m7_handoff_no_mutation")
+            connection.exec_driver_sql(f"ALTER TABLE {handoffs} ENABLE ALWAYS TRIGGER m7_handoff_no_mutation")
     with pytest.raises((ValueError, PermissionError)), authorized(ctx) as (session, scope):
         handoff_in_transaction(session, scope, receipt)
 

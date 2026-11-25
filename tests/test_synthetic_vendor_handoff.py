@@ -331,3 +331,37 @@ def test_reentrant_revocation_cannot_acknowledge_pending_intake_during_import(ha
             assert not nested
         assert ctx.handoff.mark_imported(ctx.handle, ctx.identity, issued.invitation_id)
     assert not ctx.handoff.revoke(ctx.handle, ctx.identity, issued.invitation_id)
+
+
+def test_capture_reserves_before_reentrant_sql_authorization_and_cleanup(handoff_ctx, monkeypatch):
+    ctx = handoff_ctx
+    issued = invite(ctx)
+    assert deliver(ctx, issued)
+    original = ctx.handoff._analyst
+    callbacks = []
+
+    def authorizing(*args, **kwargs):
+        if not callbacks:
+            # Models SQL/session cleanup reentering during guard setup, before
+            # the outer capture_operation has yielded to its caller.
+            callbacks.append("entered")
+            callbacks.append(ctx.handoff.revoke(ctx.handle, ctx.identity, issued.invitation_id))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ctx.handoff, "_analyst", authorizing)
+    with ctx.handoff.capture_operation(ctx.handle, ctx.identity, issued.invitation_id) as allowed:
+        assert allowed and callbacks == ["entered", False]
+        assert ctx.handoff.list_invitations(ctx.handle, ctx.identity)[0].status == "submitted"
+        assert ctx.handoff.begin_capture(ctx.handle, ctx.identity, issued.invitation_id) is not None
+    assert ctx.handoff.list_invitations(ctx.handle, ctx.identity)[0].status == "capturing"
+
+
+def test_failed_capture_authorization_releases_early_reservation(handoff_ctx, monkeypatch):
+    ctx = handoff_ctx
+    issued = invite(ctx)
+    assert deliver(ctx, issued)
+    with monkeypatch.context() as patch:
+        patch.setattr(ctx.handoff, "_analyst", lambda *args, **kwargs: None)
+        with ctx.handoff.capture_operation(ctx.handle, ctx.identity, issued.invitation_id) as allowed:
+            assert not allowed
+    assert ctx.handoff.revoke(ctx.handle, ctx.identity, issued.invitation_id)

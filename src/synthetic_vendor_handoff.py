@@ -287,6 +287,8 @@ class SyntheticVendorHandoff:
                         or record.status not in ("issued", "submitted", "captured")
                         or self._analyst(handle, identity, record) is None):
                     return False
+                if self._records.get(invitation_id) is not record:
+                    return False  # Authorization callbacks may have completed intake.
                 self._records[invitation_id] = replace(record, status="revoked", pending=None)
                 return True
         except Exception:
@@ -387,20 +389,25 @@ class SyntheticVendorHandoff:
         propagated, never interpreted as a confirmed capture or rollback.
         """
         with self._lock:
+            record = self._records.get(invitation_id)
+            eligible = (record is not None and not record.capture_active
+                        and record.status in ("submitted", "captured"))
+            # Reserve before SQL/session authorization: its trusted callbacks
+            # may reenter this RLock too. Never restore an old snapshot over an
+            # already acknowledged revocation after those callbacks return.
+            if eligible:
+                reservation = replace(record, capture_active=True)
+                self._records[invitation_id] = reservation
             allowed = False
             try:
-                record = self._records.get(invitation_id)
-                allowed = (record is not None and not record.capture_active
-                           and record.status in ("submitted", "captured")
-                           and self._analyst(handle, identity, record) is not None)
+                allowed = (eligible and self._analyst(handle, identity, record) is not None
+                           and self._records.get(invitation_id) is reservation)
             except Exception:
                 pass
-            if allowed:
-                self._records[invitation_id] = replace(record, capture_active=True)
             try:
                 yield allowed
             finally:
-                if allowed:
+                if eligible:
                     current = self._records[invitation_id]
                     self._records[invitation_id] = replace(current, capture_active=False)
 
