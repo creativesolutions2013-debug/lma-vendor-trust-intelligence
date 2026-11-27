@@ -1,0 +1,7 @@
+SYNTHETIC FIXTURE ONLY — completed recovery exercise
+Service: Synthetic Analytics
+Environment: production
+Observation date: 2026-11-24
+Achieved RTO 300 minutes and RPO 90 minutes.
+Identity service was excluded from this recovery exercise.
+These authored statements are unverified candidates for provisional analyst review.

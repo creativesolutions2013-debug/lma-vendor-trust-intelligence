@@ -47,6 +47,14 @@ jobs:
       - name: Compile authenticated synthetic pilot before tests
         run: python -m py_compile app.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
 
+      - name: Compile scoped synthetic vendor handoff before tests
+        run: python -m py_compile app.py src/db.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py src/resumable_assessment.py src/guided_assessment_package.py src/synthetic_vendor_surface.py src/synthetic_vendor_handoff.py src/synthetic_handoff_provenance.py migrations/versions/0014d_vendor_handoff.py tests/test_synthetic_vendor_identity.py tests/test_synthetic_vendor_runtime.py tests/test_synthetic_vendor_surface.py tests/test_synthetic_vendor_handoff.py tests/test_synthetic_handoff_provenance.py tests/test_vendor_source_append.py tests/test_synthetic_vendor_journey.py
+
+      - name: Verify scoped synthetic vendor delivery and analyst reassessment
+        env:
+          LMA_REQUIRE_BROWSER_TESTS: "1"
+        run: pytest -q tests/test_synthetic_vendor_identity.py tests/test_synthetic_vendor_runtime.py tests/test_synthetic_vendor_surface.py tests/test_synthetic_vendor_handoff.py tests/test_synthetic_handoff_provenance.py tests/test_vendor_source_append.py tests/test_synthetic_vendor_journey.py
+
       - name: Verify actual HTTPS authenticated analyst journey
         env:
           LMA_REQUIRE_BROWSER_TESTS: "1"
@@ -138,6 +146,14 @@ jobs:
       - name: Compile authenticated synthetic pilot before tests
         run: python -m py_compile app.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py tests/test_synthetic_browser_auth.py tests/test_synthetic_analyst_pilot.py tests/test_synthetic_pilot_runtime.py
 
+      - name: Compile scoped synthetic vendor handoff before tests
+        run: python -m py_compile app.py src/db.py src/oidc_login.py src/synthetic_browser_auth.py src/synthetic_analyst_pilot.py src/synthetic_analyst_workspace.py src/synthetic_pilot_runtime.py src/resumable_assessment.py src/guided_assessment_package.py src/synthetic_vendor_surface.py src/synthetic_vendor_handoff.py src/synthetic_handoff_provenance.py migrations/versions/0014d_vendor_handoff.py tests/test_synthetic_vendor_identity.py tests/test_synthetic_vendor_runtime.py tests/test_synthetic_vendor_surface.py tests/test_synthetic_vendor_handoff.py tests/test_synthetic_handoff_provenance.py tests/test_vendor_source_append.py tests/test_synthetic_vendor_journey.py
+
+      - name: Verify scoped synthetic vendor delivery and analyst reassessment
+        env:
+          LMA_REQUIRE_BROWSER_TESTS: "1"
+        run: pytest -q tests/test_synthetic_vendor_identity.py tests/test_synthetic_vendor_runtime.py tests/test_synthetic_vendor_surface.py tests/test_synthetic_vendor_handoff.py tests/test_synthetic_handoff_provenance.py tests/test_vendor_source_append.py tests/test_synthetic_vendor_journey.py
+
       - name: Verify actual HTTPS authenticated analyst journey
         env:
           LMA_REQUIRE_BROWSER_TESTS: "1"
@@ -173,6 +189,7 @@ jobs:
               "monitoring_events",
               "synthetic_evidence_objects",
               "synthetic_assessment_revisions",
+              "synthetic_vendor_handoffs",
               "vendors",
           }
 

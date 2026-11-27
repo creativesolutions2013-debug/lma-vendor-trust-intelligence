@@ -115,6 +115,13 @@ def summary_html(report):
     parts.append('<h2>Attached evidence/artifacts</h2><ul>')
     for artifact in report['evidence_manifest']['artifacts']:
         parts.append(f'<li><a href="{e(artifact["archive_path"])}">{e(artifact["filename"])}</a> · {e(artifact["document_id"])} · {e(artifact["source_role"])} · SHA-256 {e(artifact["sha256"])} · {e(artifact["use"])}</li>')
+    for source in report.get('persistence', {}).get('source_custody', []):
+        delivery = source.get('vendor_delivery')
+        if delivery:
+            parts.append(f'<li>Authenticated synthetic vendor delivery: {e(source["filename"])} '
+                         f'· SHA-256 {e(source["sha256"])} · {e(delivery["vendor_subject"])} '
+                         f'· delivered {e(delivery["submitted_at"])} · captured by '
+                         f'{e(source["capture_actor"]["subject"])}. Source declarations remain unverified.</li>')
     parts.append('</ul><p><a href="report.json">Detailed assessment report</a> · <a href="manifest.json">Source manifest</a></p></body></html>')
     return '\n'.join(parts).encode('utf-8')
 

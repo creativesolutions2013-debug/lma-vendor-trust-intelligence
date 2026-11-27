@@ -107,23 +107,36 @@ def _multipart(content_type, body):
 def _page(body):
     return ("<!doctype html><html lang='en'><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            "<title>LMA synthetic analyst</title><link rel='stylesheet' href='/style.css'>"
-            "<body><main><h1>LMA synthetic analyst</h1><p>Development-only synthetic pilot. "
+            "<title>LMA synthetic evidence pilot</title><link rel='stylesheet' href='/style.css'>"
+            "<body><main><h1>LMA synthetic evidence pilot</h1><p>Development-only synthetic pilot. "
             "No confidential evidence, production identity or automatic risk decisions.</p>"
             + body + "</main></body></html>")
 
 
 class PilotApplication:
-    def __init__(self, identity, factory, intake):
+    def __init__(self, identity, factory, intake, *, vendor_identity=None):
         _development()  # Must precede imports that initialize legacy DB dependencies.
         from src.synthetic_browser_auth import SyntheticPilotIdentity
         from src.synthetic_analyst_workspace import PilotWorkspace
-        if type(identity) is not SyntheticPilotIdentity:
+        if type(identity) is not SyntheticPilotIdentity or identity.subject != "synthetic-analyst":
             raise ValueError("A server-configured synthetic identity is required.")
         self.identity = identity
         self.workspace = PilotWorkspace(factory, intake)
         self.origin = identity.origin
         self.host = urlsplit(self.origin).netloc
+        self.handoff = None
+        self.vendor_surface = None
+        if vendor_identity is not None:
+            if (type(vendor_identity) is not SyntheticPilotIdentity
+                    or vendor_identity.subject != "synthetic-vendor"
+                    or vendor_identity.origin != self.origin or vendor_identity is identity
+                    or vendor_identity.sessions is identity.sessions):
+                raise ValueError("Use a distinct fixed synthetic vendor identity on this origin.")
+            from src.synthetic_vendor_handoff import SyntheticVendorHandoff
+            from src.synthetic_vendor_surface import VendorSurface
+            self.handoff = SyntheticVendorHandoff(factory, int(intake.assessment_id),
+                vendor_identity.config.issuer, vendor_identity.subject, clock=identity.clock)
+            self.vendor_surface = VendorSurface(self, vendor_identity, self.handoff)
 
     def _response(self, status, body, *, headers=(), content_type="text/html; charset=utf-8"):
         data = body if type(body) is bytes else _page(body).encode("utf-8")
@@ -171,7 +184,7 @@ class PilotApplication:
             if re.fullmatch(r"0|[1-9][0-9]{0,6}", length) is None or int(length) != len(body):
                 raise ValueError()
             content_type = header.get("content-type", "")
-            if content_type.startswith("multipart/form-data;") and url.path == "/save":
+            if content_type.startswith("multipart/form-data;") and url.path in ("/save", "/vendor/submit"):
                 fields, files = _multipart(content_type, body)
             elif content_type == "application/x-www-form-urlencoded":
                 fields, files = _pairs(body.decode("utf-8", errors="strict")), ()
@@ -183,6 +196,9 @@ class PilotApplication:
             return self._response(400, "<p>Request rejected. Reload and sign in again if needed.</p>")
 
     def _get(self, path, query, cookies, handle):
+        if path == "/vendor" or path.startswith("/vendor/"):
+            return (self.vendor_surface.get(path, query, cookies) if self.vendor_surface is not None
+                    else self._response(404, "<p>Page unavailable.</p>"))
         if path == "/synthetic-idp/authorize":
             csrf = self.identity.provider_form_token(query, cookies.get(BINDING_COOKIE, ""))
             hidden = "".join(f"<input type='hidden' name='{escape(k, quote=True)}' value='{escape(v, quote=True)}'>"
@@ -224,9 +240,15 @@ class PilotApplication:
             return self._response(200, result.package, content_type="application/zip",
                                   headers=(("Content-Disposition", 'attachment; filename="synthetic-assessment.zip"'),))
         from src.synthetic_analyst_workspace import render_workspace
-        return self._response(200, render_workspace(self.workspace.intake, result, self.identity.csrf_token(handle)))
+        rendered = render_workspace(self.workspace.intake, result, self.identity.csrf_token(handle))
+        if self.handoff is not None and result is not None:
+            rendered += self.workspace.render_vendor_handoff(handle, self.identity, result, self.handoff)
+        return self._response(200, rendered)
 
     def _post(self, path, fields, files, cookies, handle):
+        if path == "/vendor" or path.startswith("/vendor/"):
+            return (self.vendor_surface.post(path, fields, files, cookies) if self.vendor_surface is not None
+                    else self._response(404, "<p>Page unavailable.</p>"))
         csrf = fields.pop("csrf", "")
         if path == "/login":
             if fields or files or not self.identity.valid_browser_csrf(cookies.get(ANON_COOKIE, ""), csrf):
@@ -245,11 +267,35 @@ class PilotApplication:
             if not self.identity.logout(handle):
                 return self._response(503, "<p>Sign out was not confirmed. Retry; the session cookie is retained.</p>")
             return self._redirect("/", _cookie(SESSION_COOKIE, "", clear=True))
+        if self.handoff is not None and path == "/vendor-invitation/revoke" and not files:
+            if set(fields) != {"invitation_id"}:
+                raise ValueError()
+            success = self.handoff.revoke(handle, self.identity, fields["invitation_id"])
+            return self._redirect("/") if success else self._response(409, "<p>Invitation change not confirmed.</p>")
         revision = fields.pop("expected_revision", "")
         if re.fullmatch(r"0|[1-9][0-9]{0,9}", revision) is None:
             raise ValueError()
         revision = int(revision)
-        if path == "/save":
+        if self.handoff is not None and path == "/vendor-invitation/create" and not files:
+            if set(fields) != {"requirement_id"}:
+                raise ValueError()
+            invitation = self.handoff.create(handle, self.identity, revision, fields["requirement_id"])
+            if invitation is None:
+                return self._response(409, "<p>Invitation not created. Resume latest and check capacity or authorization.</p>")
+            token = escape(invitation.token, quote=True)
+            return self._response(200, '<h2>Local synthetic invitation</h2>'
+                '<p>Copy this one-use code privately to the fixed synthetic vendor representative. '
+                'Open <a href="/vendor">the vendor sign-in</a> in a separate browser profile. '
+                'The representative needs their independent password. No email is sent.</p>'
+                f'<label>One-use invitation code <input readonly value="{token}" autocomplete="off"></label>'
+                f'<p>Expires {escape(invitation.expires_at.isoformat())}. Keep this analyst session signed in until delivery. '
+                'The code will not be shown again.</p><p><a href="/">Return to assessment</a></p>')
+        if self.handoff is not None and path == "/vendor-invitation/capture" and not files:
+            if set(fields) != {"invitation_id"}:
+                raise ValueError()
+            success = self.workspace.capture_vendor_submission(handle, self.identity, revision,
+                self.handoff, fields["invitation_id"])
+        elif path == "/save":
             success = self.workspace.save(handle, self.identity, revision, fields, files)
         elif path == "/review" and not files:
             success = self.workspace.review(handle, self.identity, revision, fields)
@@ -334,13 +380,23 @@ def main():
     parser = argparse.ArgumentParser(description="Loopback HTTPS synthetic analyst pilot only")
     parser.add_argument("--directory", required=True, help="Dedicated private synthetic pilot directory")
     parser.add_argument("--port", type=int, default=8443)
+    parser.add_argument("--vendor-submissions", action="store_true", help="Enable distinct synthetic vendor delivery in a new v2 runtime")
     args = parser.parse_args()
     password = getpass("Choose a synthetic-only IdP password (at least 16 characters): ")
     identity = SyntheticPilotIdentity(args.port, password)
     del password
-    runtime = prepare_runtime(args.directory, args.port, identity.config.issuer, "synthetic-analyst")
+    vendor_identity = None
+    if args.vendor_submissions:
+        password = getpass("Choose a DIFFERENT synthetic-only vendor password (at least 16 characters): ")
+        # Authentication separation includes independent credentials, not merely subjects.
+        if identity._password_hash(password.encode("utf-8")) == identity._password_digest:
+            raise ValueError("Analyst and vendor fixture passwords must differ.")
+        vendor_identity = SyntheticPilotIdentity(args.port, password, vendor=True)
+        del password
+    runtime = prepare_runtime(args.directory, args.port, identity.config.issuer, "synthetic-analyst",
+                              vendor_submissions=args.vendor_submissions)
     try:
-        app = PilotApplication(identity, runtime.factory, runtime.intake)
+        app = PilotApplication(identity, runtime.factory, runtime.intake, vendor_identity=vendor_identity)
         server = make_https_server(app, runtime.certfile, runtime.keyfile)
         print(f"Synthetic-only pilot: {identity.origin}")
         print(f"Explicitly trust this local certificate in your browser: {runtime.certfile}")

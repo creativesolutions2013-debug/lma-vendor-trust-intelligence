@@ -210,6 +210,119 @@ class PilotWorkspace:
         except Exception:
             return False
 
+    def capture_vendor_submission(self, handle, identity, revision, handoff, invitation_id):
+        # Serialize revocation with the entire capture/import outcome. Individual
+        # queue lookups cannot authorize a later append after pending intake was
+        # revoked. Queue locks precede SQL/session authority on every queue path.
+        try:
+            with handoff.capture_operation(handle, identity, invitation_id) as allowed:
+                return bool(allowed and self._capture_vendor_submission(
+                    handle, identity, revision, handoff, invitation_id))
+        except Exception:
+            return False
+
+    def _capture_vendor_submission(self, handle, identity, revision, handoff, invitation_id):
+        """Explicit analyst capture, then append; never substitute vendor authority.
+
+        An uncertain custody acknowledgment is terminal. A confirmed custody
+        receipt may be reused after an append conflict, never staged a second time.
+        """
+        try:
+            if not _revision(revision):
+                return False
+            current = self.resume(handle, identity)
+            if current is None or current.revision != revision:
+                return False
+            pending = handoff.get_pending(handle, identity, invitation_id)
+            if pending is None:
+                return False
+            if (len(current.uploads) >= MAX_FILES or any(
+                    upload.evidence.source.filename == pending.filename
+                    or upload.evidence.content_sha256 == pending.sha256 for upload in current.uploads)):
+                # A lost append acknowledgment is recovered from verified latest state.
+                return self._recover_vendor_append(handle, identity, handoff, invitation_id, pending.receipt)
+            if pending.receipt is None:
+                pending = handoff.begin_capture(handle, identity, invitation_id)
+                if pending is None:
+                    return False
+                custody = SyntheticEvidenceCustodyService(self._factory, identity_source=self._source(handle, identity))
+                receipt = custody.save(self._assessment_id, pending.content, document_name=pending.filename)
+                if receipt is None:
+                    handoff.mark_unconfirmed(handle, identity, invitation_id)
+                    return False
+                if not handoff.record_capture(handle, identity, invitation_id, receipt):
+                    handoff.mark_unconfirmed(handle, identity, invitation_id)
+                    return False
+            else:
+                receipt = pending.receipt
+            metadata = {
+                "schema_version": 1, "invitation_id": pending.invitation_id,
+                "vendor_issuer": pending.vendor_issuer, "vendor_subject": pending.vendor_subject,
+                "vendor_session_id": pending.vendor_session_id,
+                "vendor_role": "Authenticated synthetic invitee",
+                "submitted_at": pending.submitted_at.isoformat(),
+                "kind": pending.kind,
+                "observed_on": pending.observed_on.isoformat() if pending.observed_on else None,
+                "requirement_id": pending.requirement_id,
+                "inviter_issuer": pending.inviter_issuer, "inviter_subject": pending.inviter_subject,
+                "inviter_session_id": pending.inviter_session_id,
+            }
+            saved = self._service(handle, identity).append_vendor_source(self._assessment_id,
+                expected_revision=revision, receipt=receipt, metadata=metadata)
+            if saved is not None:
+                return handoff.mark_imported(handle, identity, invitation_id)
+            return self._recover_vendor_append(handle, identity, handoff, invitation_id, receipt)
+        except Exception:
+            # A caller can only retry a confirmed captured receipt. Capturing
+            # without an acknowledgment is never converted back to submitted.
+            return False
+
+    def _recover_vendor_append(self, handle, identity, handoff, invitation_id, receipt):
+        if receipt is None:
+            return False
+        latest = self.resume(handle, identity)
+        if latest is None:
+            return False
+        for source in latest.report.get("persistence", {}).get("source_custody", []):
+            if (source["evidence_id"] == receipt.evidence_id and source["generation"] == receipt.generation
+                    and source["sha256"] == receipt.sha256
+                    and (source.get("vendor_delivery") or {}).get("invitation_id") == invitation_id):
+                return handoff.mark_imported(handle, identity, invitation_id)
+        return False
+
+    def render_vendor_handoff(self, handle, identity, result, handoff):
+        """Analyst-only controls; public correlation IDs confer no authority."""
+        e = lambda value: escape(str(value), quote=True)
+        csrf = identity.csrf_token(handle)
+        summaries = handoff.list_invitations(handle, identity)
+        if summaries is None:
+            return '<p>Vendor handoff unavailable for this session.</p>'
+        hidden = (f'<input type="hidden" name="csrf" value="{e(csrf)}">'
+                  f'<input type="hidden" name="expected_revision" value="{result.revision}">')
+        options = ''.join(f'<option value="{e(row["requirement_id"])}">{e(row["requirement_id"])}</option>'
+                          for row in result.report['requirements'])
+        parts = ['<section><h2>Request evidence from the synthetic vendor</h2>',
+            '<p>One local invitation and one TXT source. Keep this analyst session signed in until delivery. '
+            'Vendor delivery is pending in memory until you explicitly capture it below. '
+            'No external message or vendor decision is created.</p>',
+            f'<form method="post" action="/vendor-invitation/create">{hidden}'
+            f'<label>Requirement <select name="requirement_id">{options}</select></label>'
+            '<button>Create local vendor invitation</button></form>']
+        for summary in summaries:
+            parts.append(f'<article><p>Invitation {e(summary.invitation_id)} · {e(summary.status)} '
+                         f'· expires {e(summary.expires_at.isoformat())}</p>')
+            public_id = f'<input type="hidden" name="invitation_id" value="{e(summary.invitation_id)}">'
+            if summary.status in ('submitted', 'captured'):
+                parts.append(f'<form method="post" action="/vendor-invitation/capture">{hidden}{public_id}'
+                             '<button>Capture vendor evidence and reassess</button></form>')
+            if summary.status in ('issued', 'submitted', 'captured'):
+                parts.append(f'<form method="post" action="/vendor-invitation/revoke">'
+                    f'<input type="hidden" name="csrf" value="{e(csrf)}">{public_id}'
+                    '<button>Revoke invitation or pending intake</button></form>')
+            parts.append('</article>')
+        parts.append('</section>')
+        return ''.join(parts)
+
 
 def render_workspace(intake, result, csrf):
     """Render escaped server-rebuilt data; returned markup is no authorization."""
@@ -281,6 +394,14 @@ def render_workspace(intake, result, csrf):
         source = upload.evidence.source
         parts.append(f'<li>{e(source.filename)} · {e(source.evidence_kind)} · observed {e(source.observed_on)} '
                      f'· captured {e(source.captured_on)} · {e(source.service)} / {e(source.environment)}</li>')
+    for source in report.get('persistence', {}).get('source_custody', []):
+        parts.append(f'<li>{e(source["filename"])} · original SHA-256 {e(source["sha256"])} '
+                     f'· custody capture actor {e(source["capture_actor"]["subject"])}</li>')
+        if source.get('vendor_delivery'):
+            delivery = source['vendor_delivery']
+            parts.append(f'<li>Authenticated synthetic vendor delivery: {e(delivery["vendor_subject"])} '
+                         f'· delivered {e(delivery["submitted_at"])} · declaration: {e(delivery["kind"])} '
+                         '· unverified source claims, separately captured by the analyst.</li>')
     parts.append('</ul><h2>Requirements and source review</h2>')
     for row in report['requirements']:
         opened = ' open' if row['requirement_id'] == default_target else ''

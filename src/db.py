@@ -27,6 +27,9 @@ from src.membership_identity_guard import install_membership_identity_guard
 from src.synthetic_custody_guards import (
     MAX_SYNTHETIC_EVIDENCE_BYTES, install_synthetic_custody_guards,
 )
+from src.synthetic_handoff_provenance import (
+    MAX_HANDOFF_METADATA_BYTES, install_synthetic_handoff_guards,
+)
 from src.synthetic_revision_guards import (
     MAX_SYNTHETIC_ASSESSMENT_STATE_BYTES, install_synthetic_revision_guards,
 )
@@ -678,6 +681,29 @@ class SyntheticAssessmentRevision(Base):
 
 
 event.listen(SyntheticAssessmentRevision.__table__, "after_create", install_synthetic_revision_guards)
+
+
+class SyntheticVendorHandoff(Base):
+    """Immutable vendor delivery separate from the analyst's durable capture."""
+    __tablename__ = "synthetic_vendor_handoffs"
+    __table_args__ = (
+        CheckConstraint("evidence_id > 0 AND organization_id > 0 AND vendor_id > 0 AND engagement_id > 0 AND assessment_id > 0", name="ck_synthetic_handoff_positive_ids"),
+        CheckConstraint(f"length(metadata_payload) BETWEEN 1 AND {MAX_HANDOFF_METADATA_BYTES}", name="ck_synthetic_handoff_size"),
+        CheckConstraint("length(generation) = 32 AND length(sha256) = 64 AND length(metadata_sha256) = 64", name="ck_synthetic_handoff_hash_shape"),
+        {"sqlite_with_rowid": False},
+    )
+    evidence_id = Column(Integer, ForeignKey("synthetic_evidence_objects.evidence_id", ondelete="RESTRICT"), primary_key=True, autoincrement=False)
+    organization_id = Column(Integer, nullable=False)
+    vendor_id = Column(Integer, nullable=False)
+    engagement_id = Column(Integer, nullable=False)
+    assessment_id = Column(Integer, nullable=False)
+    generation = Column(String(32), nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    metadata_payload = Column(LargeBinary, nullable=False)
+    metadata_sha256 = Column(String(64), nullable=False)
+
+
+event.listen(SyntheticVendorHandoff.__table__, "after_create", install_synthetic_handoff_guards)
 
 
 class EvidenceRequestPackage(Base):

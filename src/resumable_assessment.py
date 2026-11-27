@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from hmac import compare_digest
 import re
+import json
 
 from sqlalchemy import and_, func, insert, select
 
@@ -18,14 +19,17 @@ from src.db import Assessment, Engagement, Organization, SyntheticAssessmentRevi
 from src.guided_assessment_demo import complete_review, report_payload, source_role
 from src.guided_assessment_package import assessment_package
 from src.resumable_assessment_state import (
-    MAX_STATE_BYTES, encode_state, parse_state, restore_state, with_review_state,
+    MAX_STATE_BYTES, encode_draft, encode_state, parse_state, restore_state, with_review_state,
 )
 from src.session_leased_read import _SessionLeasedRead
 from src.synthetic_custody_guards import require_synthetic_custody_guards
-from src.synthetic_evidence_custody import _retrieve_in_authorized_transaction
+from src.synthetic_evidence_custody import SyntheticEvidenceReceipt, _retrieve_in_authorized_transaction
+from src.synthetic_handoff_provenance import (
+    encode_handoff_metadata, handoff_in_transaction, record_handoff_in_transaction,
+)
 from src.synthetic_revision_guards import require_synthetic_revision_guards
 from src.tenant_read_scope import TenantReadService
-from src.upload_assessment import record_upload_review
+from src.upload_assessment import read_upload, record_upload_review, risk_and_applicability
 
 
 _PERMISSIONS = (PERMISSION_ASSESSMENT_MANAGE, PERMISSION_EVIDENCE_READ)
@@ -71,6 +75,8 @@ class _Command:
     action: str = ""
     rationale: str = ""
     confirms_insufficiency: bool = False
+    receipt: SyntheticEvidenceReceipt | None = None
+    handoff_metadata: bytes | None = None
 
 
 class _RevisionReader(TenantReadService):
@@ -79,6 +85,7 @@ class _RevisionReader(TenantReadService):
         self._command = command
         self._before = None
         self._created = None
+        self._originals = ()
 
     def _head(self, session):
         r = SyntheticAssessmentRevision
@@ -156,7 +163,41 @@ class _RevisionReader(TenantReadService):
                 raise PermissionError("Synthetic assessment unavailable.")
             request = EvidenceReadRequest(org, engagement, vendor, assessment, source["evidence_id"])
             results.append(_retrieve_in_authorized_transaction(session, scope, request, source["generation"]))
-        return restore_state(packet, tuple(results), as_of=now.date())
+        self._originals = tuple(results)
+        return restore_state(packet, self._originals, as_of=now.date())
+
+    def _append_vendor_source(self, session, scope, packet, relation, now):
+        """Append one explicitly captured delivery; never replace prior originals."""
+        command = self._command
+        restored = self._restore(session, scope, packet, relation, now)
+        receipt = command.receipt
+        if type(receipt) is not SyntheticEvidenceReceipt or len(packet["sources"]) >= 4:
+            raise PermissionError("Synthetic assessment unavailable.")
+        if any(source["filename"] == receipt.document_name or source["sha256"] == receipt.sha256
+               or source["evidence_id"] == receipt.evidence_id for source in packet["sources"]):
+            raise PermissionError("Synthetic source already present or capacity exceeded.")
+        request = EvidenceReadRequest(relation[0], relation[2], relation[1], relation[3], receipt.evidence_id)
+        original = _retrieve_in_authorized_transaction(session, scope, request, receipt.generation)
+        if original.receipt != receipt:
+            raise PermissionError("Synthetic original differs from capture acknowledgment.")
+        metadata = json.loads(command.handoff_metadata.decode("ascii"))
+        if encode_handoff_metadata(metadata) != command.handoff_metadata:
+            raise PermissionError("Synthetic delivery metadata differs.")
+        target = metadata["requirement_id"]
+        if target not in {control.control_id for control in risk_and_applicability(restored.intake)[2].controls}:
+            raise PermissionError("Synthetic delivery requirement is no longer applicable.")
+        captured = receipt.created_at.astimezone(timezone.utc).date()
+        intake = replace(restored.intake, as_of=now.date())
+        upload = read_upload(replace(intake, as_of=captured), receipt.document_name, original.content,
+            (target,), kind=metadata["kind"],
+            observed_on=datetime.fromisoformat(metadata["observed_on"]).date() if metadata["observed_on"] else None,
+            service=intake.service, environment=intake.environment)
+        source = parse_state(encode_draft(intake, (upload,), (receipt,)))["sources"][0]
+        packet["intake"]["as_of"] = now.date().isoformat()
+        packet["sources"].append(source)
+        # Provenance and source revision either commit together or remain absent.
+        record_handoff_in_transaction(session, scope, receipt, metadata)
+        return packet
 
     def materialize(self, session, scope):
         command = self._command
@@ -176,6 +217,8 @@ class _RevisionReader(TenantReadService):
             if previous is None:
                 raise PermissionError("Synthetic assessment unavailable.")
             packet = previous
+        if command.operation == "append_vendor_source":
+            packet = self._append_vendor_source(session, scope, packet, relation, now)
         restored = self._restore(session, scope, packet, relation, now)
         if command.operation == "resume":
             payload = report_payload(restored.model, restored.actions, restored.completion)
@@ -192,6 +235,18 @@ class _RevisionReader(TenantReadService):
                 "insufficiency_history": packet["need_reviews"],
                 "freshness_date": now.date().isoformat(),
                 "policy_authority": "Latest saved assessment methodology; external active-policy changes are not detected.",
+                "source_custody": [{
+                    "evidence_id": original.receipt.evidence_id,
+                    "generation": original.receipt.generation,
+                    "filename": original.receipt.document_name,
+                    "sha256": original.receipt.sha256,
+                    "byte_length": original.receipt.byte_length,
+                    "captured_at": original.receipt.created_at.isoformat(),
+                    "capture_actor": {"issuer": original.receipt.issuer,
+                                      "subject": original.receipt.subject,
+                                      "role": original.receipt.effective_role},
+                    "vendor_delivery": handoff_in_transaction(session, scope, original.receipt),
+                } for original in self._originals],
             }
             package = assessment_package(payload, [(u.evidence, source_role(u.evidence).value) for u in restored.uploads])
             return ResumedAssessment(command.assessment_id, latest, head[1], restored.intake, restored.uploads,
@@ -212,7 +267,7 @@ class _RevisionReader(TenantReadService):
         elif command.operation == "finish":
             completion = replace(complete_review(restored.model, restored.actions), completed_at=now.isoformat())
             packet = with_review_state(packet, restored.model, restored.actions, completion)
-        elif command.operation != "save":
+        elif command.operation not in ("save", "append_vendor_source"):
             raise PermissionError("Synthetic assessment unavailable.")
         encoded = encode_state(packet)
         digest = sha256(encoded).hexdigest()
@@ -260,6 +315,21 @@ class SyntheticResumableAssessmentService(_SessionLeasedRead):
 
     def finish(self, assessment_id, *, expected_revision):
         return self._command(_Command(assessment_id, "finish", expected_revision))
+
+    def append_vendor_source(self, assessment_id, *, expected_revision, receipt, metadata):
+        """Server composition after an authenticated pending delivery is captured.
+
+        The HTTP adapter never accepts a receipt or provenance DTO from a browser.
+        This command freshly authorizes and verifies the exact immutable original.
+        """
+        try:
+            if type(receipt) is not SyntheticEvidenceReceipt:
+                return None
+            encoded = encode_handoff_metadata(metadata)
+            return self._command(_Command(assessment_id, "append_vendor_source", expected_revision,
+                receipt=receipt, handoff_metadata=encoded))
+        except Exception:
+            return None
 
     def resume(self, assessment_id):
         return self._command(_Command(assessment_id, "resume"))
