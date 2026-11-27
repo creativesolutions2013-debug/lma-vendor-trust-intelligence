@@ -1,5 +1,6 @@
 """Separate authenticated vendor delivery; disposable SQLite/PostgreSQL only."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import timedelta
 from hashlib import sha256
@@ -213,6 +214,69 @@ def test_concurrent_same_token_deliveries_accept_exactly_once_on_real_backend(ha
     assert sorted(results) == [False, True]
     assert count(ctx) == 1
     assert len(ctx.handoff.list_invitations(ctx.handle, ctx.identity)) == 1
+
+
+@pytest.mark.parametrize("callback", ["lease_entry", "authenticate"])
+def test_vendor_lease_callback_revocation_is_not_resurrected(handoff_ctx, monkeypatch, callback):
+    ctx = handoff_ctx
+    issued = invite(ctx)
+    store = ctx.vendor.sessions._store
+    acknowledgments = []
+
+    def revoke_once():
+        if not acknowledgments:
+            acknowledgments.append("entered")
+            acknowledgments.append(ctx.handoff.revoke(ctx.handle, ctx.identity, issued.invitation_id))
+
+    if callback == "lease_entry":
+        original = store.operation_lease
+
+        @contextmanager
+        def entering(key):
+            revoke_once()
+            with original(key):
+                yield
+
+        monkeypatch.setattr(store, "operation_lease", entering)
+    else:
+        original = store.authenticate
+
+        def authenticating(*args):
+            revoke_once()
+            return original(*args)
+
+        monkeypatch.setattr(store, "authenticate", authenticating)
+
+    assert not deliver(ctx, issued)
+    assert acknowledgments == ["entered", True]
+    assert ctx.handoff.list_invitations(ctx.handle, ctx.identity)[0].status == "revoked"
+    assert ctx.handoff.get_pending(ctx.handle, ctx.identity, issued.invitation_id) is None
+    with ctx.handoff.capture_operation(ctx.handle, ctx.identity, issued.invitation_id) as allowed:
+        assert not allowed
+    assert not deliver(ctx, issued) and count(ctx) == 1
+
+
+def test_reentrant_vendor_lease_entry_cannot_overwrite_completed_delivery(handoff_ctx, monkeypatch):
+    ctx = handoff_ctx
+    issued = invite(ctx)
+    store = ctx.vendor.sessions._store
+    original = store.operation_lease
+    acknowledgments = []
+
+    @contextmanager
+    def entering(key):
+        if not acknowledgments:
+            acknowledgments.append("entered")
+            acknowledgments.append(deliver(ctx, issued, filename="first-delivery.txt"))
+        with original(key):
+            yield
+
+    monkeypatch.setattr(store, "operation_lease", entering)
+    assert not deliver(ctx, issued, filename="second-delivery.txt")
+    assert acknowledgments == ["entered", True]
+    pending = ctx.handoff.get_pending(ctx.handle, ctx.identity, issued.invitation_id)
+    assert pending.filename == "first-delivery.txt" and pending.content == VENDOR_CONTENT
+    assert not deliver(ctx, issued) and count(ctx) == 1
 
 
 def test_capture_is_separate_authorized_once_and_retains_confirmed_receipt(handoff_ctx):

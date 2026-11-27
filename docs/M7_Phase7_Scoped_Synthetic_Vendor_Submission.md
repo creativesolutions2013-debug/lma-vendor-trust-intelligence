@@ -48,6 +48,9 @@ append revision. Delivery alone is not durable custody or analyst acceptance.
   to the authorized analyst for local transfer to the fixed representative.
   It appears only in a vendor POST, never a URL, cookie, log or report. Public
   correlation IDs are not bearer capabilities. Restart invalidates invitations.
+  Delivery revalidates the exact issued record after vendor lease entry and
+  authentication callbacks; an acknowledged revocation or completed one-use
+  delivery cannot be overwritten by an older invitation snapshot.
 - Fresh SQL membership/grant, exact ownership, current session and optimistic
   revision checks gate delivery and capture. Revocation, ambiguity, expiry,
   rotation, cross-scope requests and changed authorization deny. Pending bytes

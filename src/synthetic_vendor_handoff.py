@@ -327,6 +327,11 @@ class SyntheticVendorHandoff:
                             or vendor_session.issuer != self._vendor_issuer
                             or vendor_session.subject != self._vendor_subject):
                         return False
+                    # Lease entry/authentication may reenter this RLock and
+                    # revoke or consume the invitation. Only the exact issued
+                    # record inspected above can be reserved for this delivery.
+                    if self._records.get(record.invitation_id) is not record:
+                        return False
                     self._records[record.invitation_id] = replace(record, status="unconfirmed")
                     target = _Delivery(record, vendor_session.issuer, vendor_session.subject,
                         vendor_session.session_id, filename, content, kind, observed_on)
