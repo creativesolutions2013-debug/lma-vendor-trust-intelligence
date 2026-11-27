@@ -1,0 +1,182 @@
+{
+  "version": "M6-provisional-v1",
+  "authoring_note": "AI-authored synthetic seed cases. Reference concern IDs, quotations and necessary questions are provisional and MUST be adjudicated by an independent human reviewer before decision-quality/efficiency claims; separate from frozen M5C gold and product parser.",
+  "case_count": 10,
+  "cases": [
+    {
+      "id": "mfa-method-unknown",
+      "family": "PAM-01",
+      "customer_requirement": "Privileged production access requires phishing-resistant MFA.",
+      "evidence": "Service: Cedar Billing API. Privileged MFA is enabled for all administrator accounts. Authentication method and recovery path not specified.",
+      "reference_concerns": [
+        {
+          "id": "method-unverified",
+          "quote": "Authentication method and recovery path not specified."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "mfa-method",
+          "question": "Provide administrator authentication-method and fallback configuration evidence."
+        }
+      ]
+    },
+    {
+      "id": "mfa-totp-not-phishing-resistant",
+      "family": "PAM-01",
+      "customer_requirement": "Privileged production access requires phishing-resistant MFA.",
+      "evidence": "Service: Cedar Billing API. Production admin authentication uses TOTP authenticator codes. No alternative phishing-resistant mechanism documented.",
+      "reference_concerns": [
+        {
+          "id": "totp-method",
+          "quote": "Production admin authentication uses TOTP authenticator codes."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "mfa-upgrade",
+          "question": "Provide evidence of phishing-resistant authentication or formally documented approved exception."
+        }
+      ]
+    },
+    {
+      "id": "tls-weak-secondary",
+      "family": "ENC-01",
+      "customer_requirement": "All production endpoints must reject TLS versions older than 1.2.",
+      "evidence": "Service: Cedar Billing API. Primary listener 443 accepts TLS 1.3. Production backup listener 9443 accepts TLS 1.1.",
+      "reference_concerns": [
+        {
+          "id": "weak-listener",
+          "quote": "Production backup listener 9443 accepts TLS 1.1."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "tls-remediation",
+          "question": "Provide current production listener configuration or remediation evidence for port 9443."
+        }
+      ]
+    },
+    {
+      "id": "tls-disabled-legacy",
+      "family": "ENC-01",
+      "customer_requirement": "All production endpoints must reject TLS versions older than 1.2.",
+      "evidence": "Service: Cedar Billing API. Production listener 443 rejects TLS 1.0 and TLS 1.1. TLS 1.3 is accepted. No other listeners are described.",
+      "reference_concerns": [
+        {
+          "id": "coverage-unknown",
+          "quote": "No other listeners are described."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "tls-inventory",
+          "question": "Provide scoped listener inventory or test demonstrating coverage of all production endpoints."
+        }
+      ]
+    },
+    {
+      "id": "dr-over-target",
+      "family": "BCP-01",
+      "customer_requirement": "Current annual production DR test must demonstrate RTO <=240 minutes and RPO <=60 minutes.",
+      "evidence": "Service: Cedar Billing API. Production recovery test completed 2026-10-18. Measured RTO 300 minutes and RPO 90 minutes.",
+      "reference_concerns": [
+        {
+          "id": "dr-breach",
+          "quote": "Measured RTO 300 minutes and RPO 90 minutes."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "dr-corrective",
+          "question": "Provide remediation and retest evidence for exceeded recovery objectives."
+        }
+      ]
+    },
+    {
+      "id": "dr-plan-not-operation",
+      "family": "BCP-01",
+      "customer_requirement": "Annual executed production DR test with achieved RTO <=240 minutes and RPO <=60 minutes.",
+      "evidence": "Service: Cedar Billing API. DR policy targets RTO 120 minutes and RPO 30 minutes. Next exercise is scheduled for December 2026.",
+      "reference_concerns": [
+        {
+          "id": "no-execution",
+          "quote": "Next exercise is scheduled for December 2026."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "dr-test",
+          "question": "Provide the latest completed in-scope DR test results with achieved recovery metrics."
+        }
+      ]
+    },
+    {
+      "id": "dr-stale-report",
+      "family": "BCP-01",
+      "customer_requirement": "Production DR exercise must be within 365 days of 2026-11-01.",
+      "evidence": "Service: Cedar Billing API. Recovery report issued 2026-10-18. The measured RTO 180 minutes relates to the exercise completed 2024-04-11.",
+      "reference_concerns": [
+        {
+          "id": "stale-exercise",
+          "quote": "The measured RTO 180 minutes relates to the exercise completed 2024-04-11."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "current-dr",
+          "question": "Provide a completed production recovery exercise within the customer's 365-day window."
+        }
+      ]
+    },
+    {
+      "id": "dr-other-service",
+      "family": "BCP-01",
+      "customer_requirement": "Annual production recovery test required for Cedar Billing API.",
+      "evidence": "Service: Cedar Warehouse. Annual recovery exercise completed 2026-10-18 and achieved RTO 90 minutes.",
+      "reference_concerns": [
+        {
+          "id": "scope-mismatch",
+          "quote": "Service: Cedar Warehouse."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "service-proof",
+          "question": "Provide test evidence for Cedar Billing API, rather than a separate service."
+        }
+      ]
+    },
+    {
+      "id": "no-evidence",
+      "family": "IR-01",
+      "customer_requirement": "Documented and exercised incident response process for Cedar Billing API.",
+      "evidence": "No incident response evidence was provided with the synthetic package.",
+      "reference_concerns": [],
+      "necessary_questions": [
+        {
+          "id": "ir-proof",
+          "question": "Provide current incident response procedure and executed tabletop or response-exercise evidence."
+        }
+      ]
+    },
+    {
+      "id": "documented-ir-only",
+      "family": "IR-01",
+      "customer_requirement": "Incident response procedure must be documented and exercised in the past 12 months.",
+      "evidence": "Service: Cedar Billing API. Incident response plan v4 was approved 2026-08-01. No tabletop or incident exercise results are included.",
+      "reference_concerns": [
+        {
+          "id": "ir-operation-missing",
+          "quote": "No tabletop or incident exercise results are included."
+        }
+      ],
+      "necessary_questions": [
+        {
+          "id": "ir-exercise",
+          "question": "Provide executed incident response exercise or response records with date and scope."
+        }
+      ]
+    }
+  ]
+}
