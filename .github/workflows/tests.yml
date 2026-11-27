@@ -70,6 +70,9 @@ jobs:
       - name: Exercise synthetic evidence-to-follow-up analyst journey
         run: pytest -q tests/test_e2e_analyst_pilot.py
 
+      - name: Compile application and M5D evaluator before tests
+        run: python -m py_compile app.py src/upload_evaluation.py
+
       - name: Run tests
         run: pytest -q
 
@@ -154,6 +157,9 @@ jobs:
 
       - name: Verify source-bound reviewed gaps and draft follow-up
         run: pytest -q tests/test_upload_followup.py
+
+      - name: Compile application and M5D evaluator before PostgreSQL tests
+        run: python -m py_compile app.py src/upload_evaluation.py
 
       - name: Apply Alembic migrations to PostgreSQL
         run: alembic upgrade head
